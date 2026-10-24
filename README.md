@@ -15,12 +15,13 @@ This repository is half of the project:
 
 | Repository | What |
 |---|---|
-| **hackios-xnu-kernel** (this one) | XNU patches, the EFI loader, the UEFI port, Wi-Fi, QEMU scripts, `xl`, prebuilt kernel/loader/UEFI, `common/` scripts |
+| **hackios-xnu-kernel** (this one) | XNU patches, the EFI loader, the UEFI port, Wi-Fi, QEMU scripts, `xl`, prebuilt kernel/UEFI, `common/` scripts |
 | [hackios-xnu-userland](https://github.com/oosexgang/hackios-xnu-userland) | our init, injected libraries, launchd jobs, the APFS image builder, the scripts that take iOS out of Apple's IPSW, Metal/Mesa work |
 
 > **No Apple files are in either repository.** `ios165/fetch.sh` downloads the iOS 16.5 IPSW from Apple's own CDN
 > to *your* machine and extracts what is needed there. HackiOS is an independent research project by OOSEX GANG and
 > is not affiliated with, authorised or endorsed by Apple Inc. iOS, iPhone and Apple are trademarks of Apple Inc.
+> Read [DISCLAIMER.md](DISCLAIMER.md) before building an image.
 
 <p>
 <img src="docs/lockscreen.jpg" width="190" alt="Lock screen">
@@ -53,8 +54,9 @@ loader and hands over its log.
 
 ## Quick start: QEMU, no kernel build
 
-`prebuilt/` holds the kernel, loader and our programs built from these repositories, so all you need is the system
-image, which is made on your machine from Apple's IPSW.
+`prebuilt/` holds the kernel and our programs built from these repositories; the loader is built by
+`common/build.sh` (clang + lld-link). All you need besides is the system image, which is made on your machine
+from Apple's IPSW.
 
 Needs: Linux x86-64, ~12 GB free disk, 4 GB free RAM. Packages (Arch):
 
@@ -210,7 +212,7 @@ kernel (driver replacements) or by a library the kernel injects with `DYLD_INSER
 | `wifi/lx/` | the layer on which Linux's Wi-Fi driver builds for our kernel |
 | `qemu/` | QEMU runs, touch input, screenshots, stack symbolication |
 | `tools/` | recording (`recording.py`, `sound.py`), UFS/flash tools, `mk-ath11k.sh`, `new-workspace.sh`, host tests |
-| `prebuilt/` | built kernel, loader and UEFI pieces (`NOTICES.md` for the third-party code in the kernel) |
+| `prebuilt/` | built kernel and UEFI pieces (`NOTICES.md` for the third-party code in the kernel) |
 | `docs/` | screenshots, [checks.md](docs/checks.md), [PORTING.md](docs/PORTING.md) |
 
 ## Debugging

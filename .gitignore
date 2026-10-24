@@ -6,6 +6,7 @@
 !/.github/
 !/README.md
 !/LICENSE
+!/DISCLAIMER.md
 !/common/
 !/docs/
 !/xl
@@ -46,9 +47,7 @@ __pycache__/
 !/xnuloader/flashboot.c
 !/xnuloader/crypto.c
 !/xnuloader/darwinfile.c
-!/xnuloader/identity.h
 !/xnuloader/loader.c
-!/xnuloader/mkidentity.py
 !/xnuloader/mkpayload.py
 
 /qemu/*
@@ -84,3 +83,4 @@ __pycache__/
 !/xnu-deps/build/lzbitmap/libzbitmap.c
 !/xnu-deps/build/lzbitmap/libzbitmap.h
 /tools/android/f2fs-resize
+/tools/macos-bin/platform-tools/
