@@ -5,7 +5,7 @@
  * AES decryption and the unwrapping of a key with it (FIPS 197, RFC 3394), and the messages of
  * the four-way and the group-key handshake (12.7.6, 12.7.7; figure 12-35 is the layout).
  *
- * Nothing here is taken from another implementation; the tests in tools/wpa-test check it
+ * Nothing here is taken from another implementation; the tests in host/wpa-test check it
  * against the standards' own examples and against Python's hashlib and "cryptography".
  * Nothing here is written for speed, and nothing here says a key in a message.
  */

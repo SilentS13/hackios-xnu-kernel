@@ -170,7 +170,7 @@ static uint32_t ustacks_threads = USTACKS_MAX_THREADS;  /* boot-arg ustacks_thre
 /*
  * Boot-arg ustacks_tname=TEXT: only the threads whose name has TEXT in it (ustacks_tname=coreanimation:
  * the window server's render-server and its other threads), each line with the thread's name and, in
- * the first, the time in microseconds of mach_absolute_time (as the "tl:" lines of tools/latency.py);
+ * the first, the time in microseconds of mach_absolute_time (as the "tl:" lines of host/latency.py);
  * the lines are few enough then to go to the loader's log as well, where all of a long run is kept.
  * ustacks_tname=* takes every thread, named or not, and sends them to the loader's log too.
  */

@@ -4,7 +4,7 @@
  * of processor cores may run, and how hot iOS should be told the phone is.
  *
  * Only the decision is here, as inline functions with no kernel in them: bsd/dev/hk_thermal.c
- * reads the sensors and carries the decision out, and tools/thermal-test compiles this same header
+ * reads the sensors and carries the decision out, and host/thermal-test compiles this same header
  * on the computer and drives it through heat-ups, cool-downs, failing sensors and a hot battery.
  *
  * The sensors: the SoC has two TSENS blocks (dt: tsens@c222000 with its readings at 0xc263000, 15

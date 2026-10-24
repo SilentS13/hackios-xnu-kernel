@@ -4,7 +4,7 @@
  * (hk_wifi.c), the audio DSP's (hk_adsp.c) -- "fw/NAME" of the image that travels with
  * the kernel (md1; md0 when there is nothing else) or of the resident one (md0).
  *
- * The image is an APFS container (tools/apfs/mkapfs.py: what userland/build.sh makes).  A file
+ * The image is an APFS container (host/apfs/mkapfs.py: what system/build.sh makes).  A file
  * stored as it is in one piece is used where it lies in the RAM disk's memory, as the drivers
  * always did (build.sh has mkapfs.py store fw/ that way: --plain fw).
  * Any other APFS file is read out once by apfs_lib -- the same code as the volume's when

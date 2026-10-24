@@ -969,7 +969,7 @@ step_survey(void)
 
 /*
  * A file of /fw on the root file system, read whole into memory of ours: the system image, where
- * userland/build.sh puts fw-audio/ when it makes that image. It is compressed there, which the file
+ * system/build.sh puts fw-audio/ when it makes that image. It is compressed there, which the file
  * system undoes and the reading of the small image's memory below does not; and it is there only
  * once the root is mounted, so only adsp=1, which waits for that on its own thread, finds it so.
  */
@@ -1031,7 +1031,7 @@ hk_adsp_fw_free(const uint8_t *data, uint64_t size)
 	kfree_data(ours, size);
 }
 
-/* A file of fw/ in the small image (ADSP=1 userland/build.sh puts fw-audio/ there), else of /fw on the root (above). */
+/* A file of fw/ in the small image (ADSP=1 system/build.sh puts fw-audio/ there), else of /fw on the root (above). */
 extern const uint8_t *hk_image_file(const char *dir, const char *name, uint64_t *size, int *disk_out);
 static const uint8_t *
 image_file(const char *name, uint64_t *size)
@@ -1052,7 +1052,7 @@ image_file(const char *name, uint64_t *size)
 		}
 	}
 	printf("adsp: %u: no fw/%s in the small image nor on the root: put the phone's /vendor/firmware_mnt/image/%s into "
-	    "fw-audio/ and run SYSTEM=1 userland/build.sh (or ADSP=1, for the small image)\n", step, name, name);
+	    "fw-audio/ and run SYSTEM=1 system/build.sh (or ADSP=1, for the small image)\n", step, name, name);
 	return NULL;
 }
 

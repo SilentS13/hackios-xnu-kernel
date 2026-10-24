@@ -294,7 +294,7 @@ bench_all(void *arg __unused, wait_result_t wr __unused)
 
 /*
  * Boot-arg cpuload=MS: every MS milliseconds, how busy each of our cores was meanwhile, in
- * percent, to the loader's log (tools/frames.py shows it per gesture):
+ * percent, to the loader's log (host/frames.py shows it per gesture):
  *   tl: u at US 7:NN 6:NN ... 1:NN      the core's number (as in its MPIDR), then its share
  * of the time it was not idle (interrupts included).
  */

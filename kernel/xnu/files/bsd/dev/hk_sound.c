@@ -1380,7 +1380,7 @@ sound_thread(__unused void *parameter, __unused wait_result_t result)
 		acf = hk_adsp_fw_file("aw882xx_acf.bin", &acf_size);
 		if (acf == NULL) {
 			say("sound: no /fw/aw882xx_acf.bin: put the phone's /vendor/etc/aw882xx_acf.bin into fw-audio/ and run SYSTEM=1 "
-			    "userland/build.sh\n");
+			    "system/build.sh\n");
 			goto out;
 		}
 	}

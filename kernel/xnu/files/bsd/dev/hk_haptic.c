@@ -12,7 +12,7 @@
  *   interrupt  GPIO 18, pulled up, low when the chip has something to say (not used: polled)
  *   the motor  f0 175.5 Hz as Android calibrated it (f0_pre 170.0 Hz, calibration data 0x0d)
  *   effects    Android's RAM waveforms, /vendor/firmware/aw8697_haptic.bin of the phone (fw-haptic/
- *              here, not in the repository; userland/build.sh puts it into /fw of the system image):
+ *              here, not in the repository; system/build.sh puts it into /fw of the system image):
  *              eleven of them, 1..10 short (Android's effects 0..9), 11 the one looped for a
  *              vibration of some length
  *

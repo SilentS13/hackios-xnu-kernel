@@ -22,8 +22,8 @@
  * Who makes the volume
  * --------------------
  * Not this code, and not the kernel: a writable APFS would be needed for that and it is a piece
- * of work of its own (tools/apfs/txn-probe.py measures why).  The volume is built on the build
- * machine by tools/apfs/mkstore.py -- which is tools/apfs/mkapfs.py, the same program that makes
+ * of work of its own (host/apfs/txn-probe.py measures why).  The volume is built on the build
+ * machine by host/apfs/mkstore.py -- which is host/apfs/mkapfs.py, the same program that makes
  * every other image this port uses -- and put on the flash once, in the free space of darwin past
  * the blocks the loader and the kernel refuse to write before.  After that its structure never
  * changes again.  That is the whole escape from needing a writable APFS, and it costs one
@@ -47,7 +47,7 @@
  * both.
  *
  * Sums are FNV-1a over 64 bits, which is what this port uses everywhere else it wants to know
- * whether a lot of bytes are the bytes it meant (tools/apfs/fnvsum.c, the census lines, the
+ * whether a lot of bytes are the bytes it meant (host/apfs/fnvsum.c, the census lines, the
  * walks); it is here to catch a torn or half-written slot, not an adversary.
  */
 

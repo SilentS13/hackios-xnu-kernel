@@ -21,7 +21,7 @@
  * No interrupt is used: a thread looks at the interrupt line 125 times a second (boot-arg
  * touch_poll_us=N: every N microseconds instead of 8000). With touch_lat=1 a line for every report
  * read ("tl: c before US seen US read US": the look before, the look that found the line low, the
- * report read), for measuring how long a touch takes to show (tools/latency.py).
+ * report read), for measuring how long a touch takes to show (host/latency.py).
  *
  * Register layouts: Linux drivers/spi/spi-geni-qcom.c, drivers/soc/qcom/{qcom-geni-se,rpmh-rsc,
  * cmd-db}.c, drivers/clk/qcom/gcc-sc7280.c, drivers/pinctrl/qcom/pinctrl-sc7280.c,

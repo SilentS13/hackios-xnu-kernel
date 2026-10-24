@@ -22,7 +22,7 @@
  * sample posted ("tl: p TYPE FINGER X Y at US", the time in microseconds of mach_absolute_time),
  * to be matched with the window server's lines about reading it (userland/src/inject.c), drawing
  * (eagl.c) and the display driver's about the frame (MiniIOMobileFramebuffer.cpp): see
- * tools/latency.py.
+ * host/latency.py.
  */
 static uint32_t touch_lat = 2;          /* 2: not yet looked up */
 

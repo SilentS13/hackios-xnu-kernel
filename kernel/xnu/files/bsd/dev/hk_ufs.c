@@ -9,14 +9,14 @@
  * core (it already does for the battery). So with ufs=2 on its command line the loader publishes a
  * page (ufs_shared_pa=) with the table of partitions, a request and an answer, and a buffer; this
  * driver writes a request -- which partition, which blocks -- and core 0 reads them with that
- * driver's ReadBlocks into the buffer (xnuloader/loader.c, block_poll). Nothing in this kernel
+ * driver's ReadBlocks into the buffer (bootloader/loader/loader.c, block_poll). Nothing in this kernel
  * touches the storage controller.
  *
  * Read only wherever a write could do harm, by construction. The block devices never write: the
  * strategy routine refuses, so no filesystem mounted from one can write, and opening one for
  * writing is refused. With ufs_write=1 one character device alone takes writes -- /dev/rufs_darwin,
  * the port's own partition -- and in it only whole blocks from UFS_WRITE_FIRST on, past the iOS
- * volume and both cryptexes that the build writes from the computer (tools/darwin-write.py); that
+ * volume and both cryptexes that the build writes from the computer (host/darwin-write.py); that
  * is where the data volume of iOS is kept between runs (userland/src/var_store.c). The partition
  * has to be the one the port was set up with (its name, size, place and logical unit here; its
  * GUIDs as well on the loader's side), and the loader refuses the same things over again and reads
@@ -30,7 +30,7 @@
  *
  * ufs_check=1 reads, once at start, the partitions there are images of in the ROM's
  * firmware-update/ (bluetooth, xbl, tz, ...) through the same path and prints an FNV-1a hash of
- * as many bytes as each image has: tools/ufs-survey.py compares those with the images and with
+ * as many bytes as each image has: host/ufs-survey.py compares those with the images and with
  * what the loader read itself before the kernel started.
  */
 #include <kern/clock.h>
@@ -60,7 +60,7 @@ extern void IOSleep(unsigned int milliseconds);
 extern void loader_return(void);        /* osfmk/arm64/loader_return.c */
 extern void FlushPoC_DcacheRegion(vm_offset_t va, size_t length);   /* osfmk/arm64/caches_asm.s */
 
-/* the page the loader publishes: the same layout as struct loader_block in xnuloader/loader.c */
+/* the page the loader publishes: the same layout as struct loader_block in bootloader/loader/loader.c */
 #define BLOCK_MAGIC        0x4b434f4c42574452ULL       /* "RDWBLOCK" */
 #define BLOCK_VERSION      3
 #define BLOCK_MAX_PARTS    160
@@ -74,13 +74,13 @@ extern void FlushPoC_DcacheRegion(vm_offset_t va, size_t length);   /* osfmk/arm
  * Where a write may go, and nowhere else: darwin, the port's own 20 GiB at the end of logical
  * unit 0, and in it only past what the build puts there from the computer -- the iOS volume
  * (blocks 0..1374207) and the two cryptexes behind it (..2042367). The loader keeps the same
- * bounds and the GUIDs of the partition besides (xnuloader/loader.c, BLOCK_WRITE_FIRST).
+ * bounds and the GUIDs of the partition besides (bootloader/loader/loader.c, BLOCK_WRITE_FIRST).
  */
 #define UFS_WRITE_FIRST    2042368ULL                  /* darwin's blocks of 4096 */
 /*
  * Where darwin is: the phone's own, since every phone gets its darwin cut from the end of its own userdata
- * (tools/userdata-carve.py) and a 128 GB and a 256 GB phone end in very different places. The loader's
- * command line says so (darwin_lba= and darwin_blocks=, which common/flash/install.sh takes from the
+ * (host/userdata-carve.py) and a 128 GB and a 256 GB phone end in very different places. The loader's
+ * command line says so (darwin_lba= and darwin_blocks=, which build/flash/install.sh takes from the
  * phone's identity file, phones/<serial>.darwin); without them, the phone the port was brought up on.
  * The loader checks the same place and the partition's GUIDs from its own copy of that file besides.
  */
@@ -1516,7 +1516,7 @@ hk_ufs_init(void)
 
 		/*
 		 * darwin_file=1: this phone's darwin is a file of userdata that the loader serves block by block
-		 * through the map of where the file lies (xnuloader/darwinfile.c, BLOCK_PART_VIRTUAL): on no unit
+		 * through the map of where the file lies (bootloader/loader/darwinfile.c, BLOCK_PART_VIRTUAL): on no unit
 		 * and at no LBA of its own, so those two checks below do not apply -- the loader has checked the
 		 * map and the file's marker -- but its size still has to be darwin_blocks=.
 		 */

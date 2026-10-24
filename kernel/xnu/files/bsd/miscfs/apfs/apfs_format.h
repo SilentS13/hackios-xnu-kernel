@@ -8,9 +8,9 @@
  * rolling, snapshots) is left out rather than copied in unused.
  *
  * Everything here is little-endian on disk and is read straight out of a block, so the
- * structures must match the disk byte for byte.  tools/apfs/fmt_check.c prints every
- * size and field offset in this file and tools/apfs/apfs.py checks its own idea of the
- * layout against that output -- run tools/apfs/run-tests.sh after touching this file.
+ * structures must match the disk byte for byte.  host/apfs/fmt_check.c prints every
+ * size and field offset in this file and host/apfs/apfs.py checks its own idea of the
+ * layout against that output -- run host/apfs/run-tests.sh after touching this file.
  *
  * Decompression of file contents (the com.apple.decmpfs attribute) is not part of APFS
  * and is not in the reference; it is at the end of this file, from bsd/sys/decmpfs.h and
@@ -723,7 +723,7 @@ struct apfs_x_field {
  *
  * XNU (bsd/sys/decmpfs.h) names only type 1; the rest live in Apple's closed
  * AppleFSCompression.  The types below are the ones the iOS 16.5 root file system
- * actually uses -- see tools/apfs/apfs.py, which counts them over the whole volume.
+ * actually uses -- see host/apfs/apfs.py, which counts them over the whole volume.
  *
  * In the attribute (types 3 and 4 the common pair): the bytes after the header are a
  * single zlib stream, except that a first byte of 0xff means the rest is the uncompressed

@@ -5,7 +5,7 @@
  * This exists so that the real iOS root volume can be read on the phone.  The phone has
  * no driver for its own storage, so a volume there has to live in a RAM disk, and that
  * volume is 5368 MB against the 4288 MB its firmware leaves usable.  But a given walk
- * reads only some of those blocks, so tools/apfs/mksparse.py writes out the ones it reads
+ * reads only some of those blocks, so host/apfs/mksparse.py writes out the ones it reads
  * together with a table saying where each went, and this serves them at their original
  * addresses.  The APFS driver above cannot tell the difference: every block it asks for is
  * there, at the address it asks for.

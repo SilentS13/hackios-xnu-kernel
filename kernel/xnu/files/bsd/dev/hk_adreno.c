@@ -1600,7 +1600,7 @@ extern int mdevgetkernelrange(dev_t dev, vm_offset_t *base, uint64_t *size);
 
 
 /*
- * A file of the small image that travels with the kernel -- userland/build.sh puts what is in
+ * A file of the small image that travels with the kernel -- system/build.sh puts what is in
  * fw-gpu/ into its directory fw/ -- found in the memory of the RAM disk itself: at this point of
  * the start that image is the root if there is no system image, and not mounted at all if there
  * is one (it is /dev/md1 then; see userland/src/stage0.c).
@@ -1622,7 +1622,7 @@ image_file(const char *directory, const char *name, uint64_t *size)
 	}
 	if (!image_asked_quietly) {
 		printf("adreno: %u: no %s/%s in the small image: put the phone's /vendor/firmware/%s into fw-gpu/ and run "
-		    "userland/build.sh\n", step, directory, name, name);
+		    "system/build.sh\n", step, directory, name, name);
 	}
 	return NULL;
 }
@@ -3255,7 +3255,7 @@ static unsigned gpu_free_count;
  * default is msm's refusal; with the arg they are answered as what they are here, which is
  * the range the kernel allocates out of -- a number to size a heap or maxBufferLength against,
  * not a licence to place anything. Nothing in Mesa is affected either way: freedreno asks
- * VA_SIZE only at drm version 9 and up (FD_VERSION_VA_SIZE), and tools/mesa/hackios-drm says 1.7.
+ * VA_SIZE only at drm version 9 and up (FD_VERSION_VA_SIZE), and graphics/mesa/hackios-drm says 1.7.
  */
 uint32_t gpu_va;                        /* boot-arg gpu_va: 0 as before, 1 describe, 2 also guard */
 #define GPU_ADDRESS_GRANULE     0x10000ull      /* what one allocation is rounded up to */

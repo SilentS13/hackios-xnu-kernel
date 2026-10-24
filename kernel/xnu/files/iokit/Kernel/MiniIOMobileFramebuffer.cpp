@@ -137,7 +137,7 @@ static TUNABLE(uint32_t, gFBTrace, "fbtrace", 3);
  * seconds, every frame that is shown is also kept -- one pixel of every REC_STEP in each
  * direction, three bytes a pixel -- in a piece of memory of M megabytes (default 480, which
  * is 520 frames) that is left in place when the kernel returns to the loader. The loader
- * hands it to the host ("xl recording"), where tools/recording.py makes a video of it.
+ * hands it to the host ("xl recording"), where host/recording.py makes a video of it.
  *
  *   struct rec_header, then per frame: struct rec_frame, width * height pixels (R, G, B)
  *
@@ -186,7 +186,7 @@ swapQueue(void)
  * Boot-arg touch_lat=1: a line for every swap handed over ("tl: s ID at US") and for every frame
  * put on the panel ("tl: v ID ready US shown US done US": the GPU done with it, its beat come, the
  * pixels in the panel's memory), in microseconds of mach_absolute_time, for measuring how long a
- * touch takes to show (tools/latency.py; the touch's own lines: bsd/dev/hk_input.c).
+ * touch takes to show (host/latency.py; the touch's own lines: bsd/dev/hk_input.c).
  */
 static TUNABLE(uint32_t, gTouchLat, "touch_lat", 0);
 

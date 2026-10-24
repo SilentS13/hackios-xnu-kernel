@@ -20,7 +20,7 @@
  *   (Xiaomi's redwood-s-oss kernel, techpack/audio/asoc/codecs/aw88263s_m20: aw882xx_device.c,
  *   aw882xx_init.c and aw882xx_pid_2113_reg.h; the phone runs its version 2.0.0), with the
  *   registers' values from Android's own configuration file -- /vendor/etc/aw882xx_acf.bin of
- *   the phone, which userland/build.sh puts into /fw of the system image from fw-audio/ and
+ *   the phone, which system/build.sh puts into /fw of the system image from fw-audio/ and
  *   which is not in this repository. Its "Music" profile is what Android plays the speakers
  *   with (tinymix: aw_dev_0_prof, aw_dev_1_prof); 55 of its 57 registers read back from the
  *   idle chips under Android exactly as the file has them, and the other two as the driver

@@ -1,9 +1,9 @@
 /*
  * Reading the Apple File System: the part that knows the format and nothing about vnodes.
  *
- * The same file is built into the kernel and, by tools/apfs/build-tool.sh, into a program
- * on the build machine (tools/apfs/apfs-tool.c) that runs it against a real image and
- * compares the result with tools/apfs/apfs.py, which is itself checked against 7-Zip.
+ * The same file is built into the kernel and, by host/apfs/build-tool.sh, into a program
+ * on the build machine (host/apfs/apfs-tool.c) that runs it against a real image and
+ * compares the result with host/apfs/apfs.py, which is itself checked against 7-Zip.
  * Nothing goes into the kernel that has not agreed with the image on the computer first.
  *
  * The layout being read is in apfs_format.h, written from Apple's reference.

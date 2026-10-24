@@ -32,7 +32,7 @@
  * (3, 3 and 342 ms), the radio's registers then answer (step 16), and the mode "off" is taken.
  *
  * The messages' structures and the tables that describe them are ath11k's own, taken out of its
- * sources when the kernel is built (tools/mk-wlfw.sh) and not kept anywhere: nothing of them is
+ * sources when the kernel is built (host/mk-wlfw.sh) and not kept anywhere: nothing of them is
  * in this file. Without them this compiles to a line that says so. The coding itself and the
  * transactions are ours (hk_qmi.c).
  */
@@ -63,7 +63,7 @@ bool
 hk_wlfw_exchange(uint32_t step)
 {
 	say("wifi: %u: THE EXCHANGE IS NOT BUILT IN: ath11k's message descriptions were not there when this kernel was built "
-	    "(tools/mk-wlfw.sh, then build again)\n", step);
+	    "(host/mk-wlfw.sh, then build again)\n", step);
 	return false;
 }
 

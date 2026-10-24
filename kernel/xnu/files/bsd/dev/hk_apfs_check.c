@@ -1,6 +1,6 @@
 /*
  * Mount the APFS volume on /dev/rvblk0 and walk it through VFS, so that what the driver
- * does can be compared with what tools/apfs/apfs.py reads from the same image on the
+ * does can be compared with what host/apfs/apfs.py reads from the same image on the
  * build machine.  Only with boot-arg apfs_check.
  *
  *   apfs_check=1              walk the whole volume and print only the totals
@@ -45,7 +45,7 @@
  *                             into it and read it back out of a container opened again from
  *                             nothing (apfs_store_check below)
  *
- * A line is the same one tools/apfs/apfs-tool's census and `verify.py clines` print:
+ * A line is the same one host/apfs/apfs-tool's census and `verify.py clines` print:
  *
  *   path <TAB> d_type <TAB> mode <TAB> uid <TAB> gid <TAB> size <TAB> hash-of-contents
  *
@@ -1005,7 +1005,7 @@ apfs_check_concurrent(void)
  * The one place bsd/miscfs/apfs/apfs_write.c is run inside the kernel.  It is not VFS: there is
  * no vnop_write and this milestone does not call for one.  It is apfs_lib and apfs_write on a
  * real block device, which is the step between the tests on the build machine
- * (tools/apfs/write-tests.sh) and anything on the phone's flash.
+ * (host/apfs/write-tests.sh) and anything on the phone's flash.
  *
  *   apfs_check=7
  *   apfs_dev=md0              the container to write in (default rvblk0)
@@ -1714,7 +1714,7 @@ walk:
 	apfs_stats_print();
 	hk_sparse_report();
 	hk_ufs_report("after the walk");
-	printf("apfs-check: compare with tools/apfs/verify.py sum\n");
+	printf("apfs-check: compare with host/apfs/verify.py sum\n");
 
 	kfree_data(cs.path, PATH_CAP);
 	kfree_data(cs.buf, READ_CHUNK);
@@ -1784,7 +1784,7 @@ SYSCTL_PROC(_kern, OID_AUTO, hk_switch_root, CTLTYPE_STRING | CTLFLAG_RW | CTLFL
 /*
  * apfs_volume=DEV: a volume for user space in an ordinary boot.  Mounted read only (and
  * nosuid, nodev) on apfs_volume_at -- by default /System/Volumes/iOS, which the system image
- * has for it (userland/build.sh) -- right here, after the root and devfs and before launchd,
+ * has for it (system/build.sh) -- right here, after the root and devfs and before launchd,
  * so that all of user space sees it from the start.  apfs_volume=ufs_darwin is the iOS root
  * container on the phone's flash (ufs=2 for the loader, bootcpu=7).
  */

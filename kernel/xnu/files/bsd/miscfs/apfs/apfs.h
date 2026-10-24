@@ -2,7 +2,7 @@
  * apfs: reading an Apple File System volume from the kernel.
  *
  * The format itself is in apfs_lib.{h,c}, which knows nothing of vnodes and is checked
- * against real images on the build machine (tools/apfs/run-tests.sh).  This is the layer
+ * against real images on the build machine (host/apfs/run-tests.sh).  This is the layer
  * between that and VFS: a mount, a vnode per object, and the vnode operations.
  *
  * Read only.  Nothing here writes to the device.

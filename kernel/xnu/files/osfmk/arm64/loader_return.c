@@ -107,7 +107,7 @@ loader_log_putc(char c)
 
 /*
  * A whole line at once, under the lock: lines written from several processors at the same time
- * (tools/latency.py's "tl:" lines, a frame's on one and a touch's on another) are not mixed up.
+ * (host/latency.py's "tl:" lines, a frame's on one and a touch's on another) are not mixed up.
  */
 void loader_log_line(const char *line);
 

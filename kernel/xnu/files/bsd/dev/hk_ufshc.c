@@ -11,7 +11,7 @@
  * UEFI's address written back, the list started. The list and its command descriptors are in
  * memory the loader owns (it offers it in its page, with UEFI's address); the loader checks the
  * address on every way back from a run and puts UEFI's back itself if the kernel did not
- * (xnuloader/loader.c, hc_take_back), and neither reads nor writes for the kernel or for its log
+ * (bootloader/loader/loader.c, hc_take_back), and neither reads nor writes for the kernel or for its log
  * while another list is in. While this kernel's list is in, it asks the loader for nothing.
  *
  * Nothing else of the controller is changed: no reset, no link startup, no UIC command, no

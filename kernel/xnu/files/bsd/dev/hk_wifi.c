@@ -1266,7 +1266,7 @@ extern int mdevgetkernelrange(dev_t dev, vm_offset_t *base, uint64_t *size);
 
 
 /*
- * A file of fw/ in the small image that travels with the kernel -- userland/build.sh puts what
+ * A file of fw/ in the small image that travels with the kernel -- system/build.sh puts what
  * is in fw-wifi/ there --, found in the memory of the RAM disk itself (see hk_adreno.c).
  */
 extern const uint8_t *hk_image_file(const char *dir, const char *name, uint64_t *size, int *disk_out);
@@ -1279,7 +1279,7 @@ image_file(const char *name, uint64_t *size)
 		return data;
 	}
 	printf("wifi: %u: no fw/%s in the small image: put the phone's /vendor/firmware_mnt/image/%s into fw-wifi/ and run "
-	    "userland/build.sh\n", step, name, name);
+	    "system/build.sh\n", step, name, name);
 	return NULL;
 }
 
@@ -3977,7 +3977,7 @@ hk_wifi_dsp_is_up(void)
 
 /*
  * ath11k asks for files by the names Linux's firmware tree has ("ath11k/WCN6750/hw1.0/board.bin");
- * this phone has what Android's driver loads (fw-wifi/, see userland/build.sh): its board's own
+ * this phone has what Android's driver loads (fw-wifi/, see system/build.sh): its board's own
  * data file and regulatory database, which are what the two names below stand for. The others
  * it asks for first and can do without (a container of several boards' data, a table of the
  * firmware's features) are not there.
@@ -4046,7 +4046,7 @@ hk_wifi_radio_address(uint8_t *address)
 
 /*
  * The network the radio is to join: the file "network" among the firmware in the small image,
- * the name on its first line, the passphrase on its second (userland/build.sh takes it from
+ * the name on its first line, the passphrase on its second (system/build.sh takes it from
  * fw-wifi/network, which is in no repository). Not a boot argument: those are echoed by the
  * loader and printed with a panic. The log says how long the two are, and nothing else of them.
  */

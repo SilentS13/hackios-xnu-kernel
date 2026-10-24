@@ -4,7 +4,7 @@
  * arrive at the keys their frames are ciphered with (IEEE 802.11-2020, 12.7; RSN, AKM "PSK",
  * key descriptor version 2: HMAC-SHA1 and the AES key wrap). lx_wpa.c is the arithmetic and
  * nothing else -- no radio, no kernel --, so that it runs on the machine the kernel is built on
- * (tools/wpa-test) as it runs in the kernel.
+ * (host/wpa-test) as it runs in the kernel.
  */
 #ifndef _LX_WPA_H_
 #define _LX_WPA_H_
