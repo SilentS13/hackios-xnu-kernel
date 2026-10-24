@@ -3,7 +3,7 @@
  * unpacked out of it again.
  *
  * /private/var is a memory filesystem (bsd/miscfs/ramfs), mounted empty by init at every boot and
- * given the directories of the template iOS ships with (ios165/mkvarskel.py), so nothing iOS keeps
+ * given the directories of the template iOS ships with (system/ios/mkvarskel.py), so nothing iOS keeps
  * there outlives the boot that wrote it: no home screen layout, no application data, no baked
  * wallpaper. The kernel's APFS driver reads and does not write, and writing APFS is not the point
  * here -- what is needed is that the bytes come back. So the tree is packed into a plain archive
@@ -41,7 +41,7 @@
  * then to make files. A store that was torn or is half a different archive therefore leaves
  * /private/var as init made it rather than half filled.
  *
- * The boot guard (xnuloader/flashboot.c in hackios-xnu-kernel): the loader counts every start of a boot
+ * The boot guard (bootloader/loader/flashboot.c): the loader counts every start of a boot
  * bundle in a block of darwin's boot area and gives up on a generation that was started three times
  * without coming up. `bootok` is the "came up": the watcher says it once the run has lasted
  * BOOTOK_AFTER seconds, so a kernel or a userland that dies early is rolled back by itself.
@@ -58,7 +58,7 @@
 #define SLOT_BYTES      0x80000000LL            /* 2 GiB a slot, two slots */
 #define SLOTS           2
 #define DEVICE          "/dev/rufs_darwin"
-#define STATE_AT        8566865920LL            /* darwin's block 2091520: the boot state (common/flash/bundlefmt.py) */
+#define STATE_AT        8566865920LL            /* darwin's block 2091520: the boot state (build/flash/bundlefmt.py) */
 #define BOOTOK_AFTER    60                      /* seconds of a run that make it a good start */
 #define ROOT            "/private/var"
 #define MAX_PATH        1024
@@ -1269,7 +1269,7 @@ save_once(void)
 	return ok;
 }
 
-/* The boot state's block, as the loader keeps it (the layout: common/flash/bundlefmt.py). */
+/* The boot state's block, as the loader keeps it (the layout: build/flash/bundlefmt.py). */
 struct boot_state {
 	char magic[8];
 	uint64_t trying, tries_flags;    /* tries_flags: u32 tries, u32 flags */

@@ -4,11 +4,11 @@
 #
 # The volume is the root device -- IMAGE becomes md0 -- and every reader walks all of it.
 #
-# usage: tools/apfs/bench-qemu.sh IMAGE "1 2 4 8" [extra boot-args]
+# usage: host/apfs/bench-qemu.sh IMAGE "1 2 4 8" [extra boot-args]
 # env:   QEMU_SMP (default 8) processors of the machine, and cpus=N to the kernel to match
 #        BENCH_LOGS directory for the logs (default apfs-work)
 #
-# Runs only this working copy's QEMU instance (qemu/instance), and waits for its ports.
+# Runs only this working copy's QEMU instance (host/qemu/instance), and waits for its ports.
 set -u
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
@@ -17,7 +17,7 @@ COUNTS=${2:-"1 2 4 8"}
 EXTRA=${3:-}
 SMP=${QEMU_SMP:-8}
 LOGS=${BENCH_LOGS:-$ROOT/apfs-work}
-INSTANCE=$(cat "$ROOT/qemu/instance" 2>/dev/null || echo 0)
+INSTANCE=$(cat "$ROOT/host/qemu/instance" 2>/dev/null || echo 0)
 PORT=$((4444 + 10 * INSTANCE))
 cd "$ROOT" || exit 1
 touch "$IMAGE"          # run-ios.sh rebuilds its RAM image only from a newer file
@@ -30,9 +30,9 @@ for n in $COUNTS; do
 		sleep 5
 	done
 	log="$LOGS/bench-$(date +%H%M%S)-$n.log"
-	QEMU_SMP=$SMP IMG="$IMAGE" ROOT=userland/root.apfs \
+	QEMU_SMP=$SMP IMG="$IMAGE" ROOT=system/root.apfs \
 		CMDLINE="cpus=$SMP apfs_check=5 apfs_threads=$n $EXTRA" \
-		timeout 900 qemu/run-ios.sh 600 > "$log" 2>&1
+		timeout 900 host/qemu/run-ios.sh 600 > "$log" 2>&1
 	wall=$(grep -ao "$n readers done in [0-9]*" "$log" | head -1 | awk '{print $5}')
 	kbs=$(grep -ao "bytes  [0-9]* KB/s" "$log" | head -1 | awk '{print $2}')
 	lock=$(grep -a "apfs: lock" "$log" | head -1 | sed 's/^\[[^]]*\]: //')

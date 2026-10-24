@@ -6,9 +6,9 @@
 # also shows what iOS made of them (a volume key: the volume indicator; the side button: the
 # screen off, or back on).
 #
-# usage: XL_SECS=N tools/buttons-watch.sh [DIR]   (N as for the run; pictures go to DIR, default
+# usage: XL_SECS=N host/buttons-watch.sh [DIR]   (N as for the run; pictures go to DIR, default
 #                                                  logs/buttons-HHMMSS)
-# Start the run first (./xl run in another terminal, or in the background); this ends with it.
+# Start the run first (host/xl run in another terminal, or in the background); this ends with it.
 # In the last seconds of the run it leaves the phone alone: what "xl log" and "xl screenshot" ask
 # the loader for travels the same way as the run's own log, and must not be in its place when
 # the run fetches that.
@@ -23,7 +23,7 @@ running() { ! flock -n "$PHONE.run" true 2>/dev/null; }
 picture() { # picture <suffix>
 	local file
 	file="$out/$(printf '%02d' $shots)-$name$1.png"
-	./xl screenshot "$file" >/dev/null 2>&1 && echo "    (picture $(date +%T): $file)"
+	host/xl screenshot "$file" >/dev/null 2>&1 && echo "    (picture $(date +%T): $file)"
 }
 for ((i = 0; i < 20; i++)); do          # wait for the run to start
 	running && { started=$(stat -c %Y "$PHONE.run"); break; }
@@ -33,7 +33,7 @@ done
 quiet=$((started + ${XL_SECS:-8} - 4))
 while running; do
 	if [ "$(date +%s)" -ge "$quiet" ]; then sleep 1; continue; fi
-	./xl log > "$out/log.now" 2>/dev/null || { sleep 1; continue; }
+	host/xl log > "$out/log.now" 2>/dev/null || { sleep 1; continue; }
 	# what is new: the lines after the last one already shown (the log is a ring: lines do not keep their numbers)
 	new=$(grep -a -E "$pattern" "$out/log.now" | awk -v last="$last" '
 		{ line[NR] = $0; if ($0 == last) at = NR }

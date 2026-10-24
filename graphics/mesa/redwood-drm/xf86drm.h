@@ -2,7 +2,7 @@
  * What Mesa's freedreno takes from libdrm's xf86drm.h, for a system without Linux's DRM: the
  * declarations here, the functions in redwood_drm.c, which carry the requests to the kernel's
  * GPU driver (the service RedwoodGPU; iokit/Kernel/RedwoodGPU.cpp) as calls of its user client.
- * tools/mk-mesa.sh puts both into Mesa's tree, where they are the "libdrm" freedreno is built
+ * graphics/mk-mesa.sh puts both into Mesa's tree, where they are the "libdrm" freedreno is built
  * against. The request numbers and their structures are Linux's (Mesa's include/drm-uapi).
  */
 #ifndef REDWOOD_XF86DRM_H

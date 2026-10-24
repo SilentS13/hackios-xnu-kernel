@@ -7,9 +7,9 @@
 #                         (BSD-3-Clause-Clear; the one header of ath/ it includes is ISC);
 #   FreeBSD's LinuxKPI    the headers with which FreeBSD compiles Linux drivers, with the kernel
 #                         headers those are written against (BSD-2-Clause, of a pinned release
-#                         of FreeBSD); patched with wifi/lx/patches/*.patch. Its source files
-#                         are not used: what they do is done in wifi/lx/src;
-#   wifi/lx               ours: the headers LinuxKPI lacks (device tree, platform devices), the
+#                         of FreeBSD); patched with kernel/wifi/lx/patches/*.patch. Its source files
+#                         are not used: what they do is done in kernel/wifi/lx/src;
+#   kernel/wifi/lx               ours: the headers LinuxKPI lacks (device tree, platform devices), the
 #                         headers of FreeBSD that cannot serve under XNU as they are, and the
 #                         functions underneath (locks, sleeping, work, memory, firmware, the
 #                         radio's bus) written on the handful of calls that the kernel's
@@ -17,29 +17,29 @@
 #
 # Not all of the driver is built yet: DRIVER below lists the files that are. What they call in
 # the files that are not becomes a function that says its name in the log and answers 0
-# (out/stubs.txt lists them), unless wifi/lx/src has one that does more.
+# (out/stubs.txt lists them), unless kernel/wifi/lx/src has one that does more.
 #
 # Everything is compiled as FreeBSD kernel code for an Apple arm64 kernel and tied into one
 # object that shows nothing but its entry points; the kernel links it when it is there
-# (xnu-build.sh).
+# (kernel/build.sh).
 #
 #   VERSION   of Linux. 7.0.14: LinuxKPI's 802.11 headers follow the mac80211 of Linux 7.0, and
 #             the driver has to be the one they were written for. For the WCN6750 the driver
 #             asks the same of firmware and platform as in the 6.6 series.
 #   FREEBSD   15.1-RELEASE, the first release whose LinuxKPI is at Linux 7.0.
 #
-# What comes out, in xnu-deps/build/ath11k:
+# What comes out, in kernel/deps/build/ath11k:
 #   src/ath11k/        the driver's files, untouched       freebsd/sys/   FreeBSD's, patched
 #   out/ath11k.o       the object for the kernel           out/stubs.txt  what is not there yet
 # Needs on this machine: curl, tar, xz, sha256sum, patch, awk, clang, and the kernel's linker
-# (xnu-deps/host/bin/ld64, see xnu-deps/setup.sh). The two archives are 150 and 253 MB and are kept.
+# (kernel/deps/host/bin/ld64, see kernel/deps/setup.sh). The two archives are 150 and 253 MB and are kept.
 #
-# usage: tools/mk-ath11k.sh [fetch]        "fetch" stops when the driver's sources are there
+# usage: host/mk-ath11k.sh [fetch]        "fetch" stops when the driver's sources are there
 set -e
 VERSION=7.0.14
 SHA256=de9999b784d2293f00d39c62d8f92a08ab8a54bc4e80ffd250a0c09cb07a0f98
 ROOT=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
-B=$ROOT/xnu-deps/build/ath11k
+B=$ROOT/kernel/deps/build/ath11k
 ATH=drivers/net/wireless/ath
 mkdir -p "$B"
 cd "$B"
@@ -67,10 +67,10 @@ if [ "$(cat src/.release 2>/dev/null)" != "$VERSION $SHA256" ]; then
 	echo "$VERSION $SHA256" > src/.release
 fi
 [ "$1" = fetch ] && { echo "mk-ath11k.sh: ath11k of Linux $VERSION: $B/src/ath11k"; exit 0; }
-W=$ROOT/wifi/lx
+W=$ROOT/kernel/wifi/lx
 
 # --- FreeBSD's LinuxKPI and the kernel headers under it, with our patches on top. When the patches
-# change, the tree is taken from the archive again (as tools/mk-mesa.sh does with Mesa's).
+# change, the tree is taken from the archive again (as graphics/mk-mesa.sh does with Mesa's).
 FREEBSD=15.1
 FREEBSD_SHA256=cf5762da53fd52e1eaf0f9ceee9bf58cbe314c821031d0d9ffa76823185a89e1
 FSYS="compat/linuxkpi sys arm64/include net net80211 netinet netinet6 vm kern tools libkern ddb
@@ -116,7 +116,7 @@ fi
 # --- compile: the driver's files that are built so far, and ours
 DRIVER="core hal qmi ce hw fw htc wmi mac reg peer dp dp_rx dp_tx hal_rx hal_tx dbring p2p"
 CC="clang -target arm64-apple-ios16.5"
-LD=$ROOT/xnu-deps/host/bin/ld64
+LD=$ROOT/kernel/deps/host/bin/ld64
 CFLAGS="-mkernel -mgeneral-regs-only -fno-builtin -fno-common -ffreestanding -fno-strict-aliasing
 	-funsigned-char -nostdinc -std=gnu17 -O2 -g -w
 	-D__FreeBSD__=15 -D_KERNEL -DKLD_MODULE -DHAVE_KERNEL_OPTION_HEADERS -include opt_global.h
@@ -125,9 +125,9 @@ CFLAGS="-mkernel -mgeneral-regs-only -fno-builtin -fno-common -ffreestanding -fn
 	-include $S/compat/linuxkpi/common/include/linux/kconfig.h -DLINUXKPI_VERSION=70000"
 DFLAGS="-Isrc/ath11k -Isrc -include $W/include/lx_prelude.h -DCONFIG_ATH11K_AHB -DCONFIG_ATH11K_DEBUG
 	-DKBUILD_MODNAME=\"ath11k\""
-# two headers are the kernel's: what it offers this object (wifi/lx/include/lx_os.h), and its QMI
-# helpers (wifi/lx/include/linux/soc/qcom/qmi.h)
-source "$ROOT/xnu-env.sh"
+# two headers are the kernel's: what it offers this object (kernel/wifi/lx/include/lx_os.h), and its QMI
+# helpers (kernel/wifi/lx/include/linux/soc/qcom/qmi.h)
+source "$ROOT/kernel/env.sh"
 for h in lx qmi; do
 	[ -f "$XNU_SRC/bsd/sys/hk_$h.h" ] || { echo "mk-ath11k.sh: the kernel tree has no bsd/sys/hk_$h.h" >&2; exit 1; }
 done

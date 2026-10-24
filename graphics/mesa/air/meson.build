@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: MIT
 
 # The AIR (Metal) frontend. In the Darwin on redwood repository this
-# directory is tools/mesa/air, copied to src/compiler/air by the build
-# scripts; tools/mesa/air.patch adds the subdir() that reaches it.
+# directory is graphics/mesa/air, copied to src/compiler/air by the build
+# scripts; graphics/mesa/air.patch adds the subdir() that reaches it.
 
 files_libair = files(
   'air_bitcode.c',
@@ -38,11 +38,11 @@ idep_air = declare_dependency(
 # air_run (air_run.c) draws with a translated shader and reads the pixels back,
 # so it needs libgallium -- which meson has not defined yet when this file is
 # read. Its executable is declared in src/gallium/drivers/freedreno instead,
-# by tools/mesa/air-ir3.patch, next to ir3_compiler.
+# by graphics/mesa/air-ir3.patch, next to ir3_compiler.
 #
 # air_metal.c (the library the Metal driver links, air_metal.h) and
 # air_metal_test.c are in src/gallium/drivers/freedreno for the same reason,
-# declared by tools/mesa/air-metal.patch. Neither is in files_libair: they are
+# declared by graphics/mesa/air-metal.patch. Neither is in files_libair: they are
 # the consumers of this frontend, not part of it.
 
 air2nir = executable(

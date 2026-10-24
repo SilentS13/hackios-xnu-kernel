@@ -10,8 +10,8 @@ all in microseconds of mach_absolute_time (the kernel's clock, which user space 
   tl: c before US seen US read US          the touch driver finds the interrupt line low and reads the
                                            report (bsd/dev/hk_goodix.c; only for a real finger)
   tl: i TYPE posted US read US sent US     the window server reads it and hands it to the event system
-                                           (userland/src/inject.c)
-  tl: g FRAME began US ended US DRAWS      the window server draws a frame (userland/src/eagl.c)
+                                           (system/src/inject.c)
+  tl: g FRAME began US ended US DRAWS      the window server draws a frame (system/src/eagl.c)
   tl: s ID at US                           it hands the frame over (SwapEnd)
   tl: v ID ready US shown US done US       the display driver: the GPU done with it, its beat come, its
                                            pixels in the panel's memory (MiniIOMobileFramebuffer.cpp)

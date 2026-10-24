@@ -11,7 +11,7 @@
 # Gallium driver cannot read -- and docs/air.md 8.2.2 is the whole of why.
 #
 # Everything here has run on this machine already, on softpipe, through the same contract
-# (tools/air/argbufruncheck.sh: 20 checks, every one passing). What the phone adds is what
+# (graphics/air/argbufruncheck.sh: 20 checks, every one passing). What the phone adds is what
 # softpipe cannot say: whether Metal's own classes hand the driver what it needs, and
 # whether the Adreno fetches a uniform block from an offset.
 #
@@ -52,7 +52,7 @@
 #     sampler member. encodedLength must be 24 and alignment 8 -- eight bytes per member,
 #     which is what Apple's own metadata says a set is: over Resident Evil 4's 7 858 sets,
 #     7 856 declare `air.arg_type_size` equal to 8 x members and all 7 858 declare
-#     `air.arg_type_align_size` 8 (tools/air/argbuflen.py). The two that do not are both
+#     `air.arg_type_align_size` 8 (graphics/air/argbuflen.py). The two that do not are both
 #     in the one kernel that builds indirect command buffers, which this frontend refuses
 #     before an encoder could be made for it.
 #
@@ -132,7 +132,7 @@
 #     a shader that declares one, and this port has no container writer: Apple's libraries
 #     have none (0 of 456) and the game's are not something a job list can reach. The
 #     draw-through-the-encoder differential is the host's, on softpipe
-#     (tools/air/argbufruncheck.sh), where the same picture comes out of an encoder as out
+#     (graphics/air/argbufruncheck.sh), where the same picture comes out of an encoder as out
 #     of direct arguments and every deliberately wrong record prints its own named
 #     picture. What the device adds is (a), (b) and (c).
 #   - NOTHING IS TIMED. What a recorded binding costs against a direct one is unmeasured;

@@ -519,12 +519,12 @@ my_function_uniform(void *context, unsigned index, size_t components, size_t cou
  *	assert(metallib_url != nil);					ogl-metal.mm:3308 -- here
  *
  * The bundle is found; the resource is not, because QuartzCore.framework/default.metallib is not in
- * this image (ios165/select-system.py drops every .metallib under the framework directories). That is
+ * this image (system/ios/select-system.py drops every .metallib under the framework directories). That is
  * fourteen aborts in one boot with launchd restarting the server after each -- logs/135751-run.log --
  * and the window server is the one process that must not crash-loop: nothing is drawn at all while it
  * is down. The road that works here is the other one: renderer() falls back to
  * [EAGLContext initWithAPI:3] and CA::OGL::GLESContext when the device is nil, and behind EAGLContext
- * is our own OpenGL ES (userland/src/eagl.c, Mesa off-screen).
+ * is our own OpenGL ES (system/src/eagl.c, Mesa off-screen).
  *
  * So the device is taken out of this process before CoreAnimation can ask for it. Metal keeps every
  * device it has made in one static NSMutableArray, and MTLCreateSystemDefaultDevice() is no more than
@@ -1014,7 +1014,7 @@ send_button(IOHIDServiceClientRef buttons, const struct redwood_touch *t)
 /*
  * Boot-arg touch_lat=1: a line for every touch sample, "tl: i TYPE posted US read US sent US" -- when
  * the kernel stamped it, when this thread had it, when the event system had the event -- in
- * microseconds of mach_absolute_time, the kernel's own time (tools/latency.py).
+ * microseconds of mach_absolute_time, the kernel's own time (host/latency.py).
  */
 static bool touch_latency;
 static mach_timebase_info_data_t timebase;

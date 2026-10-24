@@ -37,8 +37,8 @@ struct rwa_texture;
 /*
  * What the kernel answers about an IOSurface, and the request it answers in: kRedwoodSurface
  * (0x7e) on RedwoodGPUUserClient, `struct redwood_surface` in
- * xnu/files/iokit/Kernel/RedwoodGPU.cpp. Field for field the same, and declared here rather
- * than included for the reason src/redwoodmetal.m gives for the Mesa contract: userland/build.sh
+ * kernel/xnu/files/iokit/Kernel/RedwoodGPU.cpp. Field for field the same, and declared here rather
+ * than included for the reason src/redwoodmetal.m gives for the Mesa contract: system/build.sh
  * knows nothing of the kernel tree.
  *
  * The struct goes in and comes back out of the same call, so `handle` is both the question
@@ -57,8 +57,8 @@ struct rwd_surface {
 
 /*
  * The shape, in the same fields and the same order as `struct rwa_texture_shape`
- * (tools/mesa/air/air_metal.h). Declared again under a name of this file's own for the
- * reason the struct above is: this file is built by userland/build.sh, which has neither
+ * (graphics/mesa/air/air_metal.h). Declared again under a name of this file's own for the
+ * reason the struct above is: this file is built by system/build.sh, which has neither
  * tree's headers on its include path, and a second declaration of the same layout is
  * cheaper than making it have them.
  */

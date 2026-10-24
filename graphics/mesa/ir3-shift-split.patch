@@ -18,7 +18,7 @@ elements, which is the same mistake in a smaller way.
 Measured on the phone's Adreno 7c+ Gen 3. `fbs_bistochastize_iter` of
 PortraitFilters.metallib reads `grid_buf[id - 1].n` through exactly this shape
 and sums `id + 1` terms when the read returns 0 instead of `id`. With input
-built from the module's own metadata (tools/air/kinput.py, docs/air.md section
+built from the module's own metadata (graphics/air/kinput.py, docs/air.md section
 5) its four outputs should all be 1/sqrt(3) -- one term each -- and on the
 device they were:
 

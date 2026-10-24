@@ -91,7 +91,7 @@ What this CANNOT see, and must not be read as seeing:
     those, which is why it is printed next to the count and not instead of it.
 
 usage:
-  C=ios165/20F66__iPhone10,3_6/dyld_shared_cache_arm64
+  C=system/ios/20F66__iPhone10,3_6/dyld_shared_cache_arm64
   for i in /System/Library/Frameworks/Metal.framework/Metal \
            /System/Library/Extensions/AGXMetalA11.bundle/AGXMetalA11 \
            /System/Library/PrivateFrameworks/IOGPU.framework/IOGPU \
@@ -104,7 +104,7 @@ usage:
                --dump IOGPU.objc.txt --dump QuartzCore.objc.txt \
                --images ext --selmap selmap.txt \
                --sender QuartzCore=ext/QuartzCore \
-               --sender backboardd=ios165/rootfs/usr/libexec/backboardd \
+               --sender backboardd=system/ios/rootfs/usr/libexec/backboardd \
                --sender SpringBoard=.../SpringBoard.app/SpringBoard \
                --sender RE4='.../Resident Evil 4' \
                [--sent] [--verbose] [--class RedwoodMetalCommandBuffer]
@@ -815,7 +815,7 @@ def verdict(sites):
 def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument("--dump", action="append", default=[], required=True)
-    ap.add_argument("--src", default=os.path.join(ROOT, "userland/src/redwoodmetal.m"))
+    ap.add_argument("--src", default=os.path.join(ROOT, "system/src/redwoodmetal.m"))
     ap.add_argument("--images", help="directory of `ipsw dyld extract` output")
     ap.add_argument("--selmap", action="append", default=[])
     ap.add_argument("--sender", action="append", default=[], metavar="NAME=PATH")

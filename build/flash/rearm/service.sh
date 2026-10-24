@@ -1,11 +1,11 @@
 #!/system/bin/sh
-# HackiOS boot menu on every power-on (a KernelSU / Magisk module; common/flash/install.sh puts it in).
+# HackiOS boot menu on every power-on (a KernelSU / Magisk module; build/flash/install.sh puts it in).
 #
 # The phone boots whichever A/B slot is active. HackiOS lives in the spare slot (its boot partition holds
 # the UEFI with HackiOS's loader); when "Android" is chosen in the menu, the loader makes Android's slot
 # active and resets. Left at that, every later power-on would go straight to Android. This script undoes
 # it once Android has come up: it makes the spare slot active again, so the next power-on shows the menu
-# -- whose countdown then takes Android again, the last choice (xnuloader/flashboot.c).
+# -- whose countdown then takes Android again, the last choice (bootloader/loader/flashboot.c).
 #
 # It acts only when everything checks out, and otherwise leaves the phone booting Android as it is:
 #   - Android has finished starting and its slot has been marked successful (so a broken Android
@@ -13,7 +13,7 @@
 #   - no Virtual A/B update is being merged (switching slots then would cancel it);
 #   - the spare slot's boot partition still holds exactly the image HackiOS installed (its SHA-256
 #     is in hackios.conf): an Android update that wrote the spare slot has replaced it, and then
-#     there is no menu to go back to until common/flash/install.sh is run again;
+#     there is no menu to go back to until build/flash/install.sh is run again;
 #   - the darwin partition is there.
 # What it did or did not do goes into /data/adb/hackios-rearm.log.
 MODDIR=${0%/*}

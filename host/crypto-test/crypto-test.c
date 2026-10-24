@@ -1,5 +1,5 @@
 /*
- * The loader's crypto (xnuloader/crypto.c), built for the computer: reads lines from stdin and answers
+ * The loader's crypto (bootloader/loader/crypto.c), built for the computer: reads lines from stdin and answers
  * each, for run.py to compare with Python's hashlib and `cryptography`.
  *   sha256 HEX           -> the digest
  *   verify SIG PK MSG    -> 1 or 0 (all hex)
@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../../xnuloader/crypto.c"
+#include "../../bootloader/loader/crypto.c"
 
 static uint64_t
 unhex(const char *s, uint8_t *out)

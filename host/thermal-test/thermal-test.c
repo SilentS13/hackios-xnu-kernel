@@ -1,10 +1,10 @@
 /*
- * The thermal governor (xnu/files/bsd/sys/hk_thermal.h) on the computer: scenarios with
- * temperatures made up tick by tick, and what must come of each. Run: tools/thermal-test/run.sh
+ * The thermal governor (kernel/xnu/files/bsd/sys/hk_thermal.h) on the computer: scenarios with
+ * temperatures made up tick by tick, and what must come of each. Run: host/thermal-test/run.sh
  */
 #include <stdio.h>
 #include <stdlib.h>
-#include "../../xnu/files/bsd/sys/hk_thermal.h"
+#include "../../kernel/xnu/files/bsd/sys/hk_thermal.h"
 
 static int failures;
 #define CHECK(cond, ...) do { if (!(cond)) { printf("FAIL %s:%d: ", __func__, __LINE__); printf(__VA_ARGS__); printf("\n"); failures++; } } while (0)

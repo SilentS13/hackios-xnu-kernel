@@ -7,11 +7,11 @@
 # code and stays off the network -- so this runs before every commit that
 # touches the frontend, and docs/air-report.md is the report of that commit.
 #
-#   tools/air/check.sh            check, and write docs/air-report.md
-#   tools/air/check.sh -q         only the numbers, write nothing
+#   graphics/air/check.sh            check, and write docs/air-report.md
+#   graphics/air/check.sh -q         only the numbers, write nothing
 set -e
 ROOT=$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)
-IOS=${IOS:-$ROOT/ios165}
+IOS=${IOS:-$ROOT/system/ios}
 QUIET=0
 [ "${1:-}" = "-q" ] && QUIET=1
 
@@ -30,24 +30,24 @@ for f in "${LIBS[@]}"; do
 done
 
 AIR2NIR=$ROOT/build/mesa-host/build/src/compiler/air/air2nir
-[ -x "$AIR2NIR" ] || { echo "check.sh: run tools/air/mk-host.sh first"; exit 1; }
+[ -x "$AIR2NIR" ] || { echo "check.sh: run graphics/air/mk-host.sh first"; exit 1; }
 
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
 echo "== the reader against llvm-dis"
 for f in "${LIBS[@]}"; do
-	python3 "$ROOT/tools/metallib.py" dump "$f" "$WORK/$(basename "$(dirname "$f")")" > /dev/null
+	python3 "$ROOT/graphics/metallib.py" dump "$f" "$WORK/$(basename "$(dirname "$f")")" > /dev/null
 done
-"$ROOT/tools/air/reader-check.sh" "$WORK" | tail -3
+"$ROOT/graphics/air/reader-check.sh" "$WORK" | tail -3
 reader_rc=${PIPESTATUS[0]}
 
 echo
 echo "== translation and ir3, over the corpus"
 if [ "$QUIET" = 1 ]; then
-	python3 "$ROOT/tools/air/corpus.py" --ir3 --md /dev/null "${LIBS[@]}"
+	python3 "$ROOT/graphics/air/corpus.py" --ir3 --md /dev/null "${LIBS[@]}"
 else
-	python3 "$ROOT/tools/air/corpus.py" --ir3 \
+	python3 "$ROOT/graphics/air/corpus.py" --ir3 \
 		--md "$ROOT/docs/air-report.md" --json "$ROOT/build/air-report.json" "${LIBS[@]}"
 	echo "check.sh: wrote docs/air-report.md"
 fi
@@ -60,11 +60,11 @@ echo "== against LLVM on the processor, and drawn, shader by shader"
 # arguments are all buffers and which returns its result -- is counted; the
 # rest say why not. --draw also puts each one through a Gallium driver and
 # compares the pixel that comes back, which is M1's acceptance test with
-# softpipe standing in for the Adreno. See tools/air/cpuref.py and air_run.c.
+# softpipe standing in for the Adreno. See graphics/air/cpuref.py and air_run.c.
 cpu_rc=0
 for f in "${LIBS[@]}"; do
 	echo "$(basename "$(dirname "$f")")/$(basename "$f"):"
-	python3 "$ROOT/tools/air/cpuref.py" --all --draw "$f" 2>&1 | tail -3 | sed 's/^/  /' ||
+	python3 "$ROOT/graphics/air/cpuref.py" --all --draw "$f" 2>&1 | tail -3 | sed 's/^/  /' ||
 		cpu_rc=1
 done
 
@@ -85,7 +85,7 @@ echo "== the air.* operations, one at a time"
 # declarations wide. Every summary line is kept now and the per-operation
 # detail is what gets trimmed instead.
 intrin_rc=0
-python3 "$ROOT/tools/air/intrincheck.py" > "$WORK/intrin.log" 2>&1 || intrin_rc=$?
+python3 "$ROOT/graphics/air/intrincheck.py" > "$WORK/intrin.log" 2>&1 || intrin_rc=$?
 grep -a -E '^(WRONG|REFUSED|NOCASE|ASIDE|refused|approx|unread) ' "$WORK/intrin.log" | head -40 || :
 grep -a '^intrincheck:' "$WORK/intrin.log" || :
 
@@ -105,7 +105,7 @@ echo "== the same operations run, not folded"
 # result) and how many modules the log did not answer for, and every one of
 # those lines moves what the pass count means.
 run_rc=0
-python3 "$ROOT/tools/air/intrincheck.py" --run --cases 4 > "$WORK/intrinrun.log" 2>&1 || run_rc=$?
+python3 "$ROOT/graphics/air/intrincheck.py" --run --cases 4 > "$WORK/intrinrun.log" 2>&1 || run_rc=$?
 grep -a -E '^(WRONG|NOCASE|ASIDE|refused|approx) ' "$WORK/intrinrun.log" | head -24 || :
 grep -a '^intrincheck:' "$WORK/intrinrun.log" || :
 
@@ -115,7 +115,7 @@ echo "== the atomics, with a kernel written to make a lost update show"
 # never raced reads the same as one written by threads that did. This one
 # dispatches sixteen threads whose fetch_add results must be the numbers 0..15
 # with nothing repeated, so a lost update leaves a duplicate and a gap.
-python3 "$ROOT/tools/air/atomiccheck.py" 2>&1 | tail -8
+python3 "$ROOT/graphics/air/atomiccheck.py" 2>&1 | tail -8
 atomic_rc=${PIPESTATUS[0]}
 
 echo
@@ -125,7 +125,7 @@ echo "== the texture operations, on more than one texel"
 # lowering that ignored the coordinate and always fetched (1, 1) would pass all
 # six of them. These ask for the corners too, so swapping x and y is caught on
 # the five asymmetric coordinates and correctly not on the symmetric ones.
-python3 "$ROOT/tools/air/texopcheck.py" 2>&1 | tail -10
+python3 "$ROOT/graphics/air/texopcheck.py" 2>&1 | tail -10
 texop_rc=${PIPESTATUS[0]}
 
 echo
@@ -146,7 +146,7 @@ echo "== Metal's own sampler state, against Apple's rules"
 # tail -26 and not -8: the summary names what the comparison cases are worth and
 # what they deliberately do not claim, and a smaller tail would scroll that off
 # and leave a count with nothing to say what it counted.
-python3 "$ROOT/tools/air/sampcheck.py" 2>&1 | tail -26
+python3 "$ROOT/graphics/air/sampcheck.py" 2>&1 | tail -26
 samp_rc=${PIPESTATUS[0]}
 
 echo
@@ -221,7 +221,7 @@ echo "== the lowerings done by hand, against LLVM on this processor"
 # and reach ir3 without complaint. So cpuref has llc run each generated module
 # on this processor and compares LLVM's result with our folded NIR. The arm
 # count is what makes agreement mean anything.
-python3 "$ROOT/tools/air/loweringcheck.py" 2>&1 | tail -4
+python3 "$ROOT/graphics/air/loweringcheck.py" 2>&1 | tail -4
 lowering_rc=${PIPESTATUS[0]}
 
 echo
@@ -234,7 +234,7 @@ echo "== framebuffer fetch: the shape, because no value can be compared here"
 # target, an integer target refused, an unused argument not turned into a fetch
 # -- plus that ir3 emits the instruction, and says in its own last line that it
 # compares no value (docs/air.md section 3.1).
-python3 "$ROOT/tools/air/fbfetchcheck.py" 2>&1 | tail -8
+python3 "$ROOT/graphics/air/fbfetchcheck.py" 2>&1 | tail -8
 fbfetch_rc=${PIPESTATUS[0]}
 
 echo
@@ -257,7 +257,7 @@ echo "== vertex attributes: the shader's half of an MTLVertexDescriptor"
 # twenty lines in a clean run and more when a real module disagrees, so a
 # smaller tail would scroll the FAIL off and leave the summary saying 13 of 14
 # with nothing to say which.
-IOS="$IOS" python3 "$ROOT/tools/air/vattrcheck.py" 2>&1 | tail -40
+IOS="$IOS" python3 "$ROOT/graphics/air/vattrcheck.py" 2>&1 | tail -40
 vattr_rc=${PIPESTATUS[0]}
 
 echo
@@ -275,13 +275,13 @@ echo "== argument buffers: the member table and the indices it allocates"
 # `argbufcheck.py --census CORPUS` is the other half and is not run here: it
 # counts the argument-buffer metadata of a library this repository does not and
 # must not contain.
-python3 "$ROOT/tools/air/argbufcheck.py" 2>&1 | tail -30
+python3 "$ROOT/graphics/air/argbufcheck.py" 2>&1 | tail -30
 argbuf_rc=${PIPESTATUS[0]}
 
 echo
 echo "== argument buffers at run time: the encoder that records instead of writing"
 # The runtime half of the stage above, and the first stage in this file that drives
-# tools/mesa/air/air_metal.h -- the contract the Metal driver uses -- rather than the
+# graphics/mesa/air/air_metal.h -- the contract the Metal driver uses -- rather than the
 # frontend on its own. There is nothing for an encoder to write here (docs/air.md
 # 8.2.2): the frontend resolved every member of every set to a binding, so
 # MTLArgumentEncoder RECORDS (resource, Metal id) against (destination buffer,
@@ -296,7 +296,7 @@ echo "== argument buffers at run time: the encoder that records instead of writi
 # is mostly made of: an argument buffer nobody encoded.
 #
 # It needs llvm-as (as argbufcheck.py does) and air_metal_test, which mk-host.sh builds.
-"$ROOT/tools/air/argbufruncheck.sh" 2>&1 | tail -16
+"$ROOT/graphics/air/argbufruncheck.sh" 2>&1 | tail -16
 argbufrun_rc=${PIPESTATUS[0]}
 
 echo
@@ -306,7 +306,7 @@ echo "== the library functions, wrapped so they can run at all"
 # wraps one in a generated entry point (docs/air.md section 5) and this reports
 # what each comparison is worth -- LLVM is a full reference only where the
 # function calls no air.* at all, and the rest is our folder against a driver.
-python3 "$ROOT/tools/air/libcheck.py" 2>&1 | tail -24
+python3 "$ROOT/graphics/air/libcheck.py" 2>&1 | tail -24
 lib_rc=${PIPESTATUS[0]}
 
 echo
@@ -323,7 +323,7 @@ echo "== the kernels the driver ran on the phone, against softpipe here"
 # frontend. What it must never do is report a pass having compared nothing, so a
 # missing rootfs, a broken air_run or a grid that drifted fail it as loudly as a
 # wrong word does.
-IOS="$IOS" python3 "$ROOT/tools/air/metalcheck.py" --newest 2>&1 | tail -28
+IOS="$IOS" python3 "$ROOT/graphics/air/metalcheck.py" --newest 2>&1 | tail -28
 metal_rc=${PIPESTATUS[0]}
 
 exit $((reader_rc | cpu_rc | intrin_rc | run_rc | atomic_rc | texop_rc | samp_rc \

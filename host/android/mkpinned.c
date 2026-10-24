@@ -3,7 +3,7 @@
  * (F2FS_IOC_SET_PIN_FILE: the garbage collector leaves its blocks where they are, as Android's own swap
  * files and Dynamic System Update images are kept) and allocated in full (fallocate) -- so that where its
  * blocks lie on the flash stays true for as long as the file is there. This is how HackiOS keeps darwin in
- * a file of userdata instead of a partition of its own (common/flash/darwinfile.sh): nothing of the
+ * a file of userdata instead of a partition of its own (build/flash/darwinfile.sh): nothing of the
  * partition table or of the filesystem's size changes. FILE must not exist yet.
  */
 typedef unsigned long u64;

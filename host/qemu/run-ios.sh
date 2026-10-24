@@ -17,33 +17,33 @@
 #      QEMU_NET=1          with a network: a virtio network device, behind it QEMU's own "user" network
 #                          (it hands out an address by DHCP, answers DNS and passes connections on to
 #                          this machine's network; no privileges needed). The kernel makes en0 of it
-#                          (boot-arg virtio_net=1, added here); see userland/src/net_test.m for the rest.
+#                          (boot-arg virtio_net=1, added here); see system/src/net_test.m for the rest.
 #      AUDIO=<where>       what plays the sound of iOS: a QEMU audio back end (pipewire, pa, alsa, sdl: each
 #                          needs its QEMU module, e.g. the package qemu-audio-pipewire) or FILE.wav to
 #                          write it into a file instead. Default: nowhere (the guest plays all the same).
 #      QEMU_INSTANCE=<n>   to run several at once: each number has its own monitor and QMP ports
-#                          (4444 + 10n, 4445 + 10n); the file qemu/instance sets it for a working copy.
+#                          (4444 + 10n, 4445 + 10n); the file host/qemu/instance sets it for a working copy.
 #                          touch.py, screendump.sh and stop.sh follow the same rule.
 # The machine has a display (ramfb; without one SpringBoard does not start): the loader sets a mode of the
-# size of the phone's screen. qemu/screendump.sh saves a picture of it (through the monitor on port 4444).
+# size of the phone's screen. host/qemu/screendump.sh saves a picture of it (through the monitor on port 4444).
 # Add "-display gtk" to see it in a window and use it with the mouse: the pointer with the left button
 # held is a finger (the keys L, H, Up and Down are the lock, home and volume buttons).
-# Touches can also be sent from a script: qemu/touch.py (through the QMP socket on port 4445).
+# Touches can also be sent from a script: host/qemu/touch.py (through the QMP socket on port 4445).
 #
-# The system image is not read into QEMU: guest RAM is a private mapping of qemu/ram.img, a sparse
+# The system image is not read into QEMU: guest RAM is a private mapping of host/qemu/ram.img, a sparse
 # file that holds the image at the right offset (reflinked, so it costs neither disk space nor
 # host RAM).
-cd "$(dirname "$(readlink -f "$0")")/.." || exit 1
+cd "$(dirname "$(readlink -f "$0")")/../.." || exit 1
 K=xnu-src/xnu-8796.121.2/BUILD/obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837
-[ -f $K ] || { K=prebuilt/mach.development.bcm2837; echo "run-ios.sh: no kernel built here, using $K" >&2; }
+[ -f $K ] || { K=prebuilts/mach.development.bcm2837; echo "run-ios.sh: no kernel built here, using $K" >&2; }
 IMG=${IMG:-userland/system.apfs}
 ROOT=${ROOT:-userland/root.apfs}
-[ -f "$IMG" ] && [ -f "$ROOT" ] || { echo "run-ios.sh: $IMG or $ROOT is missing (userland/build.sh makes them)"; exit 1; }
+[ -f "$IMG" ] && [ -f "$ROOT" ] || { echo "run-ios.sh: $IMG or $ROOT is missing (system/build.sh makes them)"; exit 1; }
 SECS=${1:-60}; shift
 RAM_BASE=0x40000000 RD_ADDR=0xFC000000
 RAM_GB=${QEMU_RAM_GB:-7}
 RAM_SIZE=$((RAM_GB << 30)) FILE_SIZE=$((12 << 30))
-INSTANCE=${QEMU_INSTANCE:-$(cat qemu/instance 2>/dev/null || echo 0)}
+INSTANCE=${QEMU_INSTANCE:-$(cat host/qemu/instance 2>/dev/null || echo 0)}
 # an instance takes 2.5-3 GB of host memory; starting one that does not fit gets something killed
 AVAILABLE=$(awk '/^MemAvailable:/ { print int($2 / 1024) }' /proc/meminfo)
 if [ "${AVAILABLE:-9999}" -lt 3000 ] && [ -z "$QEMU_FORCE" ]; then
@@ -51,8 +51,8 @@ if [ "${AVAILABLE:-9999}" -lt 3000 ] && [ -z "$QEMU_FORCE" ]; then
 	exit 1
 fi
 
-if [ ! -f qemu/ram.img ] || [ "$IMG" -nt qemu/ram.img ]; then
-	python3 - "$IMG" qemu/ram.img $((RD_ADDR - RAM_BASE)) $FILE_SIZE <<'PY' || exit 1
+if [ ! -f host/qemu/ram.img ] || [ "$IMG" -nt host/qemu/ram.img ]; then
+	python3 - "$IMG" host/qemu/ram.img $((RD_ADDR - RAM_BASE)) $FILE_SIZE <<'PY' || exit 1
 import os, sys
 src = os.open(sys.argv[1], os.O_RDONLY)
 dst = os.open(sys.argv[2], os.O_RDWR | os.O_CREAT | os.O_TRUNC, 0o644)
@@ -78,10 +78,10 @@ if qemu-system-aarch64 -device help 2>/dev/null | grep -q '"virtio-sound-device"
 	SOUND+=(-device virtio-sound-device,audiodev=snd,streams=1)   # one stream: output, no microphone of the host
 	CMDLINE="virtio_sound=1 $CMDLINE"
 fi
-xnuloader/mkpayload.py -o qemu/payload.bin kernel=$K ramdisk=$ROOT --rdres "$(printf '%x' "$(stat -c %s "$IMG")")" \
+bootloader/loader/mkpayload.py -o host/qemu/payload.bin kernel=$K ramdisk=$ROOT --rdres "$(printf '%x' "$(stat -c %s "$IMG")")" \
 	--cmdline "loader_return_after=$SECS epoch=$(date +%s) virtio_input=1 $CMDLINE" >/dev/null || exit 1
-QEMU_MEM=${RAM_GB}G exec qemu/run.sh $((SECS + 40)) \
-	-object memory-backend-file,id=ram,size=$RAM_SIZE,mem-path="$PWD/qemu/ram.img",share=off \
+QEMU_MEM=${RAM_GB}G exec host/qemu/run.sh $((SECS + 40)) \
+	-object memory-backend-file,id=ram,size=$RAM_SIZE,mem-path="$PWD/host/qemu/ram.img",share=off \
 	-machine memory-backend=ram \
 	-global virtio-mmio.force-legacy=false -device virtio-tablet-device -device virtio-keyboard-device "${NET[@]}" "${SOUND[@]}" \
 	-device ramfb -monitor tcp:127.0.0.1:$((4444 + 10 * INSTANCE)),server,nowait \

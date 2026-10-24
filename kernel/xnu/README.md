@@ -18,17 +18,17 @@ You need:
   (`toolchain/linux/iphone/bin`: the ld64 linker, nm, otool, strip...) and `sdks/iPhoneOS16.5.sdk`.
 
 ```sh
-xnu/apply.sh             # ~6 s: tag xnu-8796.121.2 of apple-oss-distributions/xnu + our changes
+kernel/xnu/apply.sh             # ~6 s: tag xnu-8796.121.2 of apple-oss-distributions/xnu + our changes
                          #       -> xnu-src/xnu-8796.121.2, branch redwood, changes uncommitted
-xnu-deps/setup.sh        # ~30 s: dependency sources, mig/unifdef/tcsh, the SDK overlay, two libraries
-tools/mk-ath11k.sh       # optional, once: the phone's Wi-Fi driver (fetches Linux and FreeBSD sources)
-tools/mk-wlfw.sh         #   ... and its firmware-service message tables
-./xnu-build.sh -j8 -k    # ~45 s on 12 threads
+kernel/deps/setup.sh        # ~30 s: dependency sources, mig/unifdef/tcsh, the SDK overlay, two libraries
+host/mk-ath11k.sh       # optional, once: the phone's Wi-Fi driver (fetches Linux and FreeBSD sources)
+host/mk-wlfw.sh         #   ... and its firmware-service message tables
+kernel/build.sh -j8 -k    # ~45 s on 12 threads
 ```
 
 Result: `xnu-src/xnu-8796.121.2/BUILD/obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837`.
-`./xl run` and `qemu/run-ios.sh` take the kernel from there by themselves (and from `prebuilt/` only when it is not there).
-`common/build.sh <device>` runs all of these steps.
+`host/xl run` and `host/qemu/run-ios.sh` take the kernel from there by themselves (and from `prebuilts/` only when it is not there).
+`build/build.sh <device>` runs all of these steps.
 
 Checked: in an empty directory holding only the repository, these commands produced a kernel of the same
 size and the same set of symbols as the working one. Disk: ~600 MB, not counting theos.
@@ -40,27 +40,27 @@ Things to know:
   `exported name not in import list` are about DriverKit RPC names from the `iig` stubs (see below). make
   exits with status 2; the kernel is ready by then -- look at the file's date, not at make's exit status.
 - The path to the repository must not contain spaces (XNU's makefiles do not survive them).
-- The wrapper `xnu-deps/host/bin/xnu-clang` calls `/usr/bin/clang`. Tested with clang 22.1.
+- The wrapper `kernel/deps/host/bin/xnu-clang` calls `/usr/bin/clang`. Tested with clang 22.1.
 - After changing kernel headers that two outside libraries see (the pthread kext, firehose):
-  `xnu-deps/setup.sh --rebuild-libs`.
+  `kernel/deps/setup.sh --rebuild-libs`.
 - Apple's DriverKit generator (`iig`) is closed source. In its place are the stubs
-  `xnu-deps/iig-impl/OSObject.iig.cpp`, generated from the linker's list of undefined symbols. If that set
-  changes: `xnu-deps/gen-iig-stubs.py xnu-deps/iig-impl/undefined-all.txt xnu-deps/iig-impl qemu/kernel.syms`,
+  `kernel/deps/iig-impl/OSObject.iig.cpp`, generated from the linker's list of undefined symbols. If that set
+  changes: `kernel/deps/gen-iig-stubs.py kernel/deps/iig-impl/undefined-all.txt kernel/deps/iig-impl host/qemu/kernel.syms`,
   then `rm -rf BUILD`.
-- For `qemu/sym.py` after a rebuild: `nm -n .../mach.development.bcm2837.unstripped > qemu/kernel.syms`.
+- For `host/qemu/sym.py` after a rebuild: `nm -n .../mach.development.bcm2837.unstripped > host/qemu/kernel.syms`.
 
 ## Working on the tree
 
 Changes are made directly in `xnu-src/xnu-8796.121.2` (an ordinary git tree of Apple's, on branch `redwood`).
-Before committing to this repository run `xnu/export.sh` (it regenerates the patch and `files/`); to update
-the ready-made kernel in `prebuilt/`, `tools/update-prebuilt.sh`.
+Before committing to this repository run `kernel/xnu/export.sh` (it regenerates the patch and `files/`); to update
+the ready-made kernel in `prebuilts/`, `host/update-prebuilt.sh`.
 
 **Two traps, each of which cost a build.**
 
 `export.sh` regenerates the patch **from your whole tree**, not from your changes. If the tree has fallen
 behind the branch -- somebody changed the kernel after you set yours up -- the export silently rolls back
 their work: the patch comes out without their files. Before exporting, bring the tree to the current patch
-(`git checkout -- .` in `xnu-src`, then `git apply xnu/hackios.patch` and `cp -a xnu/files/. .`); if the change
+(`git checkout -- .` in `xnu-src`, then `git apply kernel/xnu/hackios.patch` and `cp -a kernel/xnu/files/. .`); if the change
 is a single one, it is more honest to paste its diff into the patch by hand and say so in the commit. The sign
 of a tree that fell behind is a kernel that builds and **crashes at boot** right after `Stackshot Succeeded`.
 
@@ -86,8 +86,8 @@ The error was there before any of our changes.
 | `bsd/dev/hk_net.c`, `bsd/sys/hk_net.h`, `hk_virtio_net.c` | the network interface `en0` on the kernel's network KPI (without IONetworkingFamily) and the boundary between it and whatever carries the frames (a "link": three functions in `hk_net.h`); the first link is virtio-net for QEMU |
 | `bsd/dev/hk_adreno.c`, `iokit/Kernel/HKGPU.cpp` | the phone's GPU (Adreno 642L): step-by-step bring-up (`adreno=N`: power, GMU, the zap shader, microcode), buffers and the command queue; an IOKit client with a subset of msm DRM for Mesa |
 | `bsd/dev/hk_wifi.c`, `bsd/sys/hk_qrtr.h` | the phone's Wi-Fi (WCN6750): Qualcomm shared memory (SMEM), the signalling bits between us and the Wi-Fi processor (SMP2P), the power processor's mailbox, loading the Wi-Fi processor's firmware, starting it through TrustZone, GLINK and QRTR on top of it; `hk_qrtr.h` is a datagram port for the rest of the kernel |
-| `bsd/dev/hk_qmi.c`, `bsd/sys/hk_qmi.h` | QMI, the message protocol of the services on Qualcomm processors: table-driven encoding, requests and replies, indications; the interface is Linux's (`qmi_*`) so that ath11k's `qmi.c` builds unchanged; tested on the computer (`tools/qmi-test/run.sh`) |
-| `bsd/dev/hk_wlfw.c` | the conversation with the Wi-Fi firmware service; the message descriptions are taken from the ath11k sources at build time (`tools/mk-wlfw.sh`) and are not in git |
+| `bsd/dev/hk_qmi.c`, `bsd/sys/hk_qmi.h` | QMI, the message protocol of the services on Qualcomm processors: table-driven encoding, requests and replies, indications; the interface is Linux's (`qmi_*`) so that ath11k's `qmi.c` builds unchanged; tested on the computer (`host/qmi-test/run.sh`) |
+| `bsd/dev/hk_wlfw.c` | the conversation with the Wi-Fi firmware service; the message descriptions are taken from the ath11k sources at build time (`host/mk-wlfw.sh`) and are not in git |
 | `bsd/dev/hk_audio.c`, `hk_virtio_sound.c`, `hk_speaker.c` | sound: `/dev/hk-audio` (where our output device in mediaserverd writes what iOS plays), recording it to memory, virtio-sound for QEMU; a first look at the phone's speaker amplifiers |
 | `bsd/pthread/pthread_kext_static.c` | the pthread kext, linked into the kernel |
 

@@ -24,7 +24,7 @@ thermald show                          # the same table, from the userland
 
 Boot arguments: on by default with `cpufreq=1`; `thermal=0` off; `thermal=2` watch and report without `cpufreq=1`.
 
-The governor's decisions are tested on the computer in 11 scenarios (`tools/thermal-test/run.sh`, in CI): heat-up,
+The governor's decisions are tested on the computer in 11 scenarios (`host/thermal-test/run.sh`, in CI): heat-up,
 cool-down without see-saw, a single hot group, package heat, near-critical, a one-tick spike, a sustained emergency,
 silent sensors, a hot battery, a configuration with one group of cores. The kernel builds with it and boots in QEMU
 (where it stays off: QEMU has no TSENS). **On the phone** (POCO X5 Pro, 22 October 2026, `cpufreq=1 cpus=8`, the

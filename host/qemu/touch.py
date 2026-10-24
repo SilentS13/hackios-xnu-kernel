@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Touch the screen of the system running under QEMU (qemu/run-ios.sh), through QMP.
+"""Touch the screen of the system running under QEMU (host/qemu/run-ios.sh), through QMP.
 
 usage: touch.py STEP...
   tap X Y                     a short touch
@@ -8,7 +8,7 @@ usage: touch.py STEP...
   key NAME [MS]               press a button: lock, home, volup, voldown; fivefingers = five fingers on the
                               screen for MS (held 1500 ms they end the run)
   stacks PROCESS              have the kernel print where the threads of that process are (the
-                              addresses come out in the log; qemu/symstack.py names them).
+                              addresses come out in the log; host/qemu/symstack.py names them).
                               "stacks top" is something else: which processes have had the processor
                               since it was last asked ("top:" lines in the log)
   wait SECONDS

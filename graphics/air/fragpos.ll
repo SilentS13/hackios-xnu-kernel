@@ -25,7 +25,7 @@
 ; instruction; the metadata keys are the AIR interface (docs/air.md section 3)
 ; and nothing in this file comes out of Apple's libraries.
 ;
-;   llvm-as -o fragpos.bc tools/air/fragpos.ll
+;   llvm-as -o fragpos.bc graphics/air/fragpos.ll
 ;   build/mesa-host/build/src/gallium/drivers/freedreno/air_run fragpos.bc
 ;
 ; On the phone it is one job line of its own; docs/metal.md 10.28 and 10.32 say which

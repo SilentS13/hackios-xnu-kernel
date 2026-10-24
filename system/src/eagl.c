@@ -366,7 +366,7 @@ static int sync_frames = 1;             /* boot-arg glsync=0 (a test): a frame's
  * for a home screen. (Mesa's driver for this GPU drew the first triangle of each such quad
  * with pixels of another tile, fragments of other icons under the labels, until it was given a
  * flush before the first draw that reads the picture after one that does not:
- * tools/mesa/freedreno-darwin.patch, fd6_draw.cc.) Boot-arg glfetch=0 keeps the extension from
+ * graphics/mesa/freedreno-darwin.patch, fd6_draw.cc.) Boot-arg glfetch=0 keeps the extension from
  * CoreAnimation, to see the difference.
  */
 static int fetch_offered = 1;
@@ -408,7 +408,7 @@ eagl_leave(struct eagl *e, unsigned offset)
 	if (slow_calls_us != 0) {
 		uint64_t now = now_us();
 
-		/* "tl: slow NAME US at US, frame N": a call that took long, and when it ended (tools/frames.py) */
+		/* "tl: slow NAME US at US, frame N": a call that took long, and when it ended (host/frames.py) */
 		if (now - call_began_us >= slow_calls_us) {
 			say("tl: slow %s %llu at %llu, frame %u%s\n", eagl_slot_name(offset), now - call_began_us, now, e->frames + 1,
 			    e->in_frame ? "" : " (before its first draw)");
@@ -1077,7 +1077,7 @@ frame_end(struct eagl *e, bool finished)
 	e->in_frame = false;
 	e->frames++;
 	if (latency_lines) {
-		/* "tl: g FRAME began US ended US DRAWS": microseconds of mach_absolute_time (tools/latency.py) */
+		/* "tl: g FRAME began US ended US DRAWS": microseconds of mach_absolute_time (host/latency.py) */
 		say("tl: g %u began %llu ended %llu %u\n", e->frames, e->began, after, e->draws);
 	}
 	if (frame_lines) {

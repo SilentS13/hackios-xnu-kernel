@@ -2,7 +2,7 @@
 """Build the store volume: an APFS container whose root holds the fixed-length slot files.
 
 The kernel's APFS driver reads and does not write, and making a file is a transaction (see
-bsd/miscfs/apfs/apfs_store.c and tools/apfs/txn-probe.py for what one costs).  So the volume is
+bsd/miscfs/apfs/apfs_store.c and host/apfs/txn-probe.py for what one costs).  So the volume is
 made here, once, by the same program that makes every other image this port uses -- mkapfs.py --
 and from then on nothing ever changes its structure again: only the bytes inside the slot files
 are overwritten, where they lie, by apfs_write_in_place().  That is the whole reason this idea
@@ -23,10 +23,10 @@ usage: mkstore.py -o IMAGE [--slot-bytes N] [--slots N] [--dense]
 The image is a whole container and goes onto the flash as one: into the free space of the
 partition darwin, past the blocks the loader and the kernel both refuse to write before
 (BLOCK_WRITE_FIRST / UFS_WRITE_FIRST, block 2042368).  Writing it there is a once-only step from
-Android with tools/darwin-write.py and it destroys whatever the store held before, so the image
+Android with host/darwin-write.py and it destroys whatever the store held before, so the image
 is made once and kept.
 
-Check it as any other image is checked: tools/apfs/check-image.sh IMAGE RedwoodStore=DIR, and
+Check it as any other image is checked: host/apfs/check-image.sh IMAGE RedwoodStore=DIR, and
 `apfs-tool store info IMAGE` says whether the driver will have it.
 """
 import argparse

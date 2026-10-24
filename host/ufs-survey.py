@@ -5,7 +5,7 @@ usage: ufs-survey.py [LOG] [FW_ZIP]
   LOG     the loader's log of a run with ufs=1 among XL_CMDLINE (default logs/last.log)
   FW_ZIP  the ROM's firmware archive (default fw/fw.zip)
 
-With ufs=1 the loader (xnuloader/loader.c, ufs_survey) lists the phone's logical units and GPT
+With ufs=1 the loader (bootloader/loader/loader.c, ufs_survey) lists the phone's logical units and GPT
 partitions as Qualcomm's own UFS driver in UEFI sees them, and for the partitions there are images
 of in the ROM's firmware-update/ it prints an FNV-1a hash of exactly as many bytes as the image
 has. This computes the same hash from the images and says, partition by partition, whether the

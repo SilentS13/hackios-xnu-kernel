@@ -6,7 +6,7 @@
 #
 # The bundle is in /Applications of the SYSTEM image as a plain directory of real files, which is
 # all this port needs to make an application launchable: LaunchServices rebuilds its database at
-# every boot by walking that directory (userland/build.sh). So there is no installd here, no
+# every boot by walking that directory (system/build.sh). So there is no installd here, no
 # container, no uicache and -- this kernel checking no signatures at all -- no signature needed to
 # RUN. The Mach-O is signed all the same, because entitlements are read out of a signature and
 # nowhere else, and a decrypted App Store dump's own signature no longer matches its bytes.

@@ -3,10 +3,10 @@
 
 usage: check-image.py IMAGE [VOLUME=]DIR[,manifest=FILE] ...   (volumes in the order mkapfs.py had them)
 
-1. apfsck (linux-apfs/apfsprogs, xnu-deps/build/apfsprogs; tools/apfs/check-image.sh builds it)
+1. apfsck (linux-apfs/apfsprogs, kernel/deps/build/apfsprogs; host/apfs/check-image.sh builds it)
    with -cw has to find the container clean: every object's checksum, the trees, the space
    manager's bitmaps against every block in use, inode and link counts, extents and references.
-2. tools/apfs/apfs-tool (the kernel's own apfs_lib) lists every volume as census lines -- path,
+2. host/apfs/apfs-tool (the kernel's own apfs_lib) lists every volume as census lines -- path,
    kind, mode, owner, group, size, FNV-1a 64 of the contents (or of a link's target) -- and they
    have to be the lines of DIR (with the manifest's owners and modes), every one, in both
    directions.
@@ -21,7 +21,7 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 import mkapfs  # noqa: E402  (the same reading of DIR and manifest)
 
-APFSCK = os.path.join(ROOT, 'xnu-deps/build/apfsprogs/apfsck/apfsck')
+APFSCK = os.path.join(ROOT, 'kernel/deps/build/apfsprogs/apfsck/apfsck')
 TOOL = os.path.join(ROOT, 'apfs-work/apfs-tool')
 FNVSUM = os.path.join(ROOT, 'apfs-work/fnvsum')
 

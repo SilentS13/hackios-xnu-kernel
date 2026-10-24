@@ -1,32 +1,32 @@
 #!/bin/bash
-# Refresh prebuilt/ from what is built in this tree: the kernel, our user-space programs
+# Refresh prebuilts/ from what is built in this tree: the kernel, our user-space programs
 # and the pieces of the phone's UEFI. With them somebody without the cross toolchain can still make the
 # images and run the system (QEMU or the phone); see README.md.
 set -e
 cd "$(dirname "$(readlink -f "$0")")/.."
-# KERNEL=... to take the kernel from a tree built elsewhere (xnu/apply.sh makes one anywhere)
+# KERNEL=... to take the kernel from a tree built elsewhere (kernel/xnu/apply.sh makes one anywhere)
 K=${KERNEL:-xnu-src/xnu-8796.121.2/BUILD/obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837}
 MU=Mu-Silicium
-mkdir -p prebuilt/userland prebuilt/uefi
-cp $K prebuilt/mach.development.bcm2837
-cp userland/hello prebuilt/userland/
+mkdir -p prebuilts/userland prebuilts/uefi
+cp $K prebuilts/mach.development.bcm2837
+cp system/hello prebuilts/userland/
 for f in init child stage0 hello_dyn svc_test surf_test rwtouch mg_test cpu_test sound_test libhackios.dylib libhackios-sb.dylib \
 	libhackios-media.dylib libhackios-app.dylib libhackios-tweaks.dylib HKAudio net_test; do
-	cp userland/obj/$f prebuilt/userland/
+	cp system/obj/$f prebuilts/userland/
 done
 if [ -f $MU/Build/hkPkg/RELEASE_CLANGPDB/FV/SILICIUM_UEFI.fd ]; then
 	cp $MU/Build/hkPkg/RELEASE_CLANGPDB/FV/SILICIUM_UEFI.fd $MU/BootShim/BootShim.bin $MU/Resources/DTBs/redwood.dtb \
-		$MU/Resources/ramdisk $MU/Resources/Scripts/mkbootimg.py prebuilt/uefi/
+		$MU/Resources/ramdisk $MU/Resources/Scripts/mkbootimg.py prebuilts/uefi/
 fi
-# one list per repository: hackios-xnu-kernel owns prebuilt/, hackios-xnu-userland prebuilt/userland/
+# two lists: prebuilts/SHA256SUMS for the kernel and the UEFI pieces, prebuilts/userland/SHA256SUMS for our programs
 {
 	echo "Built $(date '+%Y-%m-%d %H:%M') from this tree."
 	echo
-	sha256sum prebuilt/mach.development.bcm2837 prebuilt/uefi/* 2>/dev/null
-} > prebuilt/SHA256SUMS
+	sha256sum prebuilts/mach.development.bcm2837 prebuilts/uefi/* 2>/dev/null
+} > prebuilts/SHA256SUMS
 {
 	echo "Built $(date '+%Y-%m-%d %H:%M') from this tree."
 	echo
-	sha256sum prebuilt/userland/* 2>/dev/null | grep -v SHA256SUMS
-} > prebuilt/userland/SHA256SUMS.new && mv prebuilt/userland/SHA256SUMS.new prebuilt/userland/SHA256SUMS
-ls -la prebuilt prebuilt/userland prebuilt/uefi
+	sha256sum prebuilts/userland/* 2>/dev/null | grep -v SHA256SUMS
+} > prebuilts/userland/SHA256SUMS.new && mv prebuilts/userland/SHA256SUMS.new prebuilts/userland/SHA256SUMS
+ls -la prebuilt prebuilts/userland prebuilts/uefi

@@ -39,7 +39,7 @@
 #
 # THE LIBRARY AND THE DRIVER MUST COME FROM ONE SNAPSHOT, and in logs/235006-run.log they did
 # not. That boot carried a fresh driver and a libredwoodair.dylib built an hour earlier
-# (xnu-deps/build/mesa/out/libredwoodair.dylib, 22:42, from a 204 161-byte air_metal.c against
+# (kernel/deps/build/mesa/out/libredwoodair.dylib, 22:42, from a 204 161-byte air_metal.c against
 # this work's 234 981), so the two --vertex lines of rc.jobs.metalvertexdesc printed the OLD
 # refusal -- "carries no vertex attribute layout", a sentence that does not exist in the new
 # library -- which is exactly the tripwire that list wrote down. Nothing in that log is about
@@ -47,11 +47,11 @@
 # the same offset in both shapes, because rwa_render_shape grew after sample_count and rwa_draw
 # grew at the end.
 #
-#   the library        AIR=1 tools/mk-mesa.sh, run FROM THIS WORKING COPY (it resolves its
+#   the library        AIR=1 graphics/mk-mesa.sh, run FROM THIS WORKING COPY (it resolves its
 #                      sources from its own path, and 21 working copies hold 21 different
 #                      air_metal.c). It must print a libredwoodair.dylib line, and
-#                      xnu-deps/build/mesa/mesa-25.0.7/src/compiler/air/air_metal.c must then
-#                      be the same size as tools/mesa/air/air_metal.c.
+#                      kernel/deps/build/mesa/mesa-25.0.7/src/compiler/air/air_metal.c must then
+#                      be the same size as graphics/mesa/air/air_metal.c.
 #   the image          CRYPTEXES=flash SYSTEM=1 GL=1 QUIET=1 JOBS="" \
 #                        RC_JOBS=rc.jobs.metalattrib ./build.sh
 #                      JOBS="" because nothing here needs the window server, and with it alive

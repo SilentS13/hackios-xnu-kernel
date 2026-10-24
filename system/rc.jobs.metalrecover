@@ -4,7 +4,7 @@
 # answering come back? Boot the kernel with gpu_recover=1 among the boot-args and nothing else
 # changed from the run this list is written against (logs/094810-run.log):
 #
-#   XL_CMDLINE="bootcpu=7 cpus=8 cpufreq=1 touchscreen=1 gpu=1 gpu_recover=1" ./xl run
+#   XL_CMDLINE="bootcpu=7 cpus=8 cpufreq=1 touchscreen=1 gpu=1 gpu_recover=1" host/xl run
 #
 # The control is the same list booted WITHOUT gpu_recover=1, which is the behaviour of every
 # boot so far: after the first hang gpuWait latches (gGPUReported in

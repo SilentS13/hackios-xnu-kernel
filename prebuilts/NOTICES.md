@@ -1,11 +1,11 @@
 # Third-party notices for the prebuilt kernel
 
-`prebuilt/mach.development.bcm2837` is built from Apple's XNU (APSL 2.0) with the changes in `xnu/`, and it
+`prebuilts/mach.development.bcm2837` is built from Apple's XNU (APSL 2.0) with the changes in `kernel/xnu/`, and it
 also contains code of the following projects, linked in at build time (see README.md, "Licenses").
 
 ## ath11k (Linux, drivers/net/wireless/ath/ath11k)
 
-Built by `tools/mk-ath11k.sh` from Linux 7.0.14, unmodified. License: BSD-3-Clause-Clear (one header of
+Built by `host/mk-ath11k.sh` from Linux 7.0.14, unmodified. License: BSD-3-Clause-Clear (one header of
 `drivers/net/wireless/ath`, `spectral_common.h`, is ISC). The copyright lines of the files it is built from:
 
 ```
@@ -83,7 +83,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ## FreeBSD LinuxKPI and kernel headers
 
-From FreeBSD 15.1-RELEASE (`src.txz`), patched with `wifi/lx/patches/`. BSD-2-Clause. FreeBSD's `COPYRIGHT`:
+From FreeBSD 15.1-RELEASE (`src.txz`), patched with `kernel/wifi/lx/patches/`. BSD-2-Clause. FreeBSD's `COPYRIGHT`:
 
 ```
 

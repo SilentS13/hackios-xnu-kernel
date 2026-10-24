@@ -18,7 +18,7 @@
  *
  * WHAT IT DRAWS, and why exactly this. The pipeline is Apple's own clearFragment01 out of
  * AppleMetalGLRenderer's library with NO vertex function, which is the compiler library's
- * cue to supply its full-screen quad stage (tools/mesa/air/air_metal.h). That stage's quad
+ * cue to supply its full-screen quad stage (graphics/mesa/air/air_metal.h). That stage's quad
  * has four corners in a fixed order -- (-1,-1), (1,-1), (-1,1), (1,1) -- so a draw of THREE
  * vertices of it is a triangle over the first three, and clearFragment01 fills it with the
  * float4 in the constant buffer at index 14. Both halves of that are already measured on
@@ -110,7 +110,7 @@ extern id MTLCreateSystemDefaultDevice(void);
 /*
  * MTLAddDevice is not exported, so it is reached by its distance from one that is -- the
  * same two numbers src/metal_drv_test.m uses, from the same cache
- * (ios165/20F66__iPhone10,3_6/dyld_shared_cache_arm64).
+ * (system/ios/20F66__iPhone10,3_6/dyld_shared_cache_arm64).
  */
 #define MTL_CREATE_DEVICE_UNSLID 0x181a34b3cUL
 #define MTL_ADD_DEVICE_UNSLID    0x181a1875cUL

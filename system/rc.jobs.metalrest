@@ -7,7 +7,7 @@
 # canary, and the image is built without REST and with no Apple jobs at all, so the whole
 # list sits inside the first 256 KB the loader keeps.
 #
-# With tools/mesa/ir3-ssbo-subdword.patch in, its failure mode is fixed: its 16-bit
+# With graphics/mesa/ir3-ssbo-subdword.patch in, its failure mode is fixed: its 16-bit
 # nextSpanID reads used to land four bytes apart instead of two, which turned this input's
 # four lists into a cycle with no sentinel in it. PropagateParents, the same shape, now
 # finishes and changes nothing. If this does the same, the eleven are complete.

@@ -8,7 +8,7 @@
 # xnu/export.sh expects to find it. A directory that already exists is left alone.
 set -e
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-DIR=${1:-${XNU_SRC:-$HERE/../xnu-src/xnu-8796.121.2}}
+DIR=${1:-${XNU_SRC:-$HERE/../../xnu-src/xnu-8796.121.2}}
 URL=${XNU_URL:-https://github.com/apple-oss-distributions/xnu.git}
 TAG=xnu-8796.121.2
 BASE=c54f35ca767986246321eb901baf8f5ff7923f6a

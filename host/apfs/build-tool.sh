@@ -5,17 +5,17 @@
 # when KERNEL is not defined.  apfs_deflate.c is libdeflate's decompressor; host-shim/ stands
 # in for its x86 code, which is not in the kernel tree, so the host runs the kernel's decoder.
 #
-# usage: tools/apfs/build-tool.sh [OUT]       (default: apfs-work/apfs-tool)
+# usage: host/apfs/build-tool.sh [OUT]       (default: apfs-work/apfs-tool)
 set -eu
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 OUT=${1:-$ROOT/apfs-work/apfs-tool}
 
 SRC=""
-for d in "$ROOT/xnu-src/xnu-8796.121.2/bsd/miscfs/apfs" "$ROOT/xnu/files/bsd/miscfs/apfs"; do
+for d in "$ROOT/xnu-src/xnu-8796.121.2/bsd/miscfs/apfs" "$ROOT/kernel/xnu/files/bsd/miscfs/apfs"; do
 	[ -f "$d/apfs_lib.c" ] && { SRC=$d; break; }
 done
-[ -n "$SRC" ] || { echo "build-tool.sh: apfs_lib.c is in neither the kernel tree nor xnu/files" >&2; exit 1; }
+[ -n "$SRC" ] || { echo "build-tool.sh: apfs_lib.c is in neither the kernel tree nor kernel/xnu/files" >&2; exit 1; }
 
 mkdir -p "$(dirname "$OUT")"
 # TOOL_CFLAGS: more for the compiler, e.g. "-fsanitize=thread -g" with APFS_TOOL_THREADS

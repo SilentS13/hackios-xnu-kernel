@@ -15,7 +15,7 @@ Every kernel lands in exactly one row and the rows are checked against the
 total before anything is printed. That check is here because the first version
 of this table was assembled by hand in a report, and it came to 45 of 47: two
 kernels whose message matched no pattern fell into a prose aside instead of a
-row, which is exactly the habit the "How our own checks lie" notes (docs/checks.md in hackios-xnu-kernel) warns
+row, which is exactly the habit the "How our own checks lie" notes (docs/checks.md) warns
 about -- an exclusion without its own number. A table that cannot fail to add
 up is worth more than a careful author.
 
@@ -44,10 +44,10 @@ AIR_RUN = os.environ.get(
     os.path.join(ROOT, "build/mesa-host/build/src/gallium/drivers/freedreno/air_run"))
 
 LIBS = [
-    "ios165/rootfs/System/Library/VideoDecoders/AV1SW.metallib",
-    "ios165/rootfs/System/Library/Extensions/AppleMetalGLRenderer.bundle/default.metallib",
-    "ios165/rootfs/System/Library/CoreImage/PortraitFilters.cifilter/default.metallib",
-    "ios165/rootfs/System/Library/CoreImage/PortraitFilters.cifilter/portrait_filters.metallib",
+    "system/ios/rootfs/System/Library/VideoDecoders/AV1SW.metallib",
+    "system/ios/rootfs/System/Library/Extensions/AppleMetalGLRenderer.bundle/default.metallib",
+    "system/ios/rootfs/System/Library/CoreImage/PortraitFilters.cifilter/default.metallib",
+    "system/ios/rootfs/System/Library/CoreImage/PortraitFilters.cifilter/portrait_filters.metallib",
 ]
 
 # One row per cause, in the order a reader wants them: what works, then what is
@@ -212,7 +212,7 @@ def from_log(path, ks):
 
     Keyed on the name air_run prints, not on the order of the lines: a console
     shared with launchd interleaves them, and the loader's log drops its own
-    middle when it grows (docs/checks.md in hackios-xnu-kernel). A kernel
+    middle when it grows (docs/checks.md). A kernel
     whose block never appears is "not in the log", which is its own row rather
     than being folded into a refusal -- the two have different causes and the
     log being truncated is one of them.
@@ -273,7 +273,7 @@ def main(argv):
     libs = [a for a in argv if not a.startswith("--")] or LIBS
     for prog in (AIR2NIR, AIR_RUN):
         if not os.path.exists(prog):
-            print("kernelcheck: run tools/air/mk-host.sh first (%s)" % prog,
+            print("kernelcheck: run graphics/air/mk-host.sh first (%s)" % prog,
                   file=sys.stderr)
             return 1
 
@@ -331,7 +331,7 @@ def main(argv):
         if hung:
             print("      14 of the 47 cannot be dispatched by this harness at all -- their "
                   "loops leave on a value from a buffer it fills with a byte pattern "
-                  "(tools/air/kstruct.py)")
+                  "(graphics/air/kstruct.py)")
         print("  %2d  not in the log at all (the loader drops its middle when it grows)"
               % len(miss))
         vacuous = [n for n, v in res.items()

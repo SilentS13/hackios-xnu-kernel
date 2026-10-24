@@ -2,7 +2,7 @@
  * What a Metal driver needs from Mesa, and nothing else.
  *
  * Subsystem (1) made an AIR front end inside Mesa; subsystem (2) is making the Metal object
- * graph in userland/src/redwoodmetal.m. They meet here. The measurement that decided the
+ * graph in system/src/redwoodmetal.m. They meet here. The measurement that decided the
  * shape of this header is in docs/metal.md 10.12: Metal hands a driver one function's LLVM
  * module through -[_MTLFunction bitcodeData], and those bytes are -- checked over all eleven
  * functions of AV1SW.metallib -- exactly what this front end already reads. So the contract
@@ -10,7 +10,7 @@
  * side must not grow a dependency on Mesa's headers, and this side must stay free to change
  * how it compiles.
  *
- * air_run (tools/mesa/air/air_run.c) does all of this already as a test program -- opens a
+ * air_run (graphics/mesa/air/air_run.c) does all of this already as a test program -- opens a
  * freedreno screen, translates a module, builds a compute state and launches a grid on the
  * phone's Adreno. This is that, as a library, so a driver can do it in process.
  *
@@ -153,7 +153,7 @@ void rwa_texture_destroy(struct rwa_texture *texture);
  * drawn (docs/metal.md 10.43).
  *
  * `surface_id` is the IOSurface's ID, and it goes where Linux puts a dmabuf file descriptor:
- * the DRM shim of this port takes the ID there already (tools/mesa/redwood-drm: the kernel's
+ * the DRM shim of this port takes the ID there already (graphics/mesa/redwood-drm: the kernel's
  * kRedwoodSurface answers it), so nothing new is asked of the layers underneath. `offset`
  * and `row_bytes` are the kernel's own answer about that surface and are NOT asked again
  * here, because freedreno takes both from the caller.
@@ -222,7 +222,7 @@ int rwa_depth_read(struct rwa_texture *texture, unsigned level, unsigned layer,
  *   - Metal's own pipeline reflection. -newRenderPipelineStateWithDescriptor:options:
  *     reflection: has to report MTLArgument.textureType and .textureDataType for every
  *     binding, and only whoever read the shader knows them.
- *   - a test standing in for an application. userland/src/metal_drv_test.m --draw-all
+ *   - a test standing in for an application. system/src/metal_drv_test.m --draw-all
  *     sweeps every fragment function of a .metallib, and with one kind and one format
  *     bound for the whole library 13 of Apple's 271 were refused -- by this library, and
  *     rightly: they declare a texture3d, a texture2d<int> or a multisample texture where
@@ -819,7 +819,7 @@ struct rwa_render_shape {
 
 	/*
 	 * MTLRenderPipelineDescriptor.vertexDescriptor, appended for the reason the
-	 * indexed fields of rwa_draw were appended: userland/src/redwoodmetal.m holds a
+	 * indexed fields of rwa_draw were appended: system/src/redwoodmetal.m holds a
 	 * copy of this struct typed out by hand, and appending leaves every field that
 	 * driver already fills at the offset it already reads. Both still have to be
 	 * rebuilt together.
@@ -838,7 +838,7 @@ struct rwa_render_shape {
 	 * attachment, and APPENDED -- 8 * 32 + 4 = 260 bytes at the END of this struct,
 	 * with every field above it left at the offset it already had.
 	 *
-	 * That is not tidiness. userland/src/redwoodmetal.m holds a copy of this struct
+	 * That is not tidiness. system/src/redwoodmetal.m holds a copy of this struct
 	 * typed out by hand, and this port has paid twice for a field inserted in the
 	 * MIDDLE of a shared struct: once with a primitive type arriving as 1871292816
 	 * (rwa_draw, see there), and once when struct air_resource grew by eight bytes
@@ -1218,7 +1218,7 @@ struct rwa_draw {
 	unsigned vertex_start, vertex_count;
 
 	/* The indexed forms. Appended rather than placed beside `primitive` on purpose:
-	 * userland/src/redwoodmetal.m holds a copy of this struct typed out by hand, and
+	 * system/src/redwoodmetal.m holds a copy of this struct typed out by hand, and
 	 * appending leaves every field that driver already fills at the offset it already
 	 * reads. Both still have to be rebuilt together -- a driver compiled against one
 	 * shape of this struct calling a library built with the other read a primitive

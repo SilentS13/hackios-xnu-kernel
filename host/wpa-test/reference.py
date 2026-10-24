@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # The access point's side of the WPA2 handshake, written against Python's own hashlib and hmac
 # and the AES key wrap of the "cryptography" package: an implementation that shares nothing with
-# wifi/lx/src/lx_wpa.c. For a number of made-up networks it writes down, as C, the messages an
+# kernel/wifi/lx/src/lx_wpa.c. For a number of made-up networks it writes down, as C, the messages an
 # access point would send and the answers a correct station gives, byte for byte; test_wpa.c
 # has lx_wpa.c answer the same messages and compares. (IEEE 802.11-2020, 12.7.)
 import hashlib

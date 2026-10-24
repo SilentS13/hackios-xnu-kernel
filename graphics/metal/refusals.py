@@ -22,7 +22,7 @@ What it does NOT count, and why, because the gap bounds every number here:
     corpus at all. A corpus module carries no MTLTextureDescriptor. Those
     sites are listed with "no corpus" rather than with a zero, because the two
     mean opposite things: one is unmeasured, the other is measured as never.
-  - the driver's own refusals (userland/src/redwoodmetal.m) reach an
+  - the driver's own refusals (system/src/redwoodmetal.m) reach an
     application as an NSError and are counted per BOOT, in a log, not per
     module. They are listed and not counted.
   - RW_ONCE notices in the driver are counted apart and are NOT refusals: they
@@ -30,10 +30,10 @@ What it does NOT count, and why, because the gap bounds every number here:
     failure this project set out to avoid. The count is here so that it is a
     number somebody has to look at.
 
-A corpus report is `tools/air/corpus.py --json`. Two are worth having:
+A corpus report is `graphics/air/corpus.py --json`. Two are worth having:
 the 456 modules of the device image (docs/air.md section 5) and the 7 879
 Metal libraries of Resident Evil 4 (section 8, extracted with
-tools/air/repak.py). No byte of either is in this repository, so the reports
+graphics/air/repak.py). No byte of either is in this repository, so the reports
 are made where the corpus is and this tool is pointed at them.
 
 usage:
@@ -64,11 +64,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 # there is an air_ctx to hold one -- and one of them is the largest refusal in
 # the device corpus, so missing them would miss the number that matters most.
 SOURCES = [
-    ("tools/mesa/air/air_metal.c", "say", 2, "contract"),
-    ("tools/mesa/air/air_to_nir.c", "air_error", 1, "frontend"),
-    ("tools/mesa/air/air_intrinsics.c", "air_error", 1, "frontend"),
-    ("tools/mesa/air/air_to_nir.c", "*error = ralloc_strdup", 1, "frontend"),
-    ("tools/mesa/air/air_to_nir.c", "*error = ralloc_asprintf", 1, "frontend"),
+    ("graphics/mesa/air/air_metal.c", "say", 2, "contract"),
+    ("graphics/mesa/air/air_to_nir.c", "air_error", 1, "frontend"),
+    ("graphics/mesa/air/air_intrinsics.c", "air_error", 1, "frontend"),
+    ("graphics/mesa/air/air_to_nir.c", "*error = ralloc_strdup", 1, "frontend"),
+    ("graphics/mesa/air/air_to_nir.c", "*error = ralloc_asprintf", 1, "frontend"),
 ]
 
 # What a module's own stop reason gains on its way out of air_to_nir: the
@@ -165,7 +165,7 @@ def events(path):
 
 def rw_once(root=ROOT):
     """The driver's RW_ONCE notices: printed once, work dropped, nothing refused."""
-    path = os.path.join(root, "userland/src/redwoodmetal.m")
+    path = os.path.join(root, "system/src/redwoodmetal.m")
     if not os.path.exists(path):
         return []
     text = open(path, encoding="utf-8", errors="replace").read()

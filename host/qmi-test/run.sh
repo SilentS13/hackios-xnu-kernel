@@ -2,16 +2,16 @@
 # Build and run the tests of the QMI helpers (bsd/dev/hk_qmi.c of the kernel tree) on this
 # machine, under the address and undefined-behaviour sanitizers.
 #
-# With ath11k's sources at hand (tools/mk-ath11k.sh fetches them; ATH11K=<directory> to say where
+# With ath11k's sources at hand (host/mk-ath11k.sh fetches them; ATH11K=<directory> to say where
 # else they are) its own message tables are tested too; without, only what needs none of them.
 # Nothing of ath11k is kept: its tables are taken out of qmi.c into the build directory each time.
 set -e
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 K=$ROOT/xnu-src/xnu-8796.121.2                 # the kernel tree being worked in, or else the copies that are in git
-[ -f "$K/bsd/dev/hk_qmi.c" ] || K=$ROOT/xnu/files
-ATH=${ATH11K:-$ROOT/xnu-deps/build/ath11k/src/ath11k}
-B=$ROOT/xnu-deps/build/qmi-test
+[ -f "$K/bsd/dev/hk_qmi.c" ] || K=$ROOT/kernel/xnu/files
+ATH=${ATH11K:-$ROOT/kernel/deps/build/ath11k/src/ath11k}
+B=$ROOT/kernel/deps/build/qmi-test
 rm -rf "$B"
 mkdir -p "$B/inc/sys"
 ln -s "$K/bsd/sys/hk_qmi.h" "$K/bsd/sys/hk_qrtr.h" "$B/inc/sys/"

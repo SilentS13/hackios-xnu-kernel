@@ -3,7 +3,7 @@
 #
 #   hello            one raw-syscall program; as a RAM disk on its own it boots through mockfs
 #   root.apfs        the small image: our init and test programs, etc/rc, and the launchd jobs
-#                    (LaunchDaemons/), an APFS container (../tools/apfs/mkapfs.py). It travels in
+#                    (LaunchDaemons/), an APFS container (../host/apfs/mkapfs.py). It travels in
 #                    the payload next to the kernel (the second RAM disk, /dev/md1) and is mounted
 #                    on /redwood. Rebuilt every time.
 #                      RC=<file>    etc/rc: rc.launchd (default) hands process 1 to the iOS launchd
@@ -23,7 +23,7 @@
 #                                   diagnostics, which a file given as RC_JOBS can then run
 #                      EXTRA_SHARE="..." directories on this machine to copy whole into /redwood/share,
 #                                   each under its own name: the data a one-off diagnostic reads, when it
-#                                   needs more than a program (tools/air/intrincheck.py --emit writes such
+#                                   needs more than a program (graphics/air/intrincheck.py --emit writes such
 #                                   a directory). This goes into the boot volume, which every recipe
 #                                   carries and which the flash recipe puts in RAM, so its size is paid
 #                                   for at every boot -- a few megabytes, not more
@@ -41,7 +41,7 @@
 #                                   it needs an option for it, not an environment variable -- which is why
 #                                   air_run grew --buffer.
 #                      GL=1         with an OpenGL ES implementation for the window server: Mesa
-#                                   (tools/mk-mesa.sh fetches and builds it) behind src/eagl.c, as
+#                                   (graphics/mk-mesa.sh fetches and builds it) behind src/eagl.c, as
 #                                   lib/libOSMesa.8.dylib (15 MB) and lib/libredwood-gl.dylib. Where the
 #                                   kernel has started the phone's GPU, CoreAnimation then draws with its
 #                                   OpenGL ES renderer, by that GPU (boot-arg gpu=1); anywhere else -- QEMU,
@@ -54,10 +54,10 @@
 #                                   mounted). Not beside GL=1: the two do not fit the 64 MB the loader takes with
 #                                   the kernel. adsp=1 needs none of it: the system image has the firmware in /fw.
 #   system.apfs      the system image, the root filesystem (the resident RAM disk, /dev/md0), an
-#                    APFS container: the part of iOS 16.5 chosen by ../ios165/select-system.py at
+#                    APFS container: the part of iOS 16.5 chosen by ios/select-system.py at
 #                    its real paths, the dyld shared cache, and src/stage0.c as /sbin/launchd (the
 #                    real one is /sbin/launchd.ios). 2.5 GB; upload once per loader session with
-#                    `xl ramdisk userland/system.apfs`. Rebuilt when missing, when its inputs
+#                    `xl ramdisk system/system.apfs`. Rebuilt when missing, when its inputs
 #                    (stage0, the manifest, the cryptex files) are newer, or with SYSTEM=1 (after
 #                    changing the recipe below).
 #   flashboot.apfs   FLASHBOOT=1: the RAM part of a boot whose root is the iOS volume on the phone's
@@ -68,31 +68,31 @@
 #                    That root.apfs is for a flash boot; a RAM boot wants one built without FLASHBOOT=1,
 #                    or launchd will fail to start those few when something asks for them.
 #
-#   PREBUILT=1       do not compile anything: take our programs from ../prebuilt/userland (this is also
-#                    what happens when the cross toolchain is not set up, see ../xnu-deps/setup.sh);
+#   PREBUILT=1       do not compile anything: take our programs from ../prebuilts/userland (this is also
+#                    what happens when the cross toolchain is not set up, see ../kernel/deps/setup.sh);
 #                    the images are then made of them and of the iOS files alone (python3)
 #   CHECK=1          check every image (every container) as it is made: apfsck has to find it clean and
 #                    the kernel's apfs_lib has to read every volume back as the directory it was made of
-#                    (../tools/apfs/check-image.sh; the system image takes a few minutes more)
+#                    (../host/apfs/check-image.sh; the system image takes a few minutes more)
 set -e
 cd "$(dirname "$(readlink -f "$0")")"
-source ../xnu-env.sh
+source ../kernel/env.sh
 
 CC="xnu-clang -arch arm64 -Os -static -nostdlib -ffreestanding -fno-stack-protector -fno-builtin -Wall -Wextra"
 LD="-Wl,-e,_start -Wl,-pagezero_size,0x100000000"
 DYN="xnu-clang -arch arm64 -isysroot ${THEOS:-$HOME/theos}/sdks/iPhoneOS16.5.sdk -O1"
-IOS=../ios165
+IOS=ios
 CACHE=$IOS/20F66__iPhone10,3_6
-# ios165/rootfs and ios165/cryptex must be this copy's own directories of hard links, the way
-# tools/new-workspace.sh makes them. A symlink to another copy's tree makes sysroot a symlink too, because
+# system/ios/rootfs and system/ios/cryptex must be this copy's own directories of hard links, the way
+# host/new-workspace.sh makes them. A symlink to another copy's tree makes sysroot a symlink too, because
 # cp -a does not follow one, and then every rm -rf and mv below edits the shared extraction in place. That
 # happened on 19 October 2026: 491 LaunchDaemons, NanoLaunchDaemons, LaunchAngels, xpc/launchd.plist and
 # private/var went out of the main copy's tree, and only the hard links in the other copies still held them.
 for d in rootfs cryptex cryptex-app; do
 	[ -L $IOS/$d ] || continue
-	echo "build.sh: ios165/$d is a symlink to $(readlink $IOS/$d)" >&2
+	echo "build.sh: system/ios/$d is a symlink to $(readlink $IOS/$d)" >&2
 	echo "build.sh: it has to be a directory of this copy's own: rm it and cp -al the original over," >&2
-	echo "build.sh: as tools/new-workspace.sh does. Building against a link damages the shared tree." >&2
+	echo "build.sh: as host/new-workspace.sh does. Building against a link damages the shared tree." >&2
 	exit 1
 done
 # The stock iOS jobs given to launchd, roughly in the order they were brought up.
@@ -142,8 +142,8 @@ mkdir -p obj
 
 if [ -z "$PREBUILT" ] && ! command -v ld64 >/dev/null; then PREBUILT=1; fi
 if [ -n "$PREBUILT" ]; then
-	echo "build.sh: not compiling, using the programs in prebuilt/userland"
-	for f in ../prebuilt/userland/*; do
+	echo "build.sh: not compiling, using the programs in prebuilts/userland"
+	for f in ../prebuilts/userland/*; do
 		# keep a file that did not change (and its time stamp): system.apfs depends on stage0
 		cmp -s "$f" "obj/$(basename "$f")" || cp "$f" obj/
 	done
@@ -328,19 +328,19 @@ if [ -d $IOS/rootfs/usr/lib ]; then
 		if [ -n "$GL" ]; then
 			# the OpenGL ES library, and the table of functions that hands CoreAnimation's calls to it
 			# (Mesa says beside the library what it was built from: one from other patches is built again)
-			M=../xnu-deps/build/mesa/out
-			[ "$(cat $M/built-from 2>/dev/null)" = "$(cat ../tools/mesa/*.patch ../tools/mesa/redwood-drm/* | sha256sum)" ] ||
-				../tools/mk-mesa.sh
+			M=../kernel/deps/build/mesa/out
+			[ "$(cat $M/built-from 2>/dev/null)" = "$(cat ../graphics/mesa/*.patch ../graphics/mesa/redwood-drm/* | sha256sum)" ] ||
+				../graphics/mk-mesa.sh
 			# ... and the compiler library separately, because the hash above covers the PATCHES
-			# and the library is built from tools/mesa/air/, which they do not mention. Two boots
+			# and the library is built from graphics/mesa/air/, which they do not mention. Two boots
 			# of 22 October carried a libredwoodair.dylib three hours older than the driver beside
 			# it while rwa_render_shape had grown IN THE MIDDLE -- the image was the mismatch the
 			# contract warns about, and nothing in it said so. Silence is what made it expensive:
 			# the library is stripped, so the driver found the symbols it wanted and read a stride
 			# where a pixel format was.
-			[ "$(cat $M/built-from-air 2>/dev/null)" = "$(cat ../tools/mesa/air/* | sha256sum)" ] || {
-				echo "build.sh: tools/mesa/air/ has changed since libredwoodair.dylib was built"
-				AIR=1 ../tools/mk-mesa.sh
+			[ "$(cat $M/built-from-air 2>/dev/null)" = "$(cat ../graphics/mesa/air/* | sha256sum)" ] || {
+				echo "build.sh: graphics/mesa/air/ has changed since libredwoodair.dylib was built"
+				AIR=1 ../graphics/mk-mesa.sh
 			}
 			./mkeagl.py src/eagl_slots.txt $M/gl.xml $M/exported-gl.txt src/eagl.c > obj/eagl_gen.h
 			$DYN -dynamiclib -install_name /redwood/lib/libredwood-gl.dylib -Iobj -framework CoreFoundation \
@@ -353,11 +353,11 @@ if [ -d $IOS/rootfs/usr/lib ]; then
 			# air_run draws with a Metal shader translated by the AIR frontend
 			# and reads the pixels back (docs/air.md). It is built inside the
 			# Mesa build, because it needs Gallium itself and not the gl*
-			# entry points this library exports; AIR=1 tools/mk-mesa.sh makes
+			# entry points this library exports; AIR=1 graphics/mk-mesa.sh makes
 			# it, and it is copied in when it is there.
 			[ -f $M/air_run ] && cp $M/air_run obj/air_run
 			# The compiler the Metal driver asks for: AIR in, a dispatch on the
-			# Adreno out (tools/mesa/air/air_metal.h). It is copied whether or not
+			# Adreno out (graphics/mesa/air/air_metal.h). It is copied whether or not
 			# GL is wanted, because src/redwoodmetal.m dlopens it by that path --
 			# and its absence is a sentence the driver prints, not a crash.
 			[ -f $M/libredwoodair.dylib ] && cp $M/libredwoodair.dylib obj/
@@ -365,7 +365,7 @@ if [ -d $IOS/rootfs/usr/lib ]; then
 	fi
 	# (drawable_test is built in the same block as surf_test, so it is copied with it)
 	cp obj/hello_dyn obj/svc_test obj/surf_test obj/drawable_test obj/rwtouch obj/mg_test root/bin/
-	[ -f obj/cpu_test ] && cp obj/cpu_test root/bin/        # (a prebuilt/ from before this program has none)
+	[ -f obj/cpu_test ] && cp obj/cpu_test root/bin/        # (a prebuilts/ from before this program has none)
 	[ -f obj/thermald ] && cp obj/thermald root/bin/
 	[ -f obj/cow_test ] && cp obj/cow_test root/bin/
 	[ -f obj/cg_test ] && cp obj/cg_test root/bin/
@@ -486,7 +486,7 @@ if [ -d $IOS/rootfs/usr/lib ]; then
 		"") ;;
 		# an "if" and not "&& echo": a last line whose library is absent would make the loop,
 		# and with it the pipeline and the whole build under set -e, fail -- which is what a tree
-		# with only prebuilt/userland in it does, since not every injection library is shipped there
+		# with only prebuilts/userland in it does, since not every injection library is shipped there
 		/redwood/lib/*) if [ -f "root/lib/${library#/redwood/lib/}" ]; then echo "$library $names"; fi ;;
 		*) echo "$library $names" ;;
 		esac
@@ -572,7 +572,7 @@ if [ -f ../fw-haptic/aw8697_haptic.bin ]; then
 	mkdir -p root/fw
 	install -m 0644 ../fw-haptic/aw8697_haptic.bin root/fw/
 fi
-# ... and the cameras' register tables (bsd/dev/redwood_camera.c, cam=2 and up), made by tools/camsensor.py out of
+# ... and the cameras' register tables (bsd/dev/redwood_camera.c, cam=2 and up), made by host/camsensor.py out of
 # the sensors' module files of Android's camera stack, the phone's /vendor/lib64/camera/com.qti.sensormodule.
 # redwood_<maker>_<sensor>_<camera>.bin, in ../fw-camera (the vendor's: neither they nor the tables are in the
 # repository): camera-<sensor>.tab
@@ -580,15 +580,15 @@ for module in ../fw-camera/com.qti.sensormodule.redwood_*.bin; do
 	[ -f "$module" ] || continue
 	sensor=$(basename "$module" .bin | sed 's/^com\.qti\.sensormodule\.redwood_[a-z]*_\([a-z0-9]*\)_.*/\1/')
 	mkdir -p root/fw
-	../tools/camsensor.py "$module" "root/fw/camera-$sensor.tab" >/dev/null
+	../host/camsensor.py "$module" "root/fw/camera-$sensor.tab" >/dev/null
 done
-# ... and their colour tuning (libredwood-media's processor, src/camera_isp.c), made by tools/camtuning.py out of the
+# ... and their colour tuning (libredwood-media's processor, src/camera_isp.c), made by host/camtuning.py out of the
 # cameras' tuning files beside them, com.qti.tuned.redwood_<maker>_<sensor>_<camera>.bin: camera-<sensor>.isp
 for tuned in ../fw-camera/com.qti.tuned.redwood_*.bin; do
 	[ -f "$tuned" ] || continue
 	sensor=$(basename "$tuned" .bin | sed 's/^com\.qti\.tuned\.redwood_[a-z]*_\([a-z0-9]*\)_.*/\1/')
 	mkdir -p root/fw
-	../tools/camtuning.py "$tuned" "root/fw/camera-$sensor.isp" >/dev/null
+	../host/camtuning.py "$tuned" "root/fw/camera-$sensor.isp" >/dev/null
 done
 # ... and with ADSP=1 the image of the audio DSP, from the same place into ../fw-audio (bsd/dev/redwood_adsp.c):
 # adsp.mdt and adsp.b02 to adsp.b36, 20 MB. Only when asked for: beside GL=1 the payload would be more than the 64 MB
@@ -600,7 +600,7 @@ fi
 # Firmware that is not there is otherwise silent at build time and speaks only much later, deep in a
 # device log -- "adreno: THE GPU IS NOT STARTED: the small image has no fw/a660_gmu.bin" cost a phone
 # slot on 19 October 2026. It is the vendor's and never in the repository, so a copy made with bare
-# git worktree add has none of it, and neither has one whose tools/new-workspace.sh predates the fw-*
+# git worktree add has none of it, and neither has one whose host/new-workspace.sh predates the fw-*
 # loop there. Say what went in and what was not there to go in; what each one is for is above.
 fwhave= fwnone=
 for d in gpu wifi haptic camera audio; do
@@ -630,8 +630,8 @@ done
 [ -d root/lib/RedwoodAudio.driver ] && ln -s /redwood/lib/RedwoodAudio.driver root/hal/RedwoodAudio.driver
 # the image: zlib where it saves room (a small file whole in its attribute, as Apple keeps them); fw/
 # as it is, which the kernel's drivers use where it lies in memory (bsd/dev/redwood_image.c)
-python3 ../tools/apfs/mkapfs.py -z --plain fw -o root.apfs redwood=root | tail -1
-[ -z "$CHECK" ] || ../tools/apfs/check-image.sh root.apfs redwood=root
+python3 ../host/apfs/mkapfs.py -z --plain fw -o root.apfs redwood=root | tail -1
+[ -z "$CHECK" ] || ../host/apfs/check-image.sh root.apfs redwood=root
 
 # --- the RAM part of a boot off the flash: FLASHBOOT=1 -> flashboot.apfs --------------------------------
 # With the iOS volume on the phone's flash as the root, all that has to come from RAM is what is not
@@ -645,9 +645,9 @@ python3 ../tools/apfs/mkapfs.py -z --plain fw -o root.apfs redwood=root | tail -
 # where iOS grafts the cryptexes (src/init.c, flash_root; the kernel's apfs takes "/dev/md0,c=1" and
 # "c=2", and bsd/vm/vm_unix.c takes a shared cache from Cryptexes/OS). CRYPTEX_IMAGE=FILE:
 # Apple's own image of the cryptex as it is instead of this one remade (2.6 GB against 1 GB: too much
-# for the phone's memory beside iOS, not for QEMU's). Upload it with `xl ramdisk userland/flashboot.apfs`.
+# for the phone's memory beside iOS, not for QEMU's). Upload it with `xl ramdisk system/flashboot.apfs`.
 # CRYPTEXES=flash: the boot volume alone (20 MB) -- the cryptexes are Apple's images as they are on the
-# flash, in darwin right after the iOS volume (../tools/darwin-write.py put them there), and init mounts
+# flash, in darwin right after the iOS volume (../host/darwin-write.py put them there), and init mounts
 # them from there, the same containers 1 and 2 of the root's own device.
 if [ -n "$FLASHBOOT" ] && [ -f $CACHE/dyld_shared_cache_arm64 ]; then
 	rm -rf flashboot flashboot.os
@@ -678,7 +678,7 @@ if [ -n "$FLASHBOOT" ] && [ -f $CACHE/dyld_shared_cache_arm64 ]; then
 		mkdir -p flashboot/fw
 		cp ../fw-audio/aw882xx_acf.bin flashboot/fw/
 	fi
-	# the package manager's prefix, when tools/mk-jb.sh has fetched one: /jb of the boot volume, which is
+	# the package manager's prefix, when host/mk-jb.sh has fetched one: /jb of the boot volume, which is
 	# /private/preboot/jb once the iOS volume is the root -- the volume where a rootless jailbreak keeps its
 	# Procursus on an iPhone as well; init grafts it onto /var/jb (src/init.c, mount_writable)
 	if [ -d ../jb/root/var/jb ]; then
@@ -691,8 +691,8 @@ if [ -n "$FLASHBOOT" ] && [ -f $CACHE/dyld_shared_cache_arm64 ]; then
 		done
 		echo "  the package manager's prefix: $(du -sh flashboot/jb | cut -f1) as /jb of the boot volume"
 	fi
-	python3 ../tools/apfs/mkapfs.py -z --plain fw -o flashboot.boot.apfs Boot=flashboot | tail -1
-	[ -z "$CHECK" ] || ../tools/apfs/check-image.sh flashboot.boot.apfs Boot=flashboot
+	python3 ../host/apfs/mkapfs.py -z --plain fw -o flashboot.boot.apfs Boot=flashboot | tail -1
+	[ -z "$CHECK" ] || ../host/apfs/check-image.sh flashboot.boot.apfs Boot=flashboot
 	# the third container: Apple's App cryptex as it is (10 MB; fetch.sh), for the boot volume's Cryptexes/App
 	APP=""
 	[ -f $IOS/cryptex-app.dmg ] && APP=$IOS/cryptex-app.dmg
@@ -701,8 +701,8 @@ if [ -n "$FLASHBOOT" ] && [ -f $CACHE/dyld_shared_cache_arm64 ]; then
 	elif [ -n "$CRYPTEX_IMAGE" ]; then
 		cat flashboot.boot.apfs "$CRYPTEX_IMAGE" $APP > flashboot.apfs
 	else
-		python3 ../tools/apfs/mkapfs.py -z -o flashboot.os.apfs OS=flashboot.os | tail -1
-		[ -z "$CHECK" ] || ../tools/apfs/check-image.sh flashboot.os.apfs OS=flashboot.os
+		python3 ../host/apfs/mkapfs.py -z -o flashboot.os.apfs OS=flashboot.os | tail -1
+		[ -z "$CHECK" ] || ../host/apfs/check-image.sh flashboot.os.apfs OS=flashboot.os
 		cat flashboot.boot.apfs flashboot.os.apfs $APP > flashboot.apfs
 		rm -f flashboot.os.apfs
 	fi
@@ -714,11 +714,11 @@ fi
 if [ -f $IOS/system.manifest ] && [ -f $CACHE/dyld_shared_cache_arm64 ] &&
 	{ [ ! -f system.apfs ] || [ obj/stage0 -nt system.apfs ] || [ $IOS/system.manifest -nt system.apfs ] ||
 	  [ $IOS/cryptex -nt system.apfs ] || [ $IOS/cryptex-app -nt system.apfs ] || [ -n "$SYSTEM" ]; }; then
-	# what ios165/select-system.py has chosen since ios165/rootfs was extracted is not in it, and would not be
+	# what system/ios/select-system.py has chosen since system/ios/rootfs was extracted is not in it, and would not be
 	# in the image either (so it was once with the audio plug-ins and the system's sounds: iOS found no
 	# speaker and played nothing, though our device was there and the kernel's side worked)
 	if [ -f $IOS/.done-rootfs ] && [ $IOS/select-system.py -nt $IOS/.done-rootfs ]; then
-		echo "build.sh: ios165/select-system.py has changed since ios165/rootfs was extracted: run KEEP=1 ios165/fetch.sh" >&2
+		echo "build.sh: system/ios/select-system.py has changed since system/ios/rootfs was extracted: run KEEP=1 system/ios/fetch.sh" >&2
 		exit 1
 	fi
 	rm -rf sysroot
@@ -750,7 +750,7 @@ if [ -f $IOS/system.manifest ] && [ -f $CACHE/dyld_shared_cache_arm64 ] &&
 		mkdir -p sysroot/fw
 		cp ../fw-audio/aw882xx_acf.bin sysroot/fw/
 	fi
-	# the package manager's prefix, when tools/mk-jb.sh has fetched one: the Procursus bootstrap with
+	# the package manager's prefix, when host/mk-jb.sh has fetched one: the Procursus bootstrap with
 	# Sileo in it, as /jb. It cannot live at /var/jb in the image -- /private/var is a memory
 	# filesystem made afresh at every boot -- so init copies it there (src/init.c, copy_tree).
 	if [ -d ../jb/root/var/jb ]; then
@@ -826,7 +826,7 @@ if [ -f $IOS/system.manifest ] && [ -f $CACHE/dyld_shared_cache_arm64 ] &&
 	done
 	# zlib where it saves room, as Apple keeps the root (a small file whole in its attribute): 5.4 GB of
 	# files in 2.5 GB, what fits into the phone's RAM beside iOS
-	python3 ../tools/apfs/mkapfs.py -z -o system.apfs System=sysroot,manifest=$IOS/system.manifest | tail -1
-	[ -z "$CHECK" ] || ../tools/apfs/check-image.sh system.apfs System=sysroot,manifest=$IOS/system.manifest
+	python3 ../host/apfs/mkapfs.py -z -o system.apfs System=sysroot,manifest=$IOS/system.manifest | tail -1
+	[ -z "$CHECK" ] || ../host/apfs/check-image.sh system.apfs System=sysroot,manifest=$IOS/system.manifest
 	rm -rf sysroot
 fi

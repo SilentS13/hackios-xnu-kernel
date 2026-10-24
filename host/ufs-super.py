@@ -5,7 +5,7 @@ usage: ufs-super.py [LOG]
   LOG  the loader's log of a run with ufs=1 among XL_CMDLINE (default logs/last.log)
 
 Android's system, vendor, product and the rest are logical partitions inside the GPT partition
-"super", laid out by liblp's metadata at its start. With ufs=1 the loader (xnuloader/loader.c,
+"super", laid out by liblp's metadata at its start. With ufs=1 the loader (bootloader/loader/loader.c,
 ufs_dump_super) prints that metadata raw: the geometry, the header of the first slot and its tables.
 This checks their SHA-256 sums -- right sums mean the bytes are the metadata as Android wrote it --
 lists the logical partitions with their extents and groups, and says which ranges of super no

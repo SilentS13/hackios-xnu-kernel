@@ -1,11 +1,11 @@
 /*
  * The reference for metal_drv_test's --picture, on this machine.
  *
- * userland/src/metal_drv_test.m --picture draws the phone's whole panel with 66 of Apple's
+ * system/src/metal_drv_test.m --picture draws the phone's whole panel with 66 of Apple's
  * own shaders and counts 1 892 224 pixels of it against what they must hold
  * (docs/metal.md 10.33). This is the same picture and the same counts through the same
  * library on softpipe, so that every number that run prints has a reference computed here
- * and not an expectation written down beside it -- the reason tools/air/metalcheck.py
+ * and not an expectation written down beside it -- the reason graphics/air/metalcheck.py
  * exists for the compute path, and the same reason here.
  *
  * It is deliberately NOT in the Mesa build: nothing of it belongs to the library, and a
@@ -13,16 +13,16 @@
  * hand against the library that build is already producing:
  *
  *   FD=build/mesa-host/build/src/gallium/drivers/freedreno
- *   tools/air/mk-host.sh                                   # if $FD/libredwoodair.so is not there
- *   gcc -O1 -Wall -I tools/mesa/air -o /tmp/picture_host tools/air/picture_host.c \
+ *   graphics/air/mk-host.sh                                   # if $FD/libredwoodair.so is not there
+ *   gcc -O1 -Wall -I graphics/mesa/air -o /tmp/picture_host graphics/air/picture_host.c \
  *       -L$FD -l:libredwoodair.so -Wl,-rpath,$PWD/$FD
  *
  * and run it on the modules of the library the device test reads, unpacked from the
  * container (the device gets them from Metal itself, through -[_MTLFunction bitcodeData];
- * here there is no Metal, so tools/metallib.py does what the container reader does there):
+ * here there is no Metal, so graphics/metallib.py does what the container reader does there):
  *
- *   python3 tools/metallib.py dump \
- *       ios165/rootfs/System/Library/Extensions/AppleMetalGLRenderer.bundle/default.metallib /tmp/bc
+ *   python3 graphics/metallib.py dump \
+ *       system/ios/rootfs/System/Library/Extensions/AppleMetalGLRenderer.bundle/default.metallib /tmp/bc
  *   /tmp/picture_host /tmp/bc /tmp/picture.ppm
  *
  * What it must print, which is what the phone must print too:

@@ -52,7 +52,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG = os.path.join(ROOT, 'logs', 'darwin-write.log')
 
 # This phone's darwin instead of the constants above (which are the phone the port was brought up on): the
-# identity file made when its darwin was cut (common/flash/darwinid.py), named by DARWIN_ID or found by the
+# identity file made when its darwin was cut (build/flash/darwinid.py), named by DARWIN_ID or found by the
 # phone's adb serial in phones/. Every check below is then made against this phone's own values.
 def _identity():
     path = os.environ.get('DARWIN_ID')

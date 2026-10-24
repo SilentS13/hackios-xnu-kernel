@@ -1,86 +1,82 @@
 # A whitelist: the working tree also holds gigabytes of downloads, build output, logs, third-party
-# clones, files of iOS and the hackios-xnu-userland checkout (common/setup.sh), none of which belongs
-# in this repository. Nothing is tracked unless it is named here.
+# clones and files of iOS, none of which belongs in this repository. Nothing is tracked unless it
+# is named here.
 /*
 !/.gitignore
 !/.github/
 !/README.md
 !/LICENSE
 !/DISCLAIMER.md
-!/common/
+!/build/
+!/device/
 !/docs/
-!/xl
-!/mkxnuimg.py
-!/xnu-build.sh
-!/xnu-env.sh
-!/xnuloader/
-!/qemu/
-!/tools/
-!/xnu/
-!/xnu-deps/
-!/uefi/
-!/prebuilt/
-!/wifi/
+!/graphics/
+!/host/
+!/prebuilts/
+!/bootloader/
+!/kernel/
+!/system/
 
 __pycache__/
 *~
 *.orig
 *.rej
 
-# hackios-xnu-userland's files share this working tree (common/setup.sh)
-/docs/air.md
-/docs/air-report.md
-/prebuilt/userland/
-/tools/apfs/
-/tools/air/
-/tools/mesa/
-/tools/metal/
-/tools/mk-mesa.sh
-/tools/mk-jb.sh
-/tools/jb-preinstall.py
-/tools/font_trim.py
-/tools/metallib.py
+/bootloader/loader/*
+!/bootloader/loader/build.sh
+!/bootloader/loader/efi.h
+!/bootloader/loader/flashboot.c
+!/bootloader/loader/crypto.c
+!/bootloader/loader/darwinfile.c
+!/bootloader/loader/loader.c
+!/bootloader/loader/mkpayload.py
 
-/xnuloader/*
-!/xnuloader/build.sh
-!/xnuloader/efi.h
-!/xnuloader/flashboot.c
-!/xnuloader/crypto.c
-!/xnuloader/darwinfile.c
-!/xnuloader/loader.c
-!/xnuloader/mkpayload.py
+/host/qemu/*
+!/host/qemu/*.sh
+!/host/qemu/*.py
+/host/android/f2fs-resize
+/host/macos-bin/platform-tools/
 
-/qemu/*
-!/qemu/*.sh
-!/qemu/*.py
+# of kernel/deps only what is ours; setup.sh fetches and builds the rest
+/kernel/deps/*
+!/kernel/deps/setup.sh
+!/kernel/deps/gen-iig-stubs.py
+!/kernel/deps/hostinc/
+!/kernel/deps/iig-impl/
+!/kernel/deps/host/
+/kernel/deps/host/*
+!/kernel/deps/host/bin/
+/kernel/deps/host/bin/*
+!/kernel/deps/host/bin/codesign
+!/kernel/deps/host/bin/iig
+!/kernel/deps/host/bin/install
+!/kernel/deps/host/bin/plutil
+!/kernel/deps/host/bin/sw_vers
+!/kernel/deps/host/bin/xcrun
+!/kernel/deps/host/bin/xnu-clang
+!/kernel/deps/build/
+/kernel/deps/build/*
+!/kernel/deps/build/pthread/
+/kernel/deps/build/pthread/*
+!/kernel/deps/build/pthread/build.sh
+!/kernel/deps/build/pthread/inc/
+!/kernel/deps/build/lzbitmap/
+/kernel/deps/build/lzbitmap/*
+!/kernel/deps/build/lzbitmap/unzbm.c
+!/kernel/deps/build/lzbitmap/libzbitmap.c
+!/kernel/deps/build/lzbitmap/libzbitmap.h
 
-# of xnu-deps only what is ours; setup.sh fetches and builds the rest
-/xnu-deps/*
-!/xnu-deps/setup.sh
-!/xnu-deps/gen-iig-stubs.py
-!/xnu-deps/hostinc/
-!/xnu-deps/iig-impl/
-!/xnu-deps/host/
-/xnu-deps/host/*
-!/xnu-deps/host/bin/
-/xnu-deps/host/bin/*
-!/xnu-deps/host/bin/codesign
-!/xnu-deps/host/bin/iig
-!/xnu-deps/host/bin/install
-!/xnu-deps/host/bin/plutil
-!/xnu-deps/host/bin/sw_vers
-!/xnu-deps/host/bin/xcrun
-!/xnu-deps/host/bin/xnu-clang
-!/xnu-deps/build/
-/xnu-deps/build/*
-!/xnu-deps/build/pthread/
-/xnu-deps/build/pthread/*
-!/xnu-deps/build/pthread/build.sh
-!/xnu-deps/build/pthread/inc/
-!/xnu-deps/build/lzbitmap/
-/xnu-deps/build/lzbitmap/*
-!/xnu-deps/build/lzbitmap/unzbm.c
-!/xnu-deps/build/lzbitmap/libzbitmap.c
-!/xnu-deps/build/lzbitmap/libzbitmap.h
-/tools/android/f2fs-resize
-/tools/macos-bin/platform-tools/
+# system/: the sources; the images, objects and sysroots it builds stay out
+/system/*
+!/system/README.md
+!/system/build.sh
+!/system/*.py
+!/system/rc.*
+!/system/com.*.plist
+!/system/src/
+!/system/libmini/
+!/system/var/
+!/system/ios/
+/system/ios/*
+!/system/ios/fetch.sh
+!/system/ios/*.py

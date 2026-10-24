@@ -1,8 +1,8 @@
 #!/bin/bash
 # Build XNU for redwood on Linux. Extra make args are passed through.
-source "$(dirname "${BASH_SOURCE[0]}")/xnu-env.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 cd "$XNU_SRC" || exit 1
-# The Wi-Fi driver's object (tools/mk-ath11k.sh) is linked into the kernel when it is there; make
+# The Wi-Fi driver's object (host/mk-ath11k.sh) is linked into the kernel when it is there; make
 # does not see it change, so the linked kernel is thrown away when it has.
 LX=$XNUDEPS/build/ath11k/out/ath11k.o
 STAMP=BUILD/obj/redwood-objects

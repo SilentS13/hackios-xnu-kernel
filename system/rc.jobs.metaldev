@@ -51,7 +51,7 @@
 # buffer (24 bytes, read_write, `atomicMinMax`) and no textures or samplers, which is what
 # this driver can bind today; it also writes its buffer unconditionally, so an all-zero
 # result afterwards means the dispatch did not happen rather than that the kernel had
-# nothing to say. tools/air/kstruct.py sorted the corpus's 47 kernels for exactly this.
+# nothing to say. graphics/air/kstruct.py sorted the corpus's 47 kernels for exactly this.
 /redwood/bin/metal_drv_test /System/Library/CoreImage/PortraitFilters.cifilter/default.metallib MetalFaceMask_InitMinMax
 #
 # And the same driver reached the way Metal's own discovery reaches a plug-in: through

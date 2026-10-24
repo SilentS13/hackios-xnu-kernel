@@ -7,10 +7,10 @@
  * libredwoodair: air_run's compute path, as a library a Metal driver calls.
  *
  * The contract is air_metal.h and nothing else -- no NIR, no Gallium, no ir3 in the
- * caller's view -- because the Metal side (userland/src/redwoodmetal.m) must not grow a
+ * caller's view -- because the Metal side (system/src/redwoodmetal.m) must not grow a
  * dependency on Mesa's headers and this side must stay free to change how it compiles.
  *
- * Almost everything here is lifted from air_run.c (tools/mesa/air/air_run.c), which has
+ * Almost everything here is lifted from air_run.c (graphics/mesa/air/air_run.c), which has
  * done all of it as a test program since the GPU first took work: the screen, the
  * translation, the compute state, the grid and the fence. The comments that say *why*
  * came with the code and are kept, because every one of them is a mistake someone
@@ -349,7 +349,7 @@ compute_cap(struct pipe_screen *screen, enum pipe_compute_cap cap, uint64_t *out
 /* What a Gallium driver expects of a shader it is handed: NIR's own system values
  * lowered to the hardware's, and I/O as intrinsics rather than variables. This is
  * air_run.c's finalize_for_gallium, and the same three passes are in
- * tools/mesa/air-ir3.patch; a fourth copy would be the point at which they should
+ * graphics/mesa/air-ir3.patch; a fourth copy would be the point at which they should
  * become one function of the frontend.
  */
 static int
@@ -434,7 +434,7 @@ rwa_device_open(char *why, size_t why_size)
 
    /* RWA_SOFTWARE=1 asks for softpipe -- a rasterizer in plain C that needs nothing of
     * the machine but its processor. It is how this library is tested without the phone
-    * (tools/mesa/air/air_metal_test.c) and it is air_run's AIR_RUN_SOFTWARE under
+    * (graphics/mesa/air/air_metal_test.c) and it is air_run's AIR_RUN_SOFTWARE under
     * another name. A driver never sets it: on the device the only screen worth opening
     * is the Adreno's, and if there is none, saying so is more use than quietly
     * computing the answer on the processor at a thousandth of the speed.
@@ -448,7 +448,7 @@ rwa_device_open(char *why, size_t why_size)
       if (fd < 0) {
          /* The ordinary case on this port, and not an error anybody should be
           * surprised by: without gpu=1 the kernel starts no RedwoodGPU service, so
-          * there is no msm device for the shim to open (tools/mesa/redwood-drm).
+          * there is no msm device for the shim to open (graphics/mesa/redwood-drm).
           */
          say(why, why_size, "there is no GPU here: no msm device to open, which is what "
                             "a kernel booted without gpu=1 looks like");
@@ -459,7 +459,7 @@ rwa_device_open(char *why, size_t why_size)
        * passes it straight to driParseConfigFiles, which dereferences it. A zeroed one
        * died at address 0x10 on the phone -- the first thing air_run ever did on a
        * machine that has a GPU, and invisible on any machine that has not. This is the
-       * sequence osmesa_create_gpu_screen() uses in tools/mesa/freedreno-darwin.patch,
+       * sequence osmesa_create_gpu_screen() uses in graphics/mesa/freedreno-darwin.patch,
        * which is the one CoreAnimation goes through on this device daily.
        *
        * static, because fd_screen keeps the cache it was given rather than copying it.
@@ -3150,7 +3150,7 @@ base_type_name(nir_alu_type type)
  * One table, read by the two callers that must agree: texture_fits, which refuses a
  * bound texture whose type is not this number, and rwa_module_textures, which reports
  * this number so a caller can ask for a texture that fits. The mismatch the sweep in
- * userland/src/metal_drv_test.m measured came from a caller having no way to ask; two
+ * system/src/metal_drv_test.m measured came from a caller having no way to ask; two
  * tables pointing opposite ways would have been the next way to get it wrong.
  *
  * False when the dimension has no Metal spelling at all -- a kind no AIR module can
@@ -3245,7 +3245,7 @@ texture_fits(const struct rwa_texture *t, const struct rwa_slot *s, const char *
     * catches it.
     *
     * It is checked here because the Adreno does not. The first device run of
-    * tools/air/sampcheck.py's comparison cases put a shadow sample over an
+    * graphics/air/sampcheck.py's comparison cases put a shadow sample over an
     * r32g32b32a32_float texture, which is what the harness bound, and every case came
     * back with THE TEXEL -- 101 where a comparison must answer 0 or 1, and for
     * compare_func::always and compare_func::never too, which no compare function and no
@@ -4689,7 +4689,7 @@ rwa_depth_stencil_destroy(struct rwa_depth_stencil *state)
  *
  * The numbers are Apple's own and were read out of the SDK this driver is built against
  * -- iPhoneOS16.5.sdk's Metal.framework/Headers/MTLVertexDescriptor.h -- rather than
- * remembered, and userland/src/redwoodmetal.m carries a _Static_assert per row against
+ * remembered, and system/src/redwoodmetal.m carries a _Static_assert per row against
  * those enumerators, so a disagreement between this table and Apple's header is a build
  * failure of the driver and not a wrong fetch on the phone. That SDK's enumeration ends
  * at Half (53): FloatRG11B10 and FloatRGB9E5 are iOS 17's, and nothing on this device
@@ -5291,7 +5291,7 @@ vertex_reads_attributes(nir_shader *vs)
  * WHERE THESE NUMBERS COME FROM, and it is two sources that do not share a copy:
  *
  *   1. Apple's own MTLRenderPipeline.h for this release, which is on the build machine
- *      and not in this tree. userland/src/redwoodmetal.m compiles against it and
+ *      and not in this tree. system/src/redwoodmetal.m compiles against it and
  *      _Static_asserts every value this table assumes, so a disagreement is a BUILD
  *      FAILURE of the driver rather than a wrong picture. (The same declarations are
  *      byte for byte identical in every iOS SDK from 10.3 to 16.5 and in macOS 13.3's,
@@ -5315,7 +5315,7 @@ vertex_reads_attributes(nir_shader *vs)
  * THE SHAPE OF THE TWO STRUCTS THE METAL DRIVER TYPES OUT BY HAND, stated here as
  * numbers so that an edit to one side alone fails to build on that side.
  *
- * The same four numbers are asserted in userland/src/redwoodmetal.m against ITS
+ * The same four numbers are asserted in system/src/redwoodmetal.m against ITS
  * definitions. Neither file can see the other's structs, so this is not a comparison --
  * it is two independent statements of one agreement, which is the most a hand-copied
  * struct admits of. This port has paid twice for getting it wrong: a primitive type that
@@ -6195,7 +6195,7 @@ rwa_render_create(struct rwa_device *device,
     * refusal: CoreAnimation composites with premultiplied alpha, so a label layer whose
     * background is transparent black was drawn as OPAQUE BLACK -- every icon label in a
     * black box and the Search pill a black rectangle (docs/air.md section 5 has the
-    * measurement and userland/rc.jobs.blend the greps, and the photograph is the test).
+    * measurement and system/rc.jobs.blend the greps, and the photograph is the test).
     *
     * The tables' own shape is checked first, here rather than at a draw, so that a row
     * edited by hand cannot reach a picture: the one-minus pairing, the identity of the

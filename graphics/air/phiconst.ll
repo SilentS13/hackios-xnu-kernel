@@ -3,7 +3,7 @@
 ;
 ; Hand-written, not Apple's. Assemble and translate:
 ;
-;   llvm-as tools/air/phiconst.ll -o /tmp/phiconst.bc
+;   llvm-as graphics/air/phiconst.ll -o /tmp/phiconst.bc
 ;   build/mesa-host/build/src/compiler/air/air2nir /tmp/phiconst.bc
 ;
 ; What to look for is the phi in the block after the `if`. It must read

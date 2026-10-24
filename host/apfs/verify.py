@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-# Check tools/apfs/apfs.py against something that is not us.
+# Check host/apfs/apfs.py against something that is not us.
 #
-# Two independent references, both already in ios165/:
+# Two independent references, both already in system/ios/:
 #
-#   listing  ios165/rootfs.slt -- what 7-Zip's own APFS reader saw in the same image
-#            (`7z l -slt rootfs.dmg`, made by ios165/fetch.sh).  Covers every entry in
+#   listing  system/ios/rootfs.slt -- what 7-Zip's own APFS reader saw in the same image
+#            (`7z l -slt rootfs.dmg`, made by system/ios/fetch.sh).  Covers every entry in
 #            the volume: path, mode, owner, size, symbolic-link target, inode number.
 #
-#   content  ios165/rootfs/ -- the files 7-Zip actually extracted, compared byte for
+#   content  system/ios/rootfs/ -- the files 7-Zip actually extracted, compared byte for
 #            byte.  This is the one that proves we decompress correctly.
 #
-#   clines   the same lines tools/apfs/apfs-tool prints, so the C code that goes into the
+#   clines   the same lines host/apfs/apfs-tool prints, so the C code that goes into the
 #            kernel can be diffed against this reader over a whole tree.
 #
 #   sum      those same lines folded the way the kernel folds them (boot-arg apfs_check):
@@ -36,7 +36,7 @@ import apfs
 
 SYSTEM_OBJ_ID_MARK = 0x0FFFFFFF00000000
 
-# ios165/fetch.sh cuts these two fonts down after extracting them, so what is on disk in
+# system/ios/fetch.sh cuts these two fonts down after extracting them, so what is on disk in
 # the reference tree is deliberately not what is in the image
 TRIMMED = {
     "System/Library/Fonts/CoreAddition/AppleColorEmoji-160px.ttc",

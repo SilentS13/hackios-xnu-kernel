@@ -3,12 +3,12 @@
 The owner key: verified boot that the phone's owner holds, not a vendor.
 
   ownerkey.py init [KEYFILE]     make a new Ed25519 key (default ~/.hackios/owner.key, mode 600) and pin
-                                 its public half into the loader (xnuloader/owner_key.h, not in git)
+                                 its public half into the loader (bootloader/loader/owner_key.h, not in git)
   ownerkey.py pin [KEYFILE]      pin an existing key into the loader again (a new checkout)
   ownerkey.py show [KEYFILE]     the public key and its fingerprint
   ownerkey.py unpin              back to a loader that takes unsigned bundles
 
-A loader built with a pinned key (xnuloader/build.sh) boots only bundles signed by that key
+A loader built with a pinned key (bootloader/loader/build.sh) boots only bundles signed by that key
 (mkbundle.py --sign): a bundle written into darwin by anything else -- a stray tool, a bad update, someone
 with the phone for a minute -- is refused and the previous slot or Android boots instead. The private key
 never leaves the computer and never goes into the repository; keep a copy of it somewhere safe: without it
@@ -19,7 +19,7 @@ import os, stat, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, '..', '..'))
 DEFAULT = os.path.join(os.path.expanduser('~'), '.hackios', 'owner.key')
-HEADER = os.environ.get('OWNER_KEY_H') or os.path.join(ROOT, 'xnuloader', 'owner_key.h')
+HEADER = os.environ.get('OWNER_KEY_H') or os.path.join(ROOT, 'bootloader', 'loader', 'owner_key.h')
 
 
 def _crypto():
@@ -59,14 +59,14 @@ def fingerprint(pub):
 def write_header(pub):
     body = ', '.join('0x%02x' % b for b in pub) if pub else ''
     with open(HEADER, 'w') as f:
-        f.write('/* made by common/flash/ownerkey.py: the owner key the loader checks boot bundles against */\n')
+        f.write('/* made by build/flash/ownerkey.py: the owner key the loader checks boot bundles against */\n')
         f.write('#define OWNER_KEY_PINNED %d\n' % (1 if pub else 0))
         f.write('static const uint8_t owner_key[32] = { %s };\n' % body)
         if pub:
             f.write('static const char owner_key_fp[] = "%s";\n' % fingerprint(pub))
         else:
             f.write('static const char owner_key_fp[] = "";\n')
-    print('ownerkey: %s written (%s); rebuild the loader: xnuloader/build.sh'
+    print('ownerkey: %s written (%s); rebuild the loader: bootloader/loader/build.sh'
           % (os.path.relpath(HEADER, ROOT), 'pinned ' + fingerprint(pub) if pub else 'unpinned'))
 
 

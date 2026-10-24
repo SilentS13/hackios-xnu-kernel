@@ -5,13 +5,13 @@ A boot log carries stacks from two printers, and they do not agree on what an
 address is:
 
   * `userabort: NAME[pid] aborts, shared cache slide 0xS; called from: A B C ...`
-    -- the kernel (`xnu/files/osfmk/arm64/user_exception_trace.c`).  It walks the
+    -- the kernel (`kernel/xnu/files/osfmk/arm64/user_exception_trace.c`).  It walks the
     frame pointer chain and prints each saved LR **raw**, that is at its runtime
     address, and prints the slide separately in the same line.  So every frame
     needs 0xS subtracted, and 0xS must be read from that line: it is a different
     number every boot.
   * `redwood: signal N at 0xRAW, pc 0xP, lr 0xL, called from A B C ... (unslid)`
-    -- our own handler (`userland/src/inject.c`).  It has already subtracted the
+    -- our own handler (`system/src/inject.c`).  It has already subtracted the
     slide, so nothing may be subtracted twice.  The `at` address is `si_addr`,
     which for a SIGABRT raised out of a syscall is the pc and so states that
     boot's slide, but for a SIGSEGV is the address that could not be touched and

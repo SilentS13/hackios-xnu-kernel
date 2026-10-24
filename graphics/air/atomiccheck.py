@@ -266,7 +266,7 @@ def main(argv):
     if len(argv) >= 2 and argv[0] == "--keep":
         keep = argv[1]
     if not os.path.exists(AIR_RUN):
-        print("atomiccheck: no air_run at %s (run tools/air/mk-host.sh)" % AIR_RUN,
+        print("atomiccheck: no air_run at %s (run graphics/air/mk-host.sh)" % AIR_RUN,
               file=sys.stderr)
         return 1
 

@@ -6,9 +6,9 @@ set -e
 # The two -D renames below avoid clashes with kernel symbols of the same name:
 # as a real kext these live in a separate link unit.
 cd "$(dirname "${BASH_SOURCE[0]}")"
-source ../../../xnu-env.sh
+source ../../../env.sh
 X=$XNU_SRC; E=$X/BUILD/obj/EXPORT_HDRS; P=$XNUDEPS/libpthread
-[ -d $E/osfmk ] || { echo "pthread kext: no exported kernel headers in $E (run: xnu-build.sh exporthdrs)" >&2; exit 1; }
+[ -d $E/osfmk ] || { echo "pthread kext: no exported kernel headers in $E (run: kernel/build.sh exporthdrs)" >&2; exit 1; }
 mkdir -p $XNU_SDK_PATH/usr/local/lib/kernel
 for f in kern_init kern_support kern_synch; do
   xnu-clang -arch arm64 -c -Os -mkernel -nostdinc -fno-builtin -fno-common -Wno-int-conversion \

@@ -2,8 +2,8 @@
 """
 The board_ addresses of a phone (bsd/sys/hk_board.h), read out of its own device tree.
 
-usage: tools/board-from-dt.py DEVICE.dtb        prints  board_epss=0x... board_tsens0=0x... ...
-       (common/new-device.sh puts that into the profile as BOARD_ARGS)
+usage: host/board-from-dt.py DEVICE.dtb        prints  board_epss=0x... board_tsens0=0x... ...
+       (build/new-device.sh puts that into the profile as BOARD_ARGS)
 
 What is read, from the Qualcomm downstream device tree every Android phone of these SoCs carries:
   epss     qcom,cpufreq-epss / qcom,cpufreq-hw         "freq-domain0" (else its first reg)

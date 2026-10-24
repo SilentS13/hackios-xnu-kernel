@@ -61,7 +61,7 @@ AIR2NIR = os.environ.get(
 IR3 = os.environ.get(
     "IR3", os.path.join(ROOT, "build/mesa-host/build/src/gallium/drivers/freedreno/ir3_compiler"))
 CHIP_ID = os.environ.get("AIR_CHIP_ID", "0x007506030500")
-IOS = os.environ.get("IOS", os.path.join(ROOT, "ios165"))
+IOS = os.environ.get("IOS", os.path.join(ROOT, "system/ios"))
 QUARTZCORE = os.path.join(
     IOS, "rootfs/System/Library/Frameworks/QuartzCore.framework/default.metallib")
 
@@ -565,7 +565,7 @@ def main():
 
     for prog in (AIR2NIR, IR3):
         if not os.path.exists(prog):
-            print("vattrcheck: run tools/air/mk-host.sh first (%s)" % prog, file=sys.stderr)
+            print("vattrcheck: run graphics/air/mk-host.sh first (%s)" % prog, file=sys.stderr)
             return 2
 
     ok = 0

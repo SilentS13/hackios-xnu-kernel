@@ -1,9 +1,9 @@
 #!/bin/bash
 # Readers at once over an APFS volume on the phone (boot-arg apfs_check=5), one line per run.
-# The volume has to be the phone's resident image already (`./xl ramdisk IMAGE`); it stays
+# The volume has to be the phone's resident image already (`host/xl ramdisk IMAGE`); it stays
 # there across runs as long as none of them hangs.
 #
-# usage: tools/apfs/bench-phone.sh "1 2 4 8" [extra boot-args]
+# usage: host/apfs/bench-phone.sh "1 2 4 8" [extra boot-args]
 # env:   BENCH_KERNEL  a kernel to put in place first (default: whatever is built)
 #        BENCH_CPUS    cpus=N for the kernel (default 8)
 #        BENCH_FREQ    cpufreq=N (default 1: every group of cores at its top speed). Without it the
@@ -24,7 +24,7 @@ K=xnu-src/xnu-8796.121.2/BUILD/obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bc
 printf "%-7s %9s %8s %12s %12s %10s %8s %4s %s\n" readers wall_ms MB/s lock_wait_ms lock_held_ms inflate_ms hash_ms bad sums
 for n in $COUNTS; do
 	out=$(XL_CMDLINE="cpus=$CPUS cpufreq=$FREQ apfs_check=5 apfs_threads=$n $EXTRA" XL_SECS=300 \
-		timeout 500 ./xl run 2>&1)
+		timeout 500 host/xl run 2>&1)
 	log=$(echo "$out" | grep -o 'logs/[0-9]*-run.log' | tail -1)
 	if [ -z "$log" ] || ! grep -aq "readers done in" "$log" 2>/dev/null; then
 		printf "%-7s run did not come back: %s\n" "$n" "$(echo "$out" | tail -1)"

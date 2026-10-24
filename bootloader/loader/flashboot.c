@@ -12,18 +12,18 @@
  *   3. for Android makes the other slot active again and resets.
  *
  * Every power-on shows the menu, like a PC's: after Android has come up, the HackiOS module in it
- * (common/flash/rearm, for KernelSU or Magisk) makes this slot active again, so the next start comes
+ * (build/flash/rearm, for KernelSU or Magisk) makes this slot active again, so the next start comes
  * here first; and the countdown takes what was chosen last time (FB_LAST_ANDROID in the boot state).
  *
  * The boot area is the free stretch of darwin between the cryptexes and the var store's slots (README of
  * the userland repository: "Data that survives a reboot"): two bundle slots used in turn, each a header
- * block and the container behind it, and one block of boot state (formats: common/flash/bundlefmt.py).
+ * block and the container behind it, and one block of boot state (formats: build/flash/bundlefmt.py).
  * An update writes the slot that does not hold the newest good bundle -- zeroed header first, container,
  * header last -- so an update that is cut off loses the update and not the phone: the other slot still
  * boots.
  *
  * What is checked before a bundle runs: the header's own sum (a torn header is no header), the SHA-256 of
- * the container, and -- when the loader was built with an owner key pinned (common/flash/ownerkey.py) --
+ * the container, and -- when the loader was built with an owner key pinned (build/flash/ownerkey.py) --
  * the Ed25519 signature of the header by that key. A bundle that fails any of them is not run.
  *
  * The boot guard: before it starts a bundle the loader counts the start in the boot state, and iOS says
@@ -42,9 +42,9 @@
 
 #include "crypto.c"
 #ifdef OWNER_KEY_FILE
-#include OWNER_KEY_FILE             /* a key for one build (common/flash/qemu-test.sh) */
+#include OWNER_KEY_FILE             /* a key for one build (build/flash/qemu-test.sh) */
 #else
-#include "owner_key.h"              /* xnuloader/build.sh makes an unpinned one when there is none */
+#include "owner_key.h"              /* bootloader/loader/build.sh makes an unpinned one when there is none */
 #endif
 
 #define FB_BLOCK          4096ULL                 /* the boot area is laid out in darwin's 4 KiB blocks */
@@ -236,7 +236,7 @@ fb_scan(void)
 		return 0;
 	}
 	print("flash: loader %s\n", OWNER_KEY_PINNED ? "with an owner key pinned: signed bundles only" :
-	    "without an owner key: unsigned bundles are taken (common/flash/ownerkey.py)");
+	    "without an owner key: unsigned bundles are taken (build/flash/ownerkey.py)");
 	if (OWNER_KEY_PINNED) {
 		print("flash: owner key %s\n", owner_key_fp);
 	}
@@ -466,7 +466,7 @@ ab_find(struct ab_gpt *g, uint8_t *header)
 static uint8_t ab_primary[512], ab_backup[512];
 
 /*
- * Does entry k's partition hold HackiOS's own boot image -- the UEFI with this loader, which mkxnuimg.py
+ * Does entry k's partition hold HackiOS's own boot image -- the UEFI with this loader, which bootloader/mkbootimg.py
  * makes with board name "HACKiOS" (an Android boot image of header version 0..2 has its name at byte 48;
  * one of version 3 or 4 has no name there at all)? Read through the same unit as the GPT.
  */

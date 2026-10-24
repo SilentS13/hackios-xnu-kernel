@@ -7,7 +7,7 @@
 ;     7 620 of Resident Evil 4's 7 879 do (docs/air.md 8.2), and no byte of that game is
 ;     in this repository. So a module that declares a set has to be written here, and
 ;     what it declares is then known rather than inferred.
-;   - tools/air/argbufcheck.py already dispatches one as a KERNEL, and two things cannot
+;   - graphics/air/argbufcheck.py already dispatches one as a KERNEL, and two things cannot
 ;     be checked that way: softpipe's compute path answers every texture out of the
 ;     sampler view bound at slot 0, so a texture member's index is invisible there, and
 ;     air_run binds one sampler state to every slot, so a sampler member's index is
@@ -63,8 +63,8 @@
 ; the frontend resolves them through one lookup on the byte offset and this is the
 ; module that says so from the API side.
 ;
-;   llvm-as -o argbuf_set.bc tools/air/argbuf_set.ll
-;   tools/air/argbufruncheck.sh
+;   llvm-as -o argbuf_set.bc graphics/air/argbuf_set.ll
+;   graphics/air/argbufruncheck.sh
 
 source_filename = "argbuf_set"
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v24:32:32-v32:32:32-v48:64:64-v64:64:64-v96:128:128-v128:128:128-v192:256:256-v256:256:256-v512:512:512-v1024:1024:1024-n8:16:32"

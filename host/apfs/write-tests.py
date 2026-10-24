@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Judge apfs_write.c on images on this machine, where a ruined one costs nothing.
 
-Driven by tools/apfs/write-tests.sh, which builds what this needs.  Nothing here reads the
+Driven by host/apfs/write-tests.sh, which builds what this needs.  Nothing here reads the
 image with the code under test alone: every claim about what is in an image afterwards is made
 by at least one reader that is not apfs_write.c's and preferably by all of them --
 
@@ -35,7 +35,7 @@ import mkapfs                                                   # noqa: E402
 BS = 4096
 WORK = os.path.join(ROOT, 'apfs-work', 'write-tests')
 TOOL = os.path.join(ROOT, 'apfs-work', 'apfs-tool')
-APFSCK = os.path.join(ROOT, 'xnu-deps', 'build', 'apfsprogs', 'apfsck', 'apfsck')
+APFSCK = os.path.join(ROOT, 'kernel/deps', 'build', 'apfsprogs', 'apfsck', 'apfsck')
 
 failures = []
 done = 0
@@ -801,7 +801,7 @@ def test_real_images():
     """What the gates say about the images this port really has.  The iOS root volume is the one
     that matters: it is read through apfs.py because apfs-tool does not open a .dmg, and what it
     says about it is the reason apfs_write_volume_ok() refuses a volume by its role as well."""
-    for rel in ('userland/root.apfs', 'userland/system.apfs', 'userland/flashboot.apfs'):
+    for rel in ('system/root.apfs', 'system/system.apfs', 'system/flashboot.apfs'):
         path = os.path.join(ROOT, rel)
         if not os.path.exists(path):
             print('[skip] %s is not here' % rel)
@@ -809,9 +809,9 @@ def test_real_images():
         rc, out = run(TOOL, 'writable', path)
         say(rc == 0, '%s: %s' % (rel, out.strip().splitlines()[0].split(': ', 1)[-1]))
 
-    dmg = os.path.join(ROOT, 'ios165', 'rootfs.dmg')
+    dmg = os.path.join(ROOT, 'system/ios', 'rootfs.dmg')
     if not os.path.exists(dmg):
-        print('[skip] ios165/rootfs.dmg is not here')
+        print('[skip] system/ios/rootfs.dmg is not here')
         return
     c = apfs.Container(dmg)
     try:

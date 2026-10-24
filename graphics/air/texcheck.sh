@@ -24,15 +24,15 @@ set -u
 ROOT=$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)
 AIR_RUN=${AIR_RUN:-$ROOT/build/mesa-host/build/src/gallium/drivers/freedreno/air_run}
 AIR2NIR=${AIR2NIR:-$ROOT/build/mesa-host/build/src/compiler/air/air2nir}
-[ -x "$AIR_RUN" ] || { echo "texcheck.sh: run tools/air/mk-host.sh first"; exit 1; }
+[ -x "$AIR_RUN" ] || { echo "texcheck.sh: run graphics/air/mk-host.sh first"; exit 1; }
 
 LIBS=("$@")
 if [ ${#LIBS[@]} = 0 ]; then
 	LIBS=(
-		"$ROOT/ios165/rootfs/System/Library/VideoDecoders/AV1SW.metallib"
-		"$ROOT/ios165/rootfs/System/Library/Extensions/AppleMetalGLRenderer.bundle/default.metallib"
-		"$ROOT/ios165/rootfs/System/Library/CoreImage/PortraitFilters.cifilter/default.metallib"
-		"$ROOT/ios165/rootfs/System/Library/CoreImage/PortraitFilters.cifilter/portrait_filters.metallib"
+		"$ROOT/system/ios/rootfs/System/Library/VideoDecoders/AV1SW.metallib"
+		"$ROOT/system/ios/rootfs/System/Library/Extensions/AppleMetalGLRenderer.bundle/default.metallib"
+		"$ROOT/system/ios/rootfs/System/Library/CoreImage/PortraitFilters.cifilter/default.metallib"
+		"$ROOT/system/ios/rootfs/System/Library/CoreImage/PortraitFilters.cifilter/portrait_filters.metallib"
 	)
 fi
 

@@ -1,11 +1,11 @@
 # source this (from bash) before building XNU on Linux
 # Everything is found relative to this file. THEOS (default ~/theos) provides the cctools and the
-# iOS SDK; XNU_SRC is the kernel tree (xnu/apply.sh creates it).
-HACKIOS_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# iOS SDK; XNU_SRC is the kernel tree (kernel/xnu/apply.sh creates it).
+HACKIOS_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 export HACKIOS_ROOT
 export THEOS=${THEOS:-$HOME/theos}
 export XNU_SRC=${XNU_SRC:-$HACKIOS_ROOT/xnu-src/xnu-8796.121.2}
-export XNUDEPS=$HACKIOS_ROOT/xnu-deps
+export XNUDEPS=$HACKIOS_ROOT/kernel/deps
 export PATH=$XNUDEPS/host/bin:$PATH
 export XNU_SDK_PATH=$XNUDEPS/sdk/iPhoneOS16.5.xnu.sdk
 export XNU_SDK_VERSION=16.5

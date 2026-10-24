@@ -19,7 +19,7 @@ usage: userdata-carve.py [--move] DIR GIB [NAME]
 Android's userdata on this phone is a plain f2fs (no metadata encryption: its superblock lies on the
 flash as it is) that fills its partition, the last of LUN 0. Taking GIB off its end takes two steps
 on the phone: first the filesystem is shrunk in place, by Android's own kernel
-(tools/android/f2fs-resize, F2FS_IOC_RESIZE_FS), and only then the partition, by writing the
+(host/android/f2fs-resize, F2FS_IOC_RESIZE_FS), and only then the partition, by writing the
 GPT this makes: userdata ends exactly where the shrunk f2fs ends, and a new partition NAME (of the
 APFS container type) has the rest from the next 2 MB on. The kernel takes whole sections off the
 main area and leaves the filesystem's own slack at its end (the blocks past the last whole segment)

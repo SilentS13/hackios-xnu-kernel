@@ -30,14 +30,14 @@ a colon, and those declared by a Metal protocol and nothing else) from the bare
 words, and counts them apart.
 
 usage:
-  C=ios165/20F66__iPhone10,3_6/dyld_shared_cache_arm64
+  C=system/ios/20F66__iPhone10,3_6/dyld_shared_cache_arm64
   for i in /System/Library/Frameworks/Metal.framework/Metal \
            /System/Library/Extensions/AGXMetalA11.bundle/AGXMetalA11 \
            /System/Library/PrivateFrameworks/IOGPU.framework/IOGPU \
            /System/Library/Frameworks/QuartzCore.framework/QuartzCore; do
           ipsw dyld macho $C $i --objc > $(basename $i).objc.txt
   done
-  appasks.py APP_BINARY --decl Metal.objc.txt [--decl ...] [--src userland/src/redwoodmetal.m]
+  appasks.py APP_BINARY --decl Metal.objc.txt [--decl ...] [--src system/src/redwoodmetal.m]
              [--imports] [--missing] [--protocol MTLDevice]
 """
 import argparse
@@ -148,7 +148,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('binary')
     ap.add_argument('--decl', action='append', default=[], required=True)
-    ap.add_argument('--src', default=os.path.join(ROOT, 'userland/src/redwoodmetal.m'))
+    ap.add_argument('--src', default=os.path.join(ROOT, 'system/src/redwoodmetal.m'))
     ap.add_argument('--imports', action='store_true', help='also how it reaches the runtime')
     ap.add_argument('--missing', action='store_true', help='list what we do not implement')
     ap.add_argument('--ours', action='store_true',

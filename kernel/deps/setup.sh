@@ -3,17 +3,17 @@
 # Apple's and others' that are fetched and built here, and the SDK the kernel is compiled
 # against. What is already there is left alone, so this can be run again at any time.
 #
-#   xnu-deps/setup.sh             both stages (the second only once the kernel tree exists)
-#   xnu-deps/setup.sh --stage1    sources, host tools, the SDK
-#   xnu-deps/setup.sh --stage2    the two static libraries that are compiled against the
-#                                 kernel's own exported headers (needs xnu/apply.sh first)
-#   xnu-deps/setup.sh --rebuild-libs   stage 2 again from scratch (after the kernel headers changed)
+#   kernel/deps/setup.sh             both stages (the second only once the kernel tree exists)
+#   kernel/deps/setup.sh --stage1    sources, host tools, the SDK
+#   kernel/deps/setup.sh --stage2    the two static libraries that are compiled against the
+#                                 kernel's own exported headers (needs kernel/xnu/apply.sh first)
+#   kernel/deps/setup.sh --rebuild-libs   stage 2 again from scratch (after the kernel headers changed)
 #
 # Needs on the machine: git curl tar xz make cc clang flex bison m4 perl python3 autoconf
 # automake, and theos ($THEOS, default ~/theos) with its Linux toolchain
 # (toolchain/linux/iphone: the cctools linker) and sdks/iPhoneOS16.5.sdk.
 #
-# What ends up where (all under xnu-deps/, none of it committed):
+# What ends up where (all under kernel/deps/, none of it committed):
 #   AvailabilityVersions libdispatch libpthread     Apple open source, at the releases of iOS 16.5
 #   mm_bootstrap_cmds tcsh unifdef                  sources of mig, csh and unifdef
 #   MacOSX13.3.sdk                                  only Kernel.framework: the DriverKit headers
@@ -24,7 +24,7 @@
 #                                                   Apple's internal SDK has and the public one lacks
 set -e -o pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-source "$HERE/../xnu-env.sh"
+source "$HERE/../env.sh"
 cd "$XNUDEPS"
 JOBS=${JOBS:-$(nproc)}
 CCTOOLS=$THEOS/toolchain/linux/iphone/bin
@@ -95,7 +95,7 @@ stage1() {
 	if [ ! -x host/bin/migcom ] || [ ! -x host/bin/mig ]; then
 		log "building mig"
 		(cd mm_bootstrap_cmds && autoreconf --install && sh configure --prefix="$XNUDEPS/host" &&
-			make -j$JOBS && make install) > mig-build.log 2>&1 || die "mig did not build, see xnu-deps/mig-build.log"
+			make -j$JOBS && make install) > mig-build.log 2>&1 || die "mig did not build, see kernel/deps/mig-build.log"
 	fi
 	if [ ! -x host/bin/unifdef ]; then
 		log "building unifdef"
@@ -108,7 +108,7 @@ stage1() {
 	if [ ! -x host/bin/tcsh ]; then
 		log "building tcsh"
 		(cd tcsh && ./configure --prefix="$XNUDEPS/host" && make -j$JOBS) > tcsh-build.log 2>&1 ||
-			die "tcsh did not build, see xnu-deps/tcsh-build.log"
+			die "tcsh did not build, see kernel/deps/tcsh-build.log"
 		cp tcsh/tcsh host/bin/tcsh
 	fi
 	link tcsh host/bin/csh
@@ -148,7 +148,7 @@ stage1() {
 # the kernel). They are compiled against the headers the kernel build exports, so that step
 # of the kernel build comes first.
 stage2() {
-	[ -f "$XNU_SRC/makedefs/MakeInc.def" ] || die "no kernel tree in $XNU_SRC (xnu/apply.sh makes it)"
+	[ -f "$XNU_SRC/makedefs/MakeInc.def" ] || die "no kernel tree in $XNU_SRC (kernel/xnu/apply.sh makes it)"
 	[ -x host/bin/migcom ] && [ -d "$XNU_SDK_PATH/usr/local/lib/kernel" ] || die "stage 1 has not been done"
 	local lib=$XNU_SDK_PATH/usr/local/lib/kernel hdrs=$XNU_SRC/BUILD/obj/EXPORT_HDRS file
 	# three Mach-O headers for the build tools the kernel build compiles for this machine (SETUP/)
@@ -161,9 +161,9 @@ stage2() {
 		log "stage 2: nothing to do"
 		return 0
 	fi
-	log "exporting the kernel's headers (xnu-build.sh exporthdrs)"
-	"$HACKIOS_ROOT/xnu-build.sh" -j$JOBS exporthdrs > exporthdrs.log 2>&1 && [ -d "$hdrs/osfmk" ] ||
-		die "the kernel headers were not exported, see xnu-deps/exporthdrs.log"
+	log "exporting the kernel's headers (kernel/build.sh exporthdrs)"
+	"$HACKIOS_ROOT/kernel/build.sh" -j$JOBS exporthdrs > exporthdrs.log 2>&1 && [ -d "$hdrs/osfmk" ] ||
+		die "the kernel headers were not exported, see kernel/deps/exporthdrs.log"
 	if [ ! -f $lib/libfirehose_kernel.a ]; then
 		log "building libfirehose_kernel.a"
 		mkdir -p build/firehose
@@ -182,7 +182,7 @@ stage2() {
 		log "building libpthread_kext.a"
 		build/pthread/build.sh
 	fi
-	log "stage 2 done; now: ./xnu-build.sh -j$JOBS -k"
+	log "stage 2 done; now: kernel/build.sh -j$JOBS -k"
 }
 
 case "$1" in
@@ -194,7 +194,7 @@ case "$1" in
 	if [ -f "$XNU_SRC/makedefs/MakeInc.def" ]; then
 		stage2
 	else
-		log "no kernel tree yet: run xnu/apply.sh, then this script again"
+		log "no kernel tree yet: run kernel/xnu/apply.sh, then this script again"
 	fi ;;
 *) sed -n '2,12p' "$HERE/setup.sh"; exit 1 ;;
 esac

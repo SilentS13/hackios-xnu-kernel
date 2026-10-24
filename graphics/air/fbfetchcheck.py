@@ -278,7 +278,7 @@ def main():
 
     for prog in (AIR2NIR, IR3):
         if not os.path.exists(prog):
-            print("fbfetchcheck: run tools/air/mk-host.sh first (%s)" % prog,
+            print("fbfetchcheck: run graphics/air/mk-host.sh first (%s)" % prog,
                   file=sys.stderr)
             return 2
 

@@ -9,7 +9,7 @@
 # 10.14 says what can go wrong, and it is a measured risk rather than caution: Metal's
 # conditions are asserts, so a daemon handed a device that cannot serve it does not degrade,
 # it aborts, and launchd restarts an aborting daemon -- a loop. Nothing persists: the
-# properties live only in the registry, so ./xl stop and a boot without metal=1 is a clean
+# properties live only in the registry, so host/xl stop and a boot without metal=1 is a clean
 # machine, and /redwood/bin/metal_props off stops new processes taking the Metal road.
 #
 # The last line asks Metal from a program that does not load our dylib, so the log says

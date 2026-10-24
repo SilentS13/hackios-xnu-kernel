@@ -1,4 +1,4 @@
-# HackiOS — XNU kernel
+# HackiOS
 
 **HackiOS** boots Apple's open-source **XNU kernel** (`xnu-8796.121.2`, the kernel of iOS 16.5) on Android phone
 hardware and runs the **unmodified iOS 16.5 user space** on top of it: launchd → backboardd → SpringBoard →
@@ -11,14 +11,7 @@ It runs in two places:
   the whole system lives in RAM, and after a reboot the phone is back in Android;
 - **QEMU** (`virt`, aarch64) — the same thing on any Linux computer, no phone needed.
 
-This repository is half of the project:
-
-| Repository | What |
-|---|---|
-| **hackios-xnu-kernel** (this one) | XNU patches, the EFI loader, the UEFI port, Wi-Fi, QEMU scripts, `xl`, prebuilt kernel/UEFI, `common/` scripts |
-| [hackios-xnu-userland](https://github.com/oosexgang/hackios-xnu-userland) | our init, injected libraries, launchd jobs, the APFS image builder, the scripts that take iOS out of Apple's IPSW, Metal/Mesa work |
-
-> **No Apple files are in either repository.** `ios165/fetch.sh` downloads the iOS 16.5 IPSW from Apple's own CDN
+> **No Apple files are in this repository.** `system/ios/fetch.sh` downloads the iOS 16.5 IPSW from Apple's own CDN
 > to *your* machine and extracts what is needed there. HackiOS is an independent research project by OOSEX GANG and
 > is not affiliated with, authorised or endorsed by Apple Inc. iOS, iPhone and Apple are trademarks of Apple Inc.
 > Read [DISCLAIMER.md](DISCLAIMER.md) before building an image.
@@ -38,7 +31,7 @@ Photographed on the phone, the Adreno GPU drawing (`gpu=1`). More in [Screenshot
 |---|---|
 | Lock screen, swipe to unlock, home screen with all icons (two pages), stock iOS 16 wallpapers | Cellular, Bluetooth |
 | System gestures: swipe up (home, app switcher), edge swipe (back), Control Center | Fast charging (PD/PPS); the charger is read, not yet driven |
-| Apps: Settings, Clock, Calendar, Photos, Notes, Safari and more; widgets (Weather, Calendar) on the phone | Metal for apps (in progress: 293 of 456 system shaders already run on the Adreno, see `docs/air.md` in hackios-xnu-userland) |
+| Apps: Settings, Clock, Calendar, Photos, Notes, Safari and more; widgets (Weather, Calendar) on the phone | Metal for apps (in progress: 293 of 456 system shaders already run on the Adreno, see `docs/air.md`) |
 | Phone touchscreen (Goodix GT9916), multitouch, wake on touch; real power and volume keys | App Store content and Apple ID sign-in (no Secure Enclave; FairPlay daemon exits) |
 | Up to 8 CPU cores (`cpus=8`), big core at 2.4 GHz, ~20 s to the lock screen | Video and Live Photo recording |
 | Adreno 642L GPU through Mesa/freedreno (`gpu=1`, OpenGL ES for CoreAnimation) | |
@@ -54,8 +47,8 @@ loader and hands over its log.
 
 ## Quick start: QEMU, no kernel build
 
-`prebuilt/` holds the kernel and our programs built from these repositories; the loader is built by
-`common/build.sh` (clang + lld-link). All you need besides is the system image, which is made on your machine
+`prebuilts/` holds the kernel and our programs built from this repository; the loader is built by
+`build/build.sh` (clang + lld-link). All you need besides is the system image, which is made on your machine
 from Apple's IPSW.
 
 Needs: Linux x86-64, ~12 GB free disk, 4 GB free RAM. Packages (Arch):
@@ -70,10 +63,10 @@ reads APFS.)
 ```sh
 git clone https://github.com/oosexgang/hackios-xnu-kernel.git hackios
 cd hackios
-common/setup.sh               # brings hackios-xnu-userland into the same tree, checks the host
-ios165/fetch.sh               # downloads 7.4 GB from Apple's CDN and extracts what is needed (5-15 min)
-common/build.sh qemu-virt     # builds the APFS images (and the kernel, if the toolchain is there)
-common/run.sh qemu-virt       # a 20-minute session in a QEMU window
+build/setup.sh               # checks the host for the tools the build needs
+system/ios/fetch.sh          # downloads 7.4 GB from Apple's CDN and extracts what is needed (5-15 min)
+build/build.sh qemu-virt     # builds the APFS images (and the kernel, if the toolchain is there)
+build/run.sh qemu-virt       # a 20-minute session in a QEMU window
 ```
 
 The lock screen appears after 2–3 minutes.
@@ -81,8 +74,8 @@ The lock screen appears after 2–3 minutes.
 - **Mouse with the left button held = finger.** Unlock / leave an app: swipe up from the very bottom edge; back:
   swipe from the left edge.
 - Keys: `H` home, `L` lock/power, `↑`/`↓` volume, `F11` (hold) five fingers.
-- From a script: `qemu/touch.py swipe 0.5 0.985 0.5 0.3 250`, `qemu/touch.py tap 0.615 0.71`,
-  `qemu/touch.py key home`; screenshot: `qemu/screendump.sh shot.png`.
+- From a script: `host/qemu/touch.py swipe 0.5 0.985 0.5 0.3 250`, `host/qemu/touch.py tap 0.615 0.71`,
+  `host/qemu/touch.py key home`; screenshot: `host/qemu/screendump.sh shot.png`.
 - Right after SpringBoard appears the system is still registering apps: give it 30–40 s.
 - Debian/Ubuntu UEFI firmware: `QEMU_EFI=/usr/share/AAVMF/AAVMF_CODE.fd QEMU_VARS=/usr/share/AAVMF/AAVMF_VARS.fd`.
 
@@ -102,24 +95,24 @@ adb pull /vendor/firmware/aw8697_haptic.bin fw-haptic/                          
 ```
 
 (Put the `fw-*` directories next to the workspace. Wi-Fi also needs `fw-wifi/mac` — the radio's address on one
-line — and `fw-wifi/network` — network name and password. `userland/build.sh` prints which firmware went in.)
+line — and `fw-wifi/network` — network name and password. `system/build.sh` prints which firmware went in.)
 
 ```sh
-common/build.sh redwood GL=1          # images + out/redwood-boot.img
-common/run.sh redwood 900             # loader into RAM, system image into RAM, a 15-minute session
+build/build.sh redwood GL=1          # images + out/redwood-boot.img
+build/run.sh redwood 900             # loader into RAM, system image into RAM, a 15-minute session
 ```
 
 or step by step with `xl`:
 
 ```sh
-./xl enter            # Android -> fastboot -> our loader in RAM (fastboot boot); it brings up its own USB link
-./xl ramdisk          # upload the system image into the phone's RAM (2.5 GB, ~80 s), once per loader session
-XL_SECS=900 XL_CMDLINE="touchscreen=1 cpufreq=1 bootcpu=7 cpus=8 gpu=1 wifi=1 adsp=1" ./xl run
-./xl screenshot shot.png
-./xl reboot           # back to Android
+host/xl enter            # Android -> fastboot -> our loader in RAM (fastboot boot); it brings up its own USB link
+host/xl ramdisk          # upload the system image into the phone's RAM (2.5 GB, ~80 s), once per loader session
+XL_SECS=900 XL_CMDLINE="touchscreen=1 cpufreq=1 bootcpu=7 cpus=8 gpu=1 wifi=1 adsp=1" host/xl run
+host/xl screenshot shot.png
+host/xl reboot           # back to Android
 ```
 
-`./xl` with no arguments lists every command (logs, screen and sound recording, camera frames, stop, state...).
+`host/xl` with no arguments lists every command (logs, screen and sound recording, camera frames, stop, state...).
 
 ## Install as a dual boot (no computer needed afterwards)
 
@@ -138,12 +131,12 @@ always brings it back. See [docs/INSTALL.md](docs/INSTALL.md).
 | **Tested on every push** | eight QEMU scenarios of the boot menu and the guard, crypto checked against Python |
 
 ```sh
-common/hackios detect                # which profile is the phone on adb? (writes nothing)
-common/hackios doctor redwood        # every precondition, checked (writes nothing)
-common/hackios install redwood
-common/hackios switch redwood hackios
-common/hackios health redwood        # the boot guard's view
-common/hackios test                  # the whole dual boot in QEMU, no phone
+build/hackios detect                # which profile is the phone on adb? (writes nothing)
+build/hackios doctor redwood        # every precondition, checked (writes nothing)
+build/hackios install redwood
+build/hackios switch redwood hackios
+build/hackios health redwood        # the boot guard's view
+build/hackios test                  # the whole dual boot in QEMU, no phone
 ```
 
 ## Prebuilt boot image
@@ -153,26 +146,27 @@ Every release has `hackios-redwood-boot.img` attached: the redwood UEFI with our
 
 ## Building from source
 
-`common/build.sh <device>` runs every step that this machine can run and uses `prebuilt/` for the rest.
+`build/build.sh <device>` runs every step that this machine can run and uses `prebuilts/` for the rest.
 
 - **Kernel** — needs [theos](https://theos.dev/docs/installation-linux) in `~/theos` (cctools and
-  `iPhoneOS16.5.sdk`) and `clang lld python perl`. Details: [xnu/README.md](xnu/README.md).
+  `iPhoneOS16.5.sdk`) and `clang lld python perl`. Details: [kernel/xnu/README.md](kernel/xnu/README.md).
   ```sh
-  xnu/apply.sh && xnu-deps/setup.sh && ./xnu-build.sh -j8 -k
+  kernel/xnu/apply.sh && kernel/deps/setup.sh && kernel/build.sh -j8 -k
   ```
-- **Loader** — `xnuloader/build.sh` (clang + lld-link, an EFI application without EDK2).
-- **Images** — `REST=1 userland/build.sh` (variables documented at the top of that file).
-- **UEFI** — [uefi/README.md](uefi/README.md) (Project Silicium port); not needed to run, `prebuilt/uefi` has it.
-- After rebuilding: `tools/update-prebuilt.sh` refreshes `prebuilt/`.
+- **Loader** — `bootloader/loader/build.sh` (clang + lld-link, an EFI application without EDK2).
+- **Images** — `REST=1 system/build.sh` (variables documented at the top of that file).
+- **UEFI** — [bootloader/uefi/README.md](bootloader/uefi/README.md) (Project Silicium port); not needed to run, `prebuilts/uefi` has it.
+- After rebuilding: `host/update-prebuilt.sh` refreshes `prebuilts/`.
 
 ## Porting to another device
 
 ```sh
-common/new-device.sh <codename> path/to/device.dtb   # profile + loader platform from the phone's device tree
+build/new-device.sh <codename> path/to/device.dtb   # profile + loader platform from the phone's device tree
 ```
 
 Then follow [docs/PORTING.md](docs/PORTING.md): the UEFI port, the loader's platform description, the kernel's
-drivers, the firmware. Device profiles live in `common/devices/` (`redwood.conf`, `qemu-virt.conf`, `_template.conf`).
+drivers, the firmware. Device profiles live in `device/<vendor>/<device>/<name>.conf` (`xiaomi/redwood`, `qemu/virt`); `device/_template.conf`
+documents every variable.
 
 ## How it works
 
@@ -200,27 +194,33 @@ kernel (driver replacements) or by a library the kernel injects with `DYLD_INSER
 
 ## Layout
 
+One repository, laid out by what each part is for:
+
 | Path | What |
 |---|---|
-| `common/` | `setup.sh` (workspace), `build.sh` / `run.sh` (per device), `new-device.sh`, `devices/*.conf`, `ugit` |
-| `xl` | drives the phone over USB: loader, kernel runs, logs, screenshots, screen and sound recording |
-| `xnuloader/` | the loader: `loader.c` (UEFI application), `mkpayload.py` (kernel + images + arguments container) |
-| `xnu/` | our XNU changes: patch, new files, `apply.sh` / `export.sh` |
-| `xnu-deps/` | everything for building XNU on Linux: `setup.sh`, tool wrappers, stubs |
-| `xnu-build.sh`, `xnu-env.sh` | kernel build |
-| `uefi/`, `mkxnuimg.py` | the UEFI port and packing the boot image for `fastboot boot` |
-| `wifi/lx/` | the layer on which Linux's Wi-Fi driver builds for our kernel |
-| `qemu/` | QEMU runs, touch input, screenshots, stack symbolication |
-| `tools/` | recording (`recording.py`, `sound.py`), UFS/flash tools, `mk-ath11k.sh`, `new-workspace.sh`, host tests |
-| `prebuilt/` | built kernel and UEFI pieces (`NOTICES.md` for the third-party code in the kernel) |
-| `docs/` | screenshots, [checks.md](docs/checks.md), [PORTING.md](docs/PORTING.md) |
+| `build/` | `build.sh` / `run.sh` (per device), `hackios` (every command behind one name), `setup.sh` (host check), `new-device.sh`, `lib.sh`, `flash/` (the dual-boot install, boot bundles, the owner key, the QEMU test of all of it) |
+| `device/` | device profiles, `device/<vendor>/<device>/<name>.conf`: `xiaomi/redwood/`, `qemu/virt/`; `_template.conf` documents the variables |
+| `kernel/xnu/` | our XNU changes: patch, new files, `apply.sh` / `export.sh` |
+| `kernel/deps/` | everything for building XNU on Linux or macOS: `setup.sh`, tool wrappers, stubs |
+| `kernel/build.sh`, `kernel/env.sh` | kernel build |
+| `kernel/wifi/lx/` | the layer on which Linux's Wi-Fi driver builds for our kernel |
+| `bootloader/loader/` | the loader: `loader.c` (UEFI application), `mkpayload.py` (kernel + images + arguments container) |
+| `bootloader/uefi/`, `bootloader/mkbootimg.py` | the UEFI port and packing the boot image for `fastboot boot` |
+| `system/` | our user space: `build.sh` (the APFS images), `src/` (init, injected libraries, the audio and Metal drivers, tests), `libmini/`, `rc.*` job lists, `var/`; see [system/README.md](system/README.md) |
+| `system/ios/` | `fetch.sh` takes iOS 16.5 out of Apple's IPSW on your machine, `select-system.py` chooses what goes into the image |
+| `graphics/` | Mesa with our patches (`mk-mesa.sh`, `mesa/`), the AIR frontend's checks (`air/`), Metal analysis (`metal/`, `metallib.py`) |
+| `host/xl` | drives the phone over USB: loader, kernel runs, logs, screenshots, screen and sound recording |
+| `host/qemu/` | QEMU runs, touch input, screenshots, stack symbolication |
+| `host/` | APFS on the computer (`apfs/`), recording (`recording.py`, `sound.py`), UFS/flash tools, `mk-ath11k.sh`, `mk-jb.sh`, `new-workspace.sh`, host tests |
+| `prebuilts/` | built kernel, UEFI pieces and our programs (`NOTICES.md` for the third-party code in the kernel) |
+| `docs/` | screenshots, [checks.md](docs/checks.md), [PORTING.md](docs/PORTING.md), [INSTALL.md](docs/INSTALL.md), [air.md](docs/air.md) |
 
 ## Debugging
 
 - Session log: QEMU's stdout or `logs/HHMMSS-run.log` from the phone.
-- `RC_JOBS=rc.jobs.tour REST=1 userland/build.sh` — an image that unlocks and opens every app of the first page.
+- `RC_JOBS=rc.jobs.tour REST=1 system/build.sh` — an image that unlocks and opens every app of the first page.
 - `userabort:` in the log is the stack of a process that called `abort()`; `usertrap:` (with `systrace=1`) — crashes.
-- Live stacks (QEMU): `qemu/touch.py stacks NAME`, then `qemu/symstack.py LOG NAME`
+- Live stacks (QEMU): `host/qemu/touch.py stacks NAME`, then `host/qemu/symstack.py LOG NAME`
   (needs [`ipsw`](https://github.com/blacktop/ipsw)).
 - How a check can lie to you: [docs/checks.md](docs/checks.md).
 
@@ -245,17 +245,17 @@ From the phone's screen, one session (`GL=1 REST=1`, `gpu=1`):
 
 ## Licenses
 
-- No iOS files are in the repositories: `ios165/fetch.sh` downloads them from Apple's CDN to your machine.
-- `xnu/` is a derivative work of XNU and is distributed under APSL 2.0, like XNU itself; `prebuilt/mach.*` is the
+- No iOS files are in the repository: `system/ios/fetch.sh` downloads them from Apple's CDN to your machine.
+- `kernel/xnu/` is a derivative work of XNU and is distributed under APSL 2.0, like XNU itself; `prebuilts/mach.*` is the
   kernel built from it. It also contains ath11k (BSD-3-Clause-Clear) and FreeBSD LinuxKPI code (BSD-2-Clause):
-  see [prebuilt/NOTICES.md](prebuilt/NOTICES.md).
-- `xnu/files/bsd/miscfs/apfs/libzbitmap/` and `xnu-deps/build/lzbitmap/` — libzbitmap (Corellium LLC, MIT here);
-  `xnu/files/bsd/miscfs/apfs/libdeflate/` — libdeflate 1.24 (Eric Biggers, MIT, `COPYING` there).
-- ath11k, Linux and FreeBSD sources are not in the repository: `tools/mk-ath11k.sh` fetches pinned releases.
-  `wifi/lx/patches/*.patch` are our changes to FreeBSD headers; the rest of `wifi/lx/` is ours.
-- `uefi/files/Binaries/redwood` and `prebuilt/uefi/SILICIUM_UEFI.fd` contain UEFI drivers from the phone's
+  see [prebuilts/NOTICES.md](prebuilts/NOTICES.md).
+- `kernel/xnu/files/bsd/miscfs/apfs/libzbitmap/` and `kernel/deps/build/lzbitmap/` — libzbitmap (Corellium LLC, MIT here);
+  `kernel/xnu/files/bsd/miscfs/apfs/libdeflate/` — libdeflate 1.24 (Eric Biggers, MIT, `COPYING` there).
+- ath11k, Linux and FreeBSD sources are not in the repository: `host/mk-ath11k.sh` fetches pinned releases.
+  `kernel/wifi/lx/patches/*.patch` are our changes to FreeBSD headers; the rest of `kernel/wifi/lx/` is ours.
+- `bootloader/uefi/files/Binaries/redwood` and `prebuilts/uefi/SILICIUM_UEFI.fd` contain UEFI drivers from the phone's
   Xiaomi firmware, distributed the way Project Silicium distributes them for other devices;
-  `prebuilt/uefi/mkbootimg.py` — AOSP, Apache-2.0.
+  `prebuilts/uefi/mkbootimg.py` — AOSP, Apache-2.0.
 - This repository is licensed under the [Apple Public Source License 2.0](LICENSE): our changes to XNU are a derivative of XNU and must be, and our other code here (loader, scripts) is released under the same license. Third-party code keeps its own license, as listed above.
 
 ## Team

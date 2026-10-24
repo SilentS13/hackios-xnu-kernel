@@ -35,7 +35,7 @@
  * bitcodeData] hands the driver one module (docs/metal.md 10.12, where those bytes were
  * checked against this frontend's own reader over all eleven functions of AV1SW --
  * same lengths, same FNV-1a, 11 of 11). The container's layout is docs/metal.md section
- * 9, and tools/metallib.py reads the same fields from Python.
+ * 9, and graphics/metallib.py reads the same fields from Python.
  *
  * The screen is softpipe, through RWA_SOFTWARE=1, which this program sets itself unless
  * the environment already says: there is no Adreno on this machine and the point is the
@@ -109,7 +109,7 @@ enum {
 
 /* MTLVertexFormat and MTLVertexStepFunction, the few --draw-attrib configures and the
  * few it expects to be refused. The numbers are Apple's own, out of the iOS 16.5 SDK's
- * MTLVertexDescriptor.h -- the same header userland/src/redwoodmetal.m asserts the
+ * MTLVertexDescriptor.h -- the same header system/src/redwoodmetal.m asserts the
  * library's table against -- and MTLVertexFormatFloatRGB9E5 (55) is in that list
  * BECAUSE it is not in that header: iOS 17 added it, so nothing on the device can ask
  * for it, and what this program checks about it is that the sentence names it rather
@@ -222,7 +222,7 @@ u16_at(const struct metallib *lib, size_t off)
 }
 
 /* Every function of the container, with each one's module: exactly the bytes
- * tools/metallib.py hands to llvm-dis, the blob MDSZ sizes, wrapper and all. One record
+ * graphics/metallib.py hands to llvm-dis, the blob MDSZ sizes, wrapper and all. One record
  * loop, because find_function below is one pick out of this table and --textures is the
  * whole of it -- and a second loop over the same unaligned tags would be a second reader
  * of a format that has only ever been read once correctly.
@@ -324,7 +324,7 @@ find_function(const struct metallib *lib, const char *want, char *name, size_t n
     * hand-written probe can go through THIS library and not only through air_run: the
     * corpus has no fragment shader that reads its own position (all seventeen that
     * declare [[position]] mark it air.arg_unused), so the only way to exercise the
-    * driver's own position path is a module written for it -- tools/air/fragpos.ll.
+    * driver's own position path is a module written for it -- graphics/air/fragpos.ll.
     */
    if (lib->size >= 4 && memcmp(lib->bytes, "MTLB", 4) != 0) {
       snprintf(name, name_size, "%s", want ? want : "(the only module)");
@@ -512,7 +512,7 @@ element_name(unsigned element)
 /*
  * --textures: what every function of a .metallib declares it wants bound, read here.
  *
- * This is the host half of the sweep in userland/src/metal_drv_test.m. That sweep binds
+ * This is the host half of the sweep in system/src/metal_drv_test.m. That sweep binds
  * one texture kind and one format for a whole library, and so refused 13 of Apple's 271
  * fragment shaders by name -- they declare a texture3d, a texture2d<int> or a multisample
  * texture -- which measured the harness and not the shader. rwa_module_textures was added
@@ -4386,7 +4386,7 @@ run_surface(int surface_id, unsigned width, unsigned height, unsigned row_bytes)
  * This is the reflection half, and it is printed rather than asserted because the
  * numbers have to be Apple's: -[MTLArgumentEncoder encodedLength] is what the
  * application passes to -newBufferWithLength:, so a row here can be put beside
- * `air.arg_type_size` in the module's own metadata (tools/air/argbuflen.py counts that
+ * `air.arg_type_size` in the module's own metadata (graphics/air/argbuflen.py counts that
  * over a whole library) and the two readings compared.
  *
  *   air_metal_test --argbufs FILE[.metallib|.bc] [FUNCTION]
@@ -4467,7 +4467,7 @@ run_argbufs(const char *path, const char *only)
  *
  * What this measures and why it is shaped this way:
  *
- *   - THE DIFFERENTIAL. tools/air/argbuf_set.ll and tools/air/argbuf_direct.ll compute
+ *   - THE DIFFERENTIAL. graphics/air/argbuf_set.ll and graphics/air/argbuf_direct.ll compute
  *     the same four floats out of the same five resources; the only difference is that
  *     one reaches them through `air.indirect_buffer` members and the other through
  *     [[buffer(0)]], [[sampler(0)]], [[texture(0)]], [[texture(1)]], [[sampler(1)]].
@@ -4624,7 +4624,7 @@ run_draw_argbuf(const char *setpath, const char *directpath)
           nsets ? layout[0].member_count : 0,
           layout_ok ? "the five members this module declares, at the flat indices "
                       "(buffer 0; samplers 0, 1; textures 0, 1) the frontend allocates"
-                    : "NOT what tools/air/argbuf_set.ll declares");
+                    : "NOT what graphics/air/argbuf_set.ll declares");
    failed += !layout_ok;
    checks++;
 

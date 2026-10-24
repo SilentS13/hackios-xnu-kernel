@@ -3,7 +3,7 @@
 frames.py RUN.log [MORE.log ...]: how evenly the frames of a run's gestures came, and what held up the slow ones.
 (More logs: the live ones of the same run, XL_FOLLOW=N XL_FOLLOW_KEEP=1, which keep what the run's log loses.)
 
-Reads the "tl:" lines a run with boot-arg touch_lat=1 writes (see tools/latency.py for what each
+Reads the "tl:" lines a run with boot-arg touch_lat=1 writes (see host/latency.py for what each
 says): the samples and buttons of rwtouch (tl: p), the window server's frames (tl: g: began, ended),
 their hand-over (tl: s), the display driver's GPU wait and copy (tl: v), and every wait of a program
 for the GPU of a millisecond or more (tl: f). Every gesture -- from a touch going down, or a button,

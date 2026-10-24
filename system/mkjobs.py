@@ -15,7 +15,7 @@ What "there at run time" means is the recipe, not what happens to be unpacked on
 two recipes differ. With the system image as the root, it is what select-system.py chose, and a daemon it
 left out as too big really is absent. With the iOS volume on the phone's flash as the root (build.sh
 FLASHBOOT=1), the root is Apple's whole volume: --root-volume names the technical listing of its image
-(ios165/rootfs.slt) and a program counts as there if Apple ships it. Seven jobs turn on that --
+(system/ios/rootfs.slt) and a program counts as there if Apple ships it. Seven jobs turn on that --
 fairplayd, identityservicesd, passd, assistantd, callservicesd, lskdd, searchpartyd -- and were being
 refused on a flash boot for a reason true only of the thinned copy here. (fairplayd now runs on the phone
 and is never missed from a lookup again, but it does not stay: it exits 0 the moment it starts, says nothing,
@@ -23,7 +23,7 @@ and KeepAlive brings it back every ten seconds -- 22 times in a session, not one
 user client com_apple_driver_FairPlayIOKitUserClient, which this kernel has not got. The empty App Store and
 Weather were never its doing: see the network section of README.md.) Eight more, Safari's and
 AuthenticationServicesAgent, hang on the App cryptex being unpacked beside it at all (see CRYPTEXES
-below); a workspace used to lose those silently, which tools/new-workspace.sh no longer does.
+below); a workspace used to lose those silently, which host/new-workspace.sh no longer does.
 
 With --rest, the other jobs of iOS follow (their standard error on the console as well, their os_log
 only when named in OSLOG), and with them the "launch angels" (System/Library/LaunchAngels: the

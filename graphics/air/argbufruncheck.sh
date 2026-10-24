@@ -3,7 +3,7 @@
 # records as through direct arguments, and a named different picture for every
 # record that is deliberately wrong.
 #
-# This is the runtime half of tools/air/argbufcheck.py, which checks the
+# This is the runtime half of graphics/air/argbufcheck.py, which checks the
 # frontend's half (the member table, the indices it allocates, nine refusals).
 # What it cannot check is what this does, and it says so itself:
 #
@@ -19,28 +19,28 @@
 # FRAGMENT shader on the same softpipe distinguishes both and the two pictures
 # are named rather than merely different.
 #
-# Everything runs through the contract in tools/mesa/air/air_metal.h and
+# Everything runs through the contract in graphics/mesa/air/air_metal.h and
 # nothing else: air_metal_test knows that header and no more, which is what
-# makes it stand in for the Metal driver (userland/src/redwoodmetal.m drives
-# the same calls on the phone -- see userland/rc.jobs.argbuf).
+# makes it stand in for the Metal driver (system/src/redwoodmetal.m drives
+# the same calls on the phone -- see system/rc.jobs.argbuf).
 #
-#   tools/air/argbufruncheck.sh
+#   graphics/air/argbufruncheck.sh
 #
-# Exit 0 when every check passed. The modules are tools/air/argbuf_set.ll and
-# tools/air/argbuf_direct.ll, which are written by hand and explain themselves:
+# Exit 0 when every check passed. The modules are graphics/air/argbuf_set.ll and
+# graphics/air/argbuf_direct.ll, which are written by hand and explain themselves:
 # no byte of either corpus is in them, and Apple's own libraries have no
 # argument buffer at all (0 of 456).
 set -u
 ROOT=$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)
 TEST=${AIR_METAL_TEST:-$ROOT/build/mesa-host/build/src/gallium/drivers/freedreno/air_metal_test}
-[ -x "$TEST" ] || { echo "argbufruncheck.sh: run tools/air/mk-host.sh first"; exit 1; }
+[ -x "$TEST" ] || { echo "argbufruncheck.sh: run graphics/air/mk-host.sh first"; exit 1; }
 command -v llvm-as > /dev/null || { echo "argbufruncheck.sh: no llvm-as"; exit 1; }
 
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
 for m in argbuf_set argbuf_direct; do
-	llvm-as -o "$WORK/$m.bc" "$ROOT/tools/air/$m.ll" || {
+	llvm-as -o "$WORK/$m.bc" "$ROOT/graphics/air/$m.ll" || {
 		echo "argbufruncheck.sh: llvm-as would not assemble $m.ll"
 		exit 1
 	}

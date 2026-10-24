@@ -16,19 +16,19 @@ phone in Android (adb with root) or in fastboot.
   flashctl.py unhold                     the newest version again, and forget a generation given up on
   flashctl.py doctor                     everything the install needs, checked one by one             (writes nothing)
   flashctl.py menu-on IMAGE              the menu on every power-on: Android's HackiOS module (KernelSU / Magisk)
-                                         makes the HackiOS slot active again once Android is up (common/flash/rearm)
+                                         makes the HackiOS slot active again once Android is up (build/flash/rearm)
   flashctl.py menu-off                   remove that module: the phone starts Android directly again
 
 The phone must be the device the profile is for: install.sh passes the profile's CODENAMES in
 HACKIOS_CODENAMES, and nothing is written to a phone whose ro.product.device is not one of them.
 
-How the dual boot is laid out (xnuloader/flashboot.c): the phone runs Android from one A/B slot; the other
+How the dual boot is laid out (bootloader/loader/flashboot.c): the phone runs Android from one A/B slot; the other
 slot's boot partition holds the UEFI with our loader. Android's partitions are never written. darwin holds the
 iOS volume, the cryptexes, the boot area (two bundle slots) and the var store. Switching slots is what
 `bootctl set-active-boot-slot` / `fastboot --set-active` do; the loader's menu switches back.
 
 Safety:
-  * every write is preceded by a check that it goes where it should (darwin by tools/darwin-write.py's own
+  * every write is preceded by a check that it goes where it should (darwin by host/darwin-write.py's own
     identity checks; the boot partition by name, slot and size) and followed by a read back;
   * write-uefi refuses without a backup of the partition it overwrites, and never touches Android's slot;
   * switch refuses while a Virtual A/B update is not merged, and when the spare slot has no UEFI of ours;
@@ -104,8 +104,8 @@ def identity():
     """refuse a phone that is not the device the profile is for; returns the codename that matched"""
     want = os.environ.get('HACKIOS_CODENAMES', '').split()
     if not want:
-        raise Refused('no device profile given (HACKIOS_CODENAMES): run through common/flash/install.sh or '
-                      '`common/hackios`, which take it from common/devices/<device>.conf')
+        raise Refused('no device profile given (HACKIOS_CODENAMES): run through build/flash/install.sh or '
+                      '`build/hackios`, which take it from device/<vendor>/<device>/<device>.conf')
     seen = {p: sh('getprop %s' % p).strip() for p in IDENTITY_PROPS}
     for p in IDENTITY_PROPS:
         if seen[p] in want:
@@ -253,7 +253,7 @@ def cmd_write_uefi(path):
     cur, spare, _ = preflight()
     img = open(path, 'rb').read()
     if img[:8] != b'ANDROID!':
-        raise Refused('%s is not a boot image (mkxnuimg.py makes one)' % path)
+        raise Refused('%s is not a boot image (bootloader/mkbootimg.py makes one)' % path)
     target = 'boot_' + spare
     if spare == cur:
         raise Refused('refusing to write Android\'s own slot')
@@ -421,7 +421,7 @@ def cmd_doctor():
     failed = [n for ok, n, _ in checks if not ok]
     if failed:
         raise Refused('%d check(s) failed: %s' % (len(failed), ', '.join(failed)))
-    print('doctor: ready for common/flash/install.sh')
+    print('doctor: ready for build/flash/install.sh')
 
 
 def root_manager():

@@ -2,7 +2,7 @@
 /* darwin as a file of userdata                                             */
 /*
  * Included by loader.c. On a phone whose darwin is not a partition of its own but a file in userdata
- * (common/flash/darwinid.py, kind "file"): a file f2fs never moves -- pinned and allocated in full, as
+ * (build/flash/darwinid.py, kind "file"): a file f2fs never moves -- pinned and allocated in full, as
  * Android keeps its swap files and Dynamic System Update images -- whose blocks lie where the map in
  * darwin_identity.h says (FIEMAP, read when the file was made). Out of that map this makes a block device
  * of darwin's own 4 KB blocks, an efi_block_io like any other: the boot menu (flashboot.c), the block

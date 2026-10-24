@@ -1,5 +1,5 @@
 #!/bin/sh
-# The speakers' guard (bsd/dev/hk_guard.c) on this machine: tools/guard_test.c built against it and run.
+# The speakers' guard (bsd/dev/hk_guard.c) on this machine: host/guard_test.c built against it and run.
 # The kernel's header is all it needs, and an empty sys/ioccom.h beside it (the ioctl numbers are not used).
 set -e
 cd "$(dirname "$0")/.."
@@ -9,5 +9,5 @@ trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/sys"
 cp $SRC/sys/hk_audio.h "$tmp/sys/"
 printf '#define _IOW(g, n, t) 0\n' > "$tmp/sys/ioccom.h"
-cc -O2 -Wall -DKERNEL -I"$tmp" tools/guard_test.c $SRC/dev/hk_guard.c -lm -o "$tmp/guard_test"
+cc -O2 -Wall -DKERNEL -I"$tmp" host/guard_test.c $SRC/dev/hk_guard.c -lm -o "$tmp/guard_test"
 "$tmp/guard_test"

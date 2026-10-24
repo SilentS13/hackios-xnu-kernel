@@ -3,7 +3,7 @@
 A port of [Project Silicium / Mu-Silicium](https://github.com/Project-Silicium/Mu-Silicium) to the POCO X5 Pro 5G
 (redwood). The device is not upstream; the port follows `lisa` (the same SoC package, `KodiakPkg`).
 
-You do not need to rebuild the UEFI to run HackiOS -- a ready image is in `prebuilt/uefi`, and `mkxnuimg.py`
+You do not need to rebuild the UEFI to run HackiOS -- a ready image is in `prebuilts/uefi`, and `bootloader/mkbootimg.py`
 takes it by itself.
 
 What is here:
@@ -24,7 +24,7 @@ Packages as in Mu-Silicium's `setup_env.sh` (on Arch: `git base-devel lld nasm c
 python python-pip python-virtualenv`).
 
 ```sh
-uefi/apply.sh                                   # clones Mu-Silicium (with submodules, ~3 GB) and applies the port
+bootloader/uefi/apply.sh                                   # clones Mu-Silicium (with submodules, ~3 GB) and applies the port
 python3 -m venv venv && venv/bin/pip install -r Mu-Silicium/pip-requirements.txt
 cd Mu-Silicium
 source ../venv/bin/activate
@@ -41,10 +41,10 @@ echo 'version: 20016.1.1' > $D/extdep_state.yaml
 ln -s /usr/bin/nasm /usr/bin/ndisasm $D/Linux-x86-64/
 ```
 
-After a build, `mkxnuimg.py` (called by `./xl enter` and `common/build.sh`) takes the UEFI from `Mu-Silicium/`,
-and `tools/update-prebuilt.sh` refreshes `prebuilt/uefi`.
+After a build, `bootloader/mkbootimg.py` (called by `host/xl enter` and `build/build.sh`) takes the UEFI from `Mu-Silicium/`,
+and `host/update-prebuilt.sh` refreshes `prebuilts/uefi`.
 
-`uefi/export.sh` is the reverse: save the changes made in `Mu-Silicium/` back here.
+`bootloader/uefi/export.sh` is the reverse: save the changes made in `Mu-Silicium/` back here.
 
 A build from scratch by these instructions has not been re-run since (the tree was built along the way while
 the port was made). For a port to another phone, see `docs/PORTING.md`.

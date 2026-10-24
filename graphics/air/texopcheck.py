@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check the texture operations one at a time, on more than one texel.
 
-tools/air/texcheck.sh runs the corpus's own texture shaders, and 6 of its 55
+graphics/air/texcheck.sh runs the corpus's own texture shaders, and 6 of its 55
 return the exact texel on the Adreno. Two things it cannot do:
 
   - Most of the other 49 are air.visible library functions, which the harness
@@ -12,7 +12,7 @@ return the exact texel on the Adreno. Two things it cannot do:
     coordinate and always fetched (1, 1) would pass all six.
 
 So this generates a fragment shader per (operation, coordinate), the way
-tools/air/intrincheck.py does for the arithmetic, and asks for several texels
+graphics/air/intrincheck.py does for the arithmetic, and asks for several texels
 including the corners. air_run fills texel (x, y, z) of slot n with
 (100 + x + 1000n, 200 + y, 300 + x + y + z, 400), so every coordinate has a
 different expected answer in all four channels and a confusion between any two
@@ -30,7 +30,7 @@ What is NOT checked, and why:
     clamped -- and the coordinates are texel centres, where nearest filtering
     has no weights to round, so this says nothing about filtering or
     addressing. That is now a separate check rather than a gap:
-    tools/air/sampcheck.py samples with the shader's own constexpr sampler and
+    graphics/air/sampcheck.py samples with the shader's own constexpr sampler and
     compares against Apple's rules (docs/air.md section 3.3).
   - The integer-typed reads and samples (read_texture_2d.s.v4i16,
     sample_texture_2d.u.v4i32 and the rest). air_run binds one
@@ -478,7 +478,7 @@ def collect_declarations():
     air2nir = os.environ.get(
         "AIR2NIR", os.path.join(ROOT, "build/mesa-host/build/src/compiler/air/air2nir"))
     out = set()
-    for dirpath, _, names in os.walk(os.path.join(ROOT, "ios165/rootfs")):
+    for dirpath, _, names in os.walk(os.path.join(ROOT, "system/ios/rootfs")):
         for n in sorted(names):
             if not n.endswith(".metallib"):
                 continue
@@ -522,7 +522,7 @@ def main(argv):
     if "--keep" in argv:
         keep = argv[argv.index("--keep") + 1]
     if not os.path.exists(AIR_RUN):
-        print("texopcheck: no air_run at %s (run tools/air/mk-host.sh)" % AIR_RUN,
+        print("texopcheck: no air_run at %s (run graphics/air/mk-host.sh)" % AIR_RUN,
               file=sys.stderr)
         return 1
 

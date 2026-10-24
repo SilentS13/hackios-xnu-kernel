@@ -73,7 +73,7 @@ say(const char *format, ...)
  * Boot-arg touch_lat=1: a line for every turn of SpringBoard's main run loop -- when it woke up (a
  * touch, a timer, the display link ...), when CoreAnimation's commit of what that turn changed
  * began and when it was done (our observers just before and after its own, of order 2000000), in
- * microseconds of mach_absolute_time, as the other "tl:" lines (tools/latency.py, tools/frames.py):
+ * microseconds of mach_absolute_time, as the other "tl:" lines (host/latency.py, host/frames.py):
  *   tl: a WOKE COMMIT DONE
  * (a commit with nothing in it takes some microseconds; one that sends changes, a good deal more)
  */
@@ -293,7 +293,7 @@ battery_state(id self, SEL sel)
 /*
  * UIKitCore's status-bar view has its own presentation policy, separate from UIDevice. With the power
  * source it is iOS's own again: the switch Battery Percentage in Settings > Battery, which the image
- * turns on (SBShowBatteryPercentage in userland/var/mobile/Library/Preferences/com.apple.springboard.plist).
+ * turns on (SBShowBatteryPercentage in system/var/mobile/Library/Preferences/com.apple.springboard.plist).
  */
 static BOOL
 battery_view_shows_percentage(id self, SEL sel)

@@ -1,22 +1,24 @@
 #!/bin/bash
 # Start a port of HackiOS to another device: a profile and a loader platform description to fill in.
 #
-# usage: common/new-device.sh <codename> [path/to/device.dtb]
+# usage: [VENDOR=<vendor>] build/new-device.sh <codename> [path/to/device.dtb]
+#   VENDOR     the directory under device/ the profile goes into (default: other)
 #
-# Writes common/devices/<codename>.conf (from _template.conf) and common/devices/<codename>.platform.c,
-# a `struct platform` for xnuloader/loader.c. Given the phone's device tree (from its vendor_boot, or
+# Writes device/<vendor>/<codename>/<codename>.conf (from device/_template.conf) and <codename>.platform.c next to it,
+# a `struct platform` for bootloader/loader/loader.c. Given the phone's device tree (from its vendor_boot, or
 # `adb pull /sys/firmware/fdt`), it fills in what can be read from it: the GIC addresses, the number of
 # CPU cores and how MPIDR numbers them, and which cores are the small ones. What it cannot read is left
 # as TODO; docs/PORTING.md walks through all of it.
 . "$(dirname "$(readlink -f "$0")")/lib.sh"
 CODE=$1; DTB=$2
-[ -n "$CODE" ] || die "usage: common/new-device.sh <codename> [device.dtb]"
+[ -n "$CODE" ] || die "usage: build/new-device.sh <codename> [device.dtb]"
 [[ "$CODE" =~ ^[a-z0-9_-]+$ ]] || die "codename: lower-case letters, digits, - and _ only"
-CONF=common/devices/$CODE.conf PLATC=common/devices/$CODE.platform.c
-[ -e "$CONF" ] && die "$CONF exists already"
+D=device/${VENDOR:-other}/$CODE; CONF=$D/$CODE.conf PLATC=$D/$CODE.platform.c
+[ -n "$(device_conf "$CODE")" ] && die "$(device_conf "$CODE") exists already"
+mkdir -p "$D"
 
 sed -e "s/^CODENAMES=\"codename\"/CODENAMES=\"$CODE\"/" -e "s/^NAME=.*/NAME=\"TODO vendor model ($CODE)\"/" -e "s/^UEFI_TARGET=.*/UEFI_TARGET=$CODE/" \
-	common/devices/_template.conf > "$CONF"
+	device/_template.conf > "$CONF"
 [ -n "$DTB" ] && sed -i "s|^DTB=.*|DTB=$(readlink -f "$DTB")|" "$CONF"
 
 GIC_DIST=TODO GIC_REDIST=TODO CORES=8 SHIFT=8 SMALL=0x0
@@ -49,14 +51,14 @@ PY
 )
 	echo "new-device: from $DTB: GIC $GIC_DIST / $GIC_REDIST, $CORES cores, MPIDR shift $SHIFT, small cores $SMALL"
 	# where the SoC's blocks are, for the kernel's drivers (bsd/sys/hk_board.h)
-	BOARD=$(python3 tools/board-from-dt.py "$DTB")
+	BOARD=$(python3 host/board-from-dt.py "$DTB")
 	sed -i "s|^BOARD_ARGS=.*|BOARD_ARGS=\"$BOARD\"|" "$CONF"
 	echo "new-device: the SoC's blocks: ${BOARD:-none found, the kernel keeps the defaults of the POCO X5 Pro}"
 fi
 
 cat > "$PLATC" <<EOF
 /*
- * $CODE: paste into xnuloader/loader.c next to platform_redwood and add &platform_$CODE to platforms[].
+ * $CODE: paste into bootloader/loader/loader.c next to platform_redwood and add &platform_$CODE to platforms[].
  * Every value is explained in docs/PORTING.md ("The loader").
  */
 static const struct platform platform_$CODE = {
@@ -71,4 +73,4 @@ static const struct platform platform_$CODE = {
 };
 EOF
 echo "new-device: wrote $CONF and $PLATC"
-echo "new-device: next -- docs/PORTING.md, then: common/build.sh $CODE && common/run.sh $CODE"
+echo "new-device: next -- docs/PORTING.md, then: build/build.sh $CODE && build/run.sh $CODE"

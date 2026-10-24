@@ -7,7 +7,7 @@ Each NAME=DIR becomes one volume of the container (volume 0 first), case-sensiti
 normalization-insensitive like the iOS volumes, unencrypted, read-only content laid out once.
 Permission bits and symbolic links are taken from DIR; everything is owned by root:wheel
 unless a manifest says otherwise (lines of: mode in octal with the type bits, uid, gid, path,
-[link target]; ios165/system.manifest is one; a directory or symbolic link that is only in the
+[link target]; system/ios/system.manifest is one; a directory or symbolic link that is only in the
 manifest is made). With -z a regular file is stored compressed when that makes it smaller,
 as Apple stores most of the iOS root volume: a small one whole in its decmpfs attribute (type
 3, no block of its own at all), a bigger one in 64 KB zlib pieces in its resource fork (type 4); but not what is under a --plain DIR (relative to the volume's root), which stays as
@@ -20,7 +20,7 @@ its internal pool, the reaper, the two free queues), the container's object map,
 volume its superblock, object map, file-system tree, extent-reference tree and an empty
 snapshot tree; then the files' data.  What the layout of the space manager has to be is
 taken from linux-apfs/apfsprogs' mkapfs (and checked with its apfsck, which has to find the
-image clean: tools/apfs/check-image.sh).  Hard links are not made: a name is a file.
+image clean: host/apfs/check-image.sh).  Hard links are not made: a name is a file.
 """
 import argparse
 import concurrent.futures

@@ -10,7 +10,7 @@
 # -[CAMetalLayer nextDrawable] asks a Metal device exactly one thing for this:
 # -newTextureWithDescriptor:iosurface:plane:, a texture over an IOSurface CoreAnimation
 # allocated (docs/metal.md 10.46). The library grew rwa_texture_from_surface for it and
-# userland/src/redwooddrawable.m is the bridge. NOTHING OF EITHER HAS EVER RUN ON THE PHONE.
+# system/src/redwooddrawable.m is the bridge. NOTHING OF EITHER HAS EVER RUN ON THE PHONE.
 # This list is the first time, and it asks the one question that separates a texture over the
 # surface's own pages from a texture over a copy of them.
 #
@@ -41,7 +41,7 @@
 #                      "the compiler library in this image has no rwa_texture_from_surface",
 #                      and that sentence means the image is stale, not that the path is wrong.
 #                      Check it on the machine before booting:
-#                        nm -gU xnu-deps/build/mesa/out/libredwoodair.dylib | grep from_surface
+#                        nm -gU kernel/deps/build/mesa/out/libredwoodair.dylib | grep from_surface
 #   JOBS=""            not required -- this test shares nothing with the window server -- but
 #                      kept for the first boot so that nothing else is allocating surfaces or
 #                      GPU buffers while the kernel's table is being read.

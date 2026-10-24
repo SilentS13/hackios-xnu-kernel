@@ -5,32 +5,32 @@ is the realistic next target: the boot chain (Mu-Silicium UEFI started with `fas
 platform code carry over. Start with:
 
 ```sh
-common/new-device.sh <codename> path/to/device.dtb
+build/new-device.sh <codename> path/to/device.dtb
 ```
 
-It writes `common/devices/<codename>.conf` (the profile `common/build.sh` and `common/run.sh` read) and
-`common/devices/<codename>.platform.c` (the loader's description of the SoC), filling in what the device tree says.
+It writes `device/<vendor>/<codename>/<codename>.conf` (the profile `build/build.sh` and `build/run.sh` read) and
+`device/<vendor>/<codename>/<codename>.platform.c` (the loader's description of the SoC), filling in what the device tree says.
 Get the device tree from the phone's `vendor_boot` image, or from a running Android: `adb pull /sys/firmware/fdt`.
 
 ## 1. The UEFI
 
 The phone needs a UEFI that our loader can run under. Port [Mu-Silicium](https://github.com/Project-Silicium/Mu-Silicium)
-the way `uefi/` ports redwood (it follows `lisa`, the same SoC package):
+the way `bootloader/uefi/` ports redwood (it follows `lisa`, the same SoC package):
 
 - `Platforms/<Vendor>/<codename>Pkg`: memory map and driver list (copy the closest device of the same SoC);
 - `Binaries/<codename>`: the UEFI drivers of the phone's own firmware, extracted with
   [UEFIReader](https://github.com/WOA-Project/UEFIReader) from its `xbl.img`;
-- apply our two changes from `uefi/mu-silicium.patch`: the boot shim copies the "XNUP" container after the UEFI
+- apply our two changes from `bootloader/uefi/mu-silicium.patch`: the boot shim copies the "XNUP" container after the UEFI
   image to `PAYLOAD_BASE`, and `BootManagerLib` starts the XNU loader from it instead of the menu.
 
 Put the addresses in the profile: `FD_BASE`, `FD_SIZE` (where the shim puts the UEFI image) and `PAYLOAD_BASE`
 (free RAM for the kernel and images). The prebuilt `BootShim.bin` is built for redwood's addresses: build the
-shim from your Mu-Silicium tree (`mkxnuimg.py` does it when `Mu-Silicium/` is there).
+shim from your Mu-Silicium tree (`bootloader/mkbootimg.py` does it when `Mu-Silicium/` is there).
 
 ## 2. The loader
 
-`xnuloader/loader.c` describes each device with a `struct platform` and picks it by the framebuffer base the UEFI
-reports. Paste `common/devices/<codename>.platform.c` next to `platform_redwood` and add it to `platforms[]`:
+`bootloader/loader/loader.c` describes each device with a `struct platform` and picks it by the framebuffer base the UEFI
+reports. Paste `device/<vendor>/<codename>/<codename>.platform.c` next to `platform_redwood` and add it to `platforms[]`:
 
 | Field | Where it comes from |
 |---|---|
@@ -41,7 +41,7 @@ reports. Paste `common/devices/<codename>.platform.c` next to `platform_redwood`
 | `psci_hvc` | 1 if the firmware's PSCI is called with HVC (QEMU), 0 for SMC (phones) |
 | `fb_base` | the framebuffer address; the loader prints it at start (`display W x H at ...`) |
 
-Rebuild with `xnuloader/build.sh`; QEMU must still pick `qemu-virt` (no match = ramfb).
+Rebuild with `bootloader/loader/build.sh`; QEMU must still pick `qemu-virt` (no match = ramfb).
 
 ## 3. The kernel
 
@@ -61,16 +61,16 @@ Start with no extras: the system boots to the lock screen with only the framebuf
 
 Vendor firmware never goes into the repository; it comes from the phone's own Android (`FIRMWARE` in the profile
 lists what to pull, see README "On the phone"). Without `fw-gpu/` the kernel does not start the GPU and says so only
-deep in the log (`adreno: THE GPU IS NOT STARTED`); `userland/build.sh` prints which firmware went into the image.
+deep in the log (`adreno: THE GPU IS NOT STARTED`); `system/build.sh` prints which firmware went into the image.
 
 ## 5. Run
 
 ```sh
-common/build.sh <codename>
-common/run.sh <codename>
+build/build.sh <codename>
+build/run.sh <codename>
 ```
 
-The first useful milestone is the loader's own screen and log over USB (`./xl log`), the next one is the kernel's
+The first useful milestone is the loader's own screen and log over USB (`host/xl log`), the next one is the kernel's
 verbose boot text (`-v`), then SpringBoard. Read [checks.md](checks.md) before trusting a "it is not in the log".
 
 ## The SoC's blocks: BOARD_ARGS
@@ -78,6 +78,6 @@ verbose boot text (`-v`), then SpringBoard. Read [checks.md](checks.md) before t
 The kernel's drivers were brought up on the POCO X5 Pro (SM7325), and every block they map -- the CPU frequency
 domains, the temperature sensors, the clock controllers, the display's timing engine, the UFS controller, the
 PMIC arbiter -- defaults to that phone's address. Another phone gives its own on the kernel's command line,
-`board_<block>=0x...` (bsd/sys/hk_board.h lists them). `common/new-device.sh <codename> <dtb>` reads them out
-of the phone's device tree (`tools/board-from-dt.py`) into the profile's `BOARD_ARGS`, which `common/run.sh` and
-`common/flash/install.sh` pass on. On redwood's own device tree the tool reads back exactly the defaults.
+`board_<block>=0x...` (bsd/sys/hk_board.h lists them). `build/new-device.sh <codename> <dtb>` reads them out
+of the phone's device tree (`host/board-from-dt.py`) into the profile's `BOARD_ARGS`, which `build/run.sh` and
+`build/flash/install.sh` pass on. On redwood's own device tree the tool reads back exactly the defaults.

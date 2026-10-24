@@ -23,7 +23,7 @@
  *     MTLAddDevice read is conformsToProtocol:. One call says the same thing truthfully.
  *     MTLDeviceSPI adopts MTLDevice, so one declaration satisfies both.
  *   - -initWithAcceleratorPort: opens this port's OWN gpu service, `RedwoodGPU`, the way
- *     Mesa's shim does (tools/mesa/redwood-drm/redwood_drm.c: IOServiceOpen with type 0,
+ *     Mesa's shim does (graphics/mesa/redwood-drm/redwood_drm.c: IOServiceOpen with type 0,
  *     then msm-shaped requests through IOConnectCallStructMethod). That is the road the
  *     resource layer will take, and it already carries Mesa's own dispatches today. The
  *     IOGPU road was measured shut: IOServiceOpen on our IOAcceleratorES service with
@@ -31,7 +31,7 @@
  *
  * The first resource is here too. A Metal buffer on this port is a GEM allocation of the
  * kernel's own gpu driver, made and mapped exactly the way Mesa's shim makes and maps one
- * (tools/mesa/redwood-drm/redwood_drm.c): kMsmGemNew (0x42) for the memory, MSM_INFO_GET_IOVA
+ * (graphics/mesa/redwood-drm/redwood_drm.c): kMsmGemNew (0x42) for the memory, MSM_INFO_GET_IOVA
  * through kMsmGemInfo (0x43) for the address the GPU sees, IOConnectMapMemory64 for the
  * address the processor sees, kDrmGemClose (0x09) to give it back. The kernel makes that
  * memory write-combined, with no cache of this processor between the program and what the
@@ -46,7 +46,7 @@
  * those bytes were checked against our own AIR reader over all eleven functions of
  * AV1SW.metallib -- same lengths, same checksums (docs/metal.md 10.12). The front end that
  * reads them lives in Mesa, so the compiling and the dispatching are asked of
- * /redwood/lib/libredwoodair.dylib through the contract in tools/mesa/air/air_metal.h.
+ * /redwood/lib/libredwoodair.dylib through the contract in graphics/mesa/air/air_metal.h.
  *
  * That library is loaded with dlopen rather than linked, for a measured reason: the device
  * object must exist even when there is no GPU. The port starts the Adreno only with the
@@ -105,8 +105,8 @@
 #include <unistd.h>
 
 /* The contract with Mesa's side, copied here rather than included: this file is built by
- * userland/build.sh, which knows nothing of Mesa's tree, and the declarations are few.
- * tools/mesa/air/air_metal.h is the original and explains each call. */
+ * system/build.sh, which knows nothing of Mesa's tree, and the declarations are few.
+ * graphics/mesa/air/air_metal.h is the original and explains each call. */
 struct rwa_device;
 struct rwa_buffer;
 struct rwa_texture;
@@ -311,7 +311,7 @@ struct rwa_draw {
 
 /*
  * The library's MTLVertexFormat table, checked against Apple's own header HERE, where the
- * SDK is in hand: tools/mesa/air/air_metal.c carries those numbers as literals (it has no
+ * SDK is in hand: graphics/mesa/air/air_metal.c carries those numbers as literals (it has no
  * Metal headers to read them from), this file is compiled against
  * iPhoneOS16.5.sdk/System/Library/Frameworks/Metal.framework/Headers/MTLVertexDescriptor.h,
  * and a disagreement between the two would be a vertex fetched in the wrong format rather
@@ -407,7 +407,7 @@ _Static_assert((int)MTLColorWriteMaskNone == 0 && (int)MTLColorWriteMaskAlpha ==
  * air_resource growing by eight bytes so that every resource after the first was read
  * eight bytes early.
  *
- * The numbers below are the same numbers asserted in tools/mesa/air/air_metal.c against
+ * The numbers below are the same numbers asserted in graphics/mesa/air/air_metal.c against
  * the library's own definitions. Neither file can see the other's structs, so this is
  * not a comparison -- it is two independent statements of one agreement, and an edit to
  * one side alone fails to build on that side. The offsets are asserted as well as the
@@ -798,7 +798,7 @@ rw_blend_result(unsigned enabled_mask, unsigned write_masks)
 /*
  * The depth/stencil state's base class, and it is one of the good ones: everything but four
  * methods is Apple's and works for us. Read out of the cache the way the rest of this driver
- * was (tools/metal/absmeth.py over `_MTLDepthStencilState`, 10 selectors):
+ * was (graphics/metal/absmeth.py over `_MTLDepthStencilState`, 10 selectors):
  *
  *   - -initWithDevice:depthStencilDescriptor: (0x181a29b38) is REAL and is the designated
  *     initialiser. It validates the descriptor field by field -- depthCompareFunction and
@@ -832,7 +832,7 @@ rw_blend_result(unsigned enabled_mask, unsigned write_masks)
  * The one struct Metal reads out of a device by raw pointer, and the one answer on this
  * device that cannot be a refusal. Nothing here is guessed: the name and all three field
  * types are Apple's own, out of the type encoding MTLDeviceSPI records for the method
- * (`tools/metal/protometh.py`, joined to `absmeth.py` by implementation address):
+ * (`graphics/metal/protometh.py`, joined to `absmeth.py` by implementation address):
  *
  *     -targetDeviceInfo    r^{MTLTargetDeviceArch=QI*}16@0:8
  *
@@ -1608,7 +1608,7 @@ struct gem_close { uint32_t handle, pad; };
  * process. owes.py counts what the protocols require and found nothing missing; these are
  * declared on Apple's counterpart CLASSES -- AGXA11FamilyDevice and IOGPUMetalDevice -- which our
  * device does not descend from, so nothing in the chain answers them and no protocol says so.
- * tools/metal/owesclass.py counts that other list: 343 such selectors, 72 of which something in
+ * graphics/metal/owesclass.py counts that other list: 343 such selectors, 72 of which something in
  * this image actually sends, and NONE of the 72 behind a -respondsToSelector:. QuartzCore does not
  * ask, it sends. So every one of them is terminate(), not a composite that merely looks wrong --
  * which is what setProtectionOptions: did to the window server and what the first of these just
@@ -2360,7 +2360,7 @@ struct gem_close { uint32_t handle, pad; };
  * Asking the device whether it responds to these says yes -- they are real entries in
  * _MTLDevice's method list -- and calling one aborts, because each body is
  * [self doesNotRecognizeSelector:_cmd]. Seven methods of _MTLDevice are abstract in that
- * way (tools/metal/absmeth.py), one of them is -initWithAcceleratorPort: which this driver
+ * way (graphics/metal/absmeth.py), one of them is -initWithAcceleratorPort: which this driver
  * implements, and the other six are these: ray tracing. Overriding them to decline turns the
  * last aborting paths into ordinary nil, which is what the "0 unanswered" measurement needs
  * in order to mean anything.
@@ -2432,7 +2432,7 @@ struct gem_close { uint32_t handle, pad; };
  *   0x181a3ca3c  ldr x8, [x23, #0x10]                                      -> 0x10
  *
  * Both halves of that are Apple's. `_MTLDevice` HAS an entry for -targetDeviceInfo and its
- * body is `mov x0, #0; ret` (0x181aa8d98 -- tools/metal/absmeth.py calls that a nil-stub),
+ * body is `mov x0, #0; ret` (0x181aa8d98 -- graphics/metal/absmeth.py calls that a nil-stub),
  * so the runtime answers the question YES on our behalf and the pointer is NULL; and the
  * caller treats a YES as a promise and dereferences what comes back. Declining is therefore
  * not on the table: returning nil IS what crashes, and the only way to make the runtime say
@@ -3446,7 +3446,7 @@ redwood_clear_semaphore_debt(id commandBuffer)
  * public header: both are required members of <MTLCommandQueueSPI>, which is declared in
  * AGXMetalA11.bundle and therefore does not exist in any process on this phone -- so
  * objc_getProtocol cannot be asked what this class owes, and the list was read out of the
- * cache instead (tools/metal/protometh.py, tools/metal/owes.py).
+ * cache instead (graphics/metal/protometh.py, graphics/metal/owes.py).
  *
  * -setGPUPriority: (B24@0:8Q16 -- NSUInteger in, BOOL out) is NOT bookkeeping.
  * -[IOGPUMetalCommandQueue setGPUPriority:] (0x1ec174cb8) calls _validateGPUPriority
@@ -3588,11 +3588,11 @@ redwood_clear_semaphore_debt(id commandBuffer)
  * it, and it is printed out of these constants, so the line cannot drift from what -status
  * answers. A log without that line is older than this change, and in it "status 6" is this
  * completion, "status 4" is a buffer that was only submitted, and 2 and 3 do not occur at all.
- * That is the rule tools/air/metalcheck.py reads a log by, and the measurement that makes it
+ * That is the rule graphics/air/metalcheck.py reads a log by, and the measurement that makes it
  * safe: over all 141 logs in logs/ the only statuses the test ever printed are 5 (128 times) and
  * 6 (990 times) -- never 4.
  *
- * One file more keys on the old numbers and is NOT part of this change: userland/src/
+ * One file more keys on the old numbers and is NOT part of this change: system/src/
  * metal_drv_test.m compares [cmd status] with the literal 6 in five places (its lines 1200, 1526,
  * 2041, 2293, 2795) and prints the literal "status 6" in a sixth (2308). Until those move, a boot
  * with this driver has the test calling every completed buffer a failure: the sweep prints
@@ -4875,7 +4875,7 @@ done:
  *
  * 125 + 34 required methods between them, read out of the cache rather than the runtime
  * (MTLRenderCommandEncoderSPI is declared in AGXMetalA11.bundle, so no process on this
- * phone has it; tools/metal/owes.py does the subtraction). 48 of them had no answer
+ * phone has it; graphics/metal/owes.py does the subtraction). 48 of them had no answer
  * anywhere in this chain before this section, and an answer is the difference between a
  * daemon that keeps running and one launchd restarts for ever.
  *
@@ -5241,7 +5241,7 @@ controlPointIndexBufferOffset:(NSUInteger)controlPointOffset
  * setMeshTexture:atIndex:]: unrecognized selector" and send the next reader looking for a
  * method that is not the problem. An entry in a method table is not behaviour, and the only
  * way to tell these apart from working methods is to read the bodies out of the cache
- * (tools/metal/protometh.py --verdicts, which found exactly 28 of them under this driver's
+ * (graphics/metal/protometh.py --verdicts, which found exactly 28 of them under this driver's
  * classes: these, -commitWithDeadline: and -setThreadgroupPackingDisabled:).
  *
  * A mesh pipeline is two stages before the fragment one -- an object stage that decides how
@@ -5683,7 +5683,7 @@ controlPointIndexBufferOffset:(NSUInteger)controlPointOffset
 /*
  * THE REST OF WHAT <MTLComputeCommandEncoder> AND <MTLComputeCommandEncoderSPI> REQUIRE:
  * 20 methods that had no answer in this chain, each of which was an abort waiting for the
- * first daemon to encode a kernel. Counted by tools/metal/owes.py off the cache, because
+ * first daemon to encode a kernel. Counted by graphics/metal/owes.py off the cache, because
  * MTLComputeCommandEncoderSPI is declared in AGXMetalA11.bundle and is in no process here.
  */
 
@@ -5797,7 +5797,7 @@ controlPointIndexBufferOffset:(NSUInteger)controlPointOffset
 		"size is ignored\n");
 }
 /* An entry for this exists in _MTLCommandEncoder and it is one of Apple's abstract ones
- * (tools/metal/protometh.py --verdicts), so inheriting it is an abort rather than a
+ * (graphics/metal/protometh.py --verdicts), so inheriting it is an abort rather than a
  * default. It is a hint about how the hardware packs threadgroups together; the compiler
  * library decides that for itself and there is nothing here to turn off. */
 - (void)setThreadgroupPackingDisabled:(BOOL)disabled { (void)disabled; }

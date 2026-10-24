@@ -8,7 +8,7 @@ Two files are written:
   system.files      the regular files to extract ("7z x -orootfs rootfs.dmg @system.files")
   system.manifest   every chosen file, directory and symbolic link with its owner, group and mode,
                     tab separated: mode(octal, with the type bits) uid gid path [link target].
-                    tools/apfs/mkapfs.py builds the image from the extracted files and this manifest,
+                    host/apfs/mkapfs.py builds the image from the extracted files and this manifest,
                     because extraction on Linux keeps neither owners nor all of the symlinks.
 
 The whole root is 7.9 GB and the kernel on the phone has about 4 GB of RAM for everything, so:
@@ -20,7 +20,7 @@ The whole root is 7.9 GB and the kernel on the phone has about 4 GB of RAM for e
     keeps in /private/var/staged_system_apps until its first boot installs them (Maps, Notes,
     Weather, ...) are put straight into /Applications, where they are system applications like
     the rest: system.files names them where they are in the image, system.manifest where they go
-    (userland/build.sh moves the extracted files);
+    (system/build.sh moves the extracted files);
   - machine-learning models, other languages' localizations, media and GPU shader libraries
     are left out -- but for the two shader libraries Apple's own code aborts without, which are
     named one by one (KEEP_METALLIB) -- and so are a few very big daemons that have nothing to
@@ -67,8 +67,8 @@ SKIP_EXT = ('.weights', '.weights_nonane', '.metallib', '.mov', '.pcm', '.scnz',
 #     mediaserverd aborts in -[_MTLDevice newLibraryWithURL:error:] -- twenty-eight times in one boot.
 # Unconditional, and that does NOT put the phone's interface through our driver: a file being present is
 # not the switch. Whether Apple's code gets a Metal device at all is decided per process by the device
-# array that userland/src/inject.c empties in backboardd (boot-arg camtl=1 leaves it) and
-# userland/src/inject_media.c empties in mediaserverd (mediamtl=1 leaves it), and both default to "no
+# array that system/src/inject.c empties in backboardd (boot-arg camtl=1 leaves it) and
+# system/src/inject_media.c empties in mediaserverd (mediamtl=1 leaves it), and both default to "no
 # device". So a default boot behaves exactly as it does today and these two files merely sit in the image
 # -- 1,4 MB of an image that lives in RAM -- which is what makes the camtl=1 / mediamtl=1 experiment
 # possible without a second rebuild of system.apfs. The cost is paid once, at build time: a system.apfs
@@ -113,7 +113,7 @@ SKIP_APP_EXT = ('.mov', '.mp4', '.m4a', '.caf', '.wav', '.heic', '.aiff', '.meta
 # (the one with all the SF Symbols alone is 170 MB and is left out)
 MAX_ASSET_CATALOG = 4 << 20
 # fonts: all but the very big ones; those two -- the colour emoji, 130 MB, and PingFang, the Chinese faces, 74 MB --
-# are taken and made smaller after extraction (fetch.sh, ../tools/font_trim.py): the emoji without their biggest
+# are taken and made smaller after extraction (fetch.sh, ../../host/font_trim.py): the emoji without their biggest
 # bitmaps (59 MB), PingFang with the regular and semibold faces for simplified, traditional and Hong Kong Chinese,
 # both those programs name and the hidden ones (".PingFangSC-Regular") the system font falls back to
 # (26 MB). Without them Safari and the rest drew emoji and Chinese characters as boxes with a question mark.

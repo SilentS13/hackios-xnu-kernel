@@ -14,7 +14,7 @@
  *   zigzag X Y0 Y1 MS N [STEP]   touch at Y0, go to Y1 in MS milliseconds and back again, N times, then let go;
  *                                a sample every STEP milliseconds (default 8, what the touch screen gives, as
  *                                swipe and drag give them):
- *                                for measuring how far behind the finger the screen is (tools/latency.py)
+ *                                for measuring how far behind the finger the screen is (host/latency.py)
  *   button NAME [MS]             press a button: home, lock, volup, voldown
  *   read                         print the samples that arrive, forever (to watch the queue)
  *   notify NAME                  post a Darwin notification (com.redwood.unlock: see inject_sb.c)

@@ -79,7 +79,7 @@ for arg in "$@"; do
 	elif [ "${arg%.metallib}" != "$arg" ]; then
 		dir=$WORK/unpack
 		rm -rf "$dir"
-		python3 "$ROOT/tools/metallib.py" dump "$arg" "$dir" > /dev/null
+		python3 "$ROOT/graphics/metallib.py" dump "$arg" "$dir" > /dev/null
 		while IFS= read -r f; do
 			check_bc "$f" "$(basename "$arg"):$(basename "$f" .bc)"
 		done < <(find "$dir" -name '*.bc' | sort)

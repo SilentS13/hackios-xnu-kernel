@@ -3,11 +3,11 @@
  *
  * bsd/miscfs/apfs/apfs_lib.c is built into this program unchanged, so what it says about
  * an image here is what the driver will see.  `census` prints a line per directory entry
- * that tools/apfs/apfs.py can print too, and run-tests.sh diffs the two: the Python
+ * that host/apfs/apfs.py can print too, and run-tests.sh diffs the two: the Python
  * reader has already been checked against 7-Zip over the whole volume, so agreeing with
  * it byte for byte is the C code agreeing with the image.
  *
- * Built by tools/apfs/build-tool.sh.
+ * Built by host/apfs/build-tool.sh.
  *
  * usage: apfs-tool info   IMAGE
  *        apfs-tool ls     IMAGE [PATH]
@@ -1160,7 +1160,7 @@ cmd_cfrace(const char *path, int n, int rounds)
 
 /*
  * namehash IMAGE OUT: every directory record's name hashed the way the lookup hashes it,
- * against the hash APFS stored with it; and into OUT, for tools/apfs/test_namehash.py to work
+ * against the hash APFS stored with it; and into OUT, for host/apfs/test_namehash.py to work
  * out independently, a line per record: directory, the name in hex, the stored hash, the hash
  * as on a case-sensitive volume and as on a case-insensitive one, the file's id.
  */

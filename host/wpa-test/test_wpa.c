@@ -1,5 +1,5 @@
 /*
- * Tests of wifi/lx/src/lx_wpa.c on the machine the kernel is built on.
+ * Tests of kernel/wifi/lx/src/lx_wpa.c on the machine the kernel is built on.
  *
  * Two kinds. The pieces against the examples their own standards give (they are quoted here with
  * where they are from). And whole handshakes against an access point written in Python on

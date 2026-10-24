@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
 """
-A phone's darwin: where it is and what it is, in one file that the loader, the kernel and tools/darwin-write.py
-all take it from. Every phone gets its darwin cut from the end of its own userdata (tools/userdata-carve.py),
+A phone's darwin: where it is and what it is, in one file that the loader, the kernel and host/darwin-write.py
+all take it from. Every phone gets its darwin cut from the end of its own userdata (host/userdata-carve.py),
 so two phones of the same model have it in different places (a 128 GB and a 256 GB POCO X5 Pro differ by
 tens of millions of blocks) and with different GUIDs.
 
   darwinid.py from-gpt GPT_HEAD SERIAL   read darwin's entry out of a GPT (8 blocks, as the carve makes them)
                                          and write phones/SERIAL.darwin
-  darwinid.py header FILE OUT            the C header the loader is built with (xnuloader/build.sh, DARWIN_ID=)
-  darwinid.py bootargs FILE              the kernel's darwin_lba= darwin_blocks= (common/flash/install.sh)
+  darwinid.py header FILE OUT            the C header the loader is built with (bootloader/loader/build.sh, DARWIN_ID=)
+  darwinid.py bootargs FILE              the kernel's darwin_lba= darwin_blocks= (build/flash/install.sh)
   darwinid.py show FILE
   darwinid.py mark FILE OUT              (a file-backed darwin) the marker block that proves the file is still the
                                          one mapped: written into darwin at MARK_BLOCK by the installer
   darwinid.py where FILE BLOCK           (a file-backed darwin) darwin's 4 KB block BLOCK, as a block of its host
   darwinid.py put FILE IMAGE DISK OFFSET BLOCK
                                          (tests) IMAGE into a disk image DISK whose host partition starts at byte
-                                         OFFSET, at darwin's block BLOCK, through the map: common/flash/qemu-test.sh
+                                         OFFSET, at darwin's block BLOCK, through the map: build/flash/qemu-test.sh
   darwinid.py get FILE DISK OFFSET BLOCK COUNT   ... and COUNT blocks back out, to standard output
 
 Two kinds of darwin:
-  partition  a GPT partition of its own, cut from the end of userdata (tools/userdata-carve.py)
-  file       a file in userdata that f2fs never moves (tools/android/mkpinned: pinned and allocated in full,
+  partition  a GPT partition of its own, cut from the end of userdata (host/userdata-carve.py)
+  file       a file in userdata that f2fs never moves (host/android/mkpinned: pinned and allocated in full,
              as Android keeps its swap files and Dynamic System Update images), reached through the map of
              where its blocks lie (FIEMAP) -- no change to the partition table or to the filesystem's size.
-             The loader builds a block device of darwin's blocks out of that map (xnuloader/darwinfile.c).
+             The loader builds a block device of darwin's blocks out of that map (bootloader/loader/darwinfile.c).
 
 phones/ is not in the repository: it describes one person's phone. Without a file, everything keeps the values
 of the phone the port was brought up on.
@@ -35,7 +35,7 @@ PHONES = os.path.join(ROOT, 'phones')
 BS = 4096
 APFS = uuid.UUID('7c3457ef-0000-11aa-aa11-00306543ecac')
 LEAST = 3145728                 # the var store's two slots end here
-MARK_BLOCK = 2091521            # a file-backed darwin's marker: right after the boot state (common/flash/bundlefmt.py)
+MARK_BLOCK = 2091521            # a file-backed darwin's marker: right after the boot state (build/flash/bundlefmt.py)
 DEFAULT = {'first': 25374720, 'last': 30617594, 'partn': 34,
            'unique': 'fd6854ad-24aa-4fc3-94fe-290116858d68', 'type': str(APFS)}
 
@@ -133,7 +133,7 @@ def header(path, out):
     d = load(path)
     if d.get('kind') == 'file':
         with open(out, 'w') as o:
-            o.write('/* made by common/flash/darwinid.py from %s: this phone\'s darwin is a file of %s */\n'
+            o.write('/* made by build/flash/darwinid.py from %s: this phone\'s darwin is a file of %s */\n'
                     % (os.path.relpath(path, ROOT), d['host']))
             o.write('#define DARWIN_FILE 1\n#define DARWIN_FILE_HOST "%s"\n' % d['host'])
             o.write('#define DARWIN_FILE_BLOCKS %dULL\n#define DARWIN_FILE_MARK 0x%sULL\n' % (d['blocks'], d['mark']))
@@ -150,7 +150,7 @@ def header(path, out):
     f = u.fields
     node = u.bytes[8:]
     with open(out, 'w') as o:
-        o.write('/* made by common/flash/darwinid.py from %s: where this phone\'s darwin is */\n'
+        o.write('/* made by build/flash/darwinid.py from %s: where this phone\'s darwin is */\n'
                 % (os.path.relpath(path, ROOT) if path and os.path.exists(path) else 'the defaults'))
         o.write('#define BLOCK_DARWIN_FIRST %dULL\n#define BLOCK_DARWIN_LAST %dULL\n' % (d['first'], d['last']))
         o.write('#define BLOCK_DARWIN_UNIQ { 0x%08x, 0x%04x, 0x%04x, { %s } }\n'

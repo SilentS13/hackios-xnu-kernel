@@ -46,7 +46,7 @@ usage: libcheck.py [--list] [FILE.metallib...]
 into buffer 1, against the words our folder computes on this machine. A block
 is keyed on the name air_run prints, not on the order of the lines, because the
 console is shared with launchd and the loader drops its own middle when the log
-grows (docs/checks.md in hackios-xnu-kernel).
+grows (docs/checks.md).
 """
 
 import os
@@ -64,9 +64,9 @@ AIR2NIR = os.environ.get(
 AIR_RUN = os.environ.get(
     "AIR_RUN",
     os.path.join(ROOT, "build/mesa-host/build/src/gallium/drivers/freedreno/air_run"))
-CPUREF = os.path.join(ROOT, "tools/air/cpuref.py")
+CPUREF = os.path.join(ROOT, "graphics/air/cpuref.py")
 
-LIBS = ["ios165/rootfs/System/Library/CoreImage/PortraitFilters.cifilter/"
+LIBS = ["system/ios/rootfs/System/Library/CoreImage/PortraitFilters.cifilter/"
         "portrait_filters.metallib"]
 
 # The air.* operations whose result is exactly defined, by the family name in
@@ -320,7 +320,7 @@ def main(argv):
     libs = [a for a in argv if not a.startswith("--")] or LIBS
     for prog in (AIR2NIR, AIR_RUN):
         if not os.path.exists(prog):
-            print("libcheck: run tools/air/mk-host.sh first (%s)" % prog, file=sys.stderr)
+            print("libcheck: run graphics/air/mk-host.sh first (%s)" % prog, file=sys.stderr)
             return 1
 
     rows = []

@@ -3,9 +3,9 @@
  * what comes out, second by second, for a sustained full-scale tone at the amplifiers' levels that
  * are tried on the phone, for music-like noise, and for the tone once it stops (the cooling).
  *
- *   cc -O2 -DKERNEL -I<a directory with sys/hk_audio.h and a sys/ioccom.h> tools/guard_test.c \
+ *   cc -O2 -DKERNEL -I<a directory with sys/hk_audio.h and a sys/ioccom.h> host/guard_test.c \
  *      xnu-src/xnu-8796.121.2/bsd/dev/hk_guard.c -lm -o guard_test && ./guard_test
- * (tools/guard-test.sh does that.)
+ * (host/guard-test.sh does that.)
  */
 #include <math.h>
 #include <stdbool.h>

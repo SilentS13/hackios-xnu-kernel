@@ -3,7 +3,7 @@
 #
 #   xl enter            get the phone into the resident loader (from Android or stock fastboot)
 #   xl run [N]          upload the current kernel, run it (optionally stop at checkpoint N), fetch the log
-#   xl ramdisk [FILE]   upload the big system image (default userland/system.apfs) once; it stays in
+#   xl ramdisk [FILE]   upload the big system image (default system/system.apfs) once; it stays in
 #                       the phone's RAM across kernel runs and is the root filesystem (/dev/md0)
 #                       ("xl ramdisk none" forgets it; the image sent with the kernel is then the root)
 #   xl screenshot [F]   save what is in the phone's framebuffer as a PNG (default logs/screen.png);
@@ -19,7 +19,7 @@
 #   xl stop             end the run in progress now (the kernel returns as when its time is up)
 #   xl hang             watchdog test: make the loader hang on purpose
 #   xl reboot           cold-reset the phone (back to Android)
-#   xl reload           restart the phone into a freshly built loader (after changing xnuloader/)
+#   xl reload           restart the phone into a freshly built loader (after changing bootloader/loader/)
 #   xl memmap           the phone's memory map as its firmware reports it
 #   xl state            where is the phone right now
 #
@@ -27,14 +27,14 @@
 #   XL_CMDLINE  extra kernel boot-args; default "-v": the boot is shown as text on the phone's screen
 #               (XL_CMDLINE="" for a blank screen, XL_CMDLINE="-v systrace=1" to trace failing syscalls)
 #   XL_SECS     seconds after which the kernel returns to the loader on its own (default 8)
-#   XL_SB_DELAY seconds SpringBoard waits before it starts (default 8; see userland/src/inject_sb.c)
+#   XL_SB_DELAY seconds SpringBoard waits before it starts (default 8; see system/src/inject_sb.c)
 #               Among XL_CMDLINE, for the phone: bootcpu=7 runs the kernel on the biggest core instead of
 #               the small one the firmware starts on (the loader then watches from the first core, and a
 #               kernel that hangs still gets its log out); cpufreq=1 sets that core to its top speed;
 #               touchscreen=1 turns the touch screen on.
 #   XL_RAMDISK  the image sent with the kernel: the small one that is mounted on /hackios
-#               (default userland/root.apfs; "none" sends none). Without a system image in the
-#               phone's RAM it is the root itself (e.g. XL_RAMDISK=userland/hello).
+#               (default system/root.apfs; "none" sends none). Without a system image in the
+#               phone's RAM it is the root itself (e.g. XL_RAMDISK=system/hello).
 # One phone, several working copies: a run holds a lock, and `stop` and `reboot` from another working
 # copy than the one it was started from are refused (XL_FORCE=1 to end it all the same). While a run
 # is in progress every other command is refused too, `ramdisk` among them.
@@ -43,14 +43,14 @@
 # `ramdisk` records who uploaded what, and how big it was, in $PHONE.ramdisk, and `run` prints that
 # when the last upload was not from this copy. The record starts empty -- an upload by a copy without
 # this change leaves none -- and `run` says so rather than assuming.
-cd "$(dirname "$(readlink -f "$0")")" || exit 1
+cd "$(dirname "$(readlink -f "$0")")/.." || exit 1
 # the kernel and the loader built here, or else the ones that come with the repository
 K=${XL_KERNEL:-xnu-src/xnu-8796.121.2/BUILD/obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837}   # XL_KERNEL=file: another kernel for this run
-[ -f $K ] || K=prebuilt/mach.development.bcm2837
-L=xnuloader/loader.efi
-[ -f $L ] || L=prebuilt/loader.efi
+[ -f $K ] || K=prebuilts/mach.development.bcm2837
+L=bootloader/loader/loader.efi
+[ -f $L ] || L=prebuilts/loader.efi
 mkdir -p logs
-# There is one phone, whichever working copy (tools/new-workspace.sh) talks to it: the locks are
+# There is one phone, whichever working copy (host/new-workspace.sh) talks to it: the locks are
 # outside all of them.
 PHONE=${XDG_RUNTIME_DIR:-/tmp}/hackios-phone
 
@@ -82,8 +82,8 @@ enter() {
 		[ "$(state)" = absent ] && { echo "xl: phone not reachable"; return 1; }
 		enter; return ;;
 	esac
-	xnuloader/mkpayload.py -o usb-payload.bin loader.efi=$L --usb >/dev/null &&
-		./mkxnuimg.py -p usb-payload.bin -o xnu-usb.img >/dev/null || { echo "xl: image build failed"; return 1; }
+	bootloader/loader/mkpayload.py -o usb-payload.bin loader.efi=$L --usb >/dev/null &&
+		bootloader/mkbootimg.py -p usb-payload.bin -o xnu-usb.img >/dev/null || { echo "xl: image build failed"; return 1; }
 	# Right after the phone enters fastboot the first "boot" is sometimes not taken: try twice.
 	local try
 	for try in 1 2; do
@@ -115,7 +115,7 @@ run() { # run <oem command> <label>
 		none|resident) rd= ;;
 		*) [ -f "$rd" ] || { echo "xl: ramdisk $rd not found"; return 1; } ;;
 		esac
-		case $K in prebuilt/*) echo "xl: no kernel built here, running $K" >&2 ;; esac
+		case $K in prebuilts/*) echo "xl: no kernel built here, running $K" >&2 ;; esac
 		# The resident image: whose it is and how big, when the last upload was not from here.
 		# Both values and not just "not from here", because a foreign image of the same kind
 		# changes nothing, while a foreign one of another kind makes the boot fail in a way that
@@ -128,7 +128,7 @@ run() { # run <oem command> <label>
 			if [ "$rwho" != "$(pwd)" ]; then
 				echo "xl: the resident image was uploaded from $rwho:" \
 				     "$rwhat, $(( rsize / 1048576 )) MB. Upload your own" \
-				     "(./xl ramdisk FILE) unless that is the one you want" >&2
+				     "(host/xl ramdisk FILE) unless that is the one you want" >&2
 			fi
 		else
 			echo "xl: nothing here recorded who uploaded the resident image;" \
@@ -140,7 +140,7 @@ run() { # run <oem command> <label>
 		case " $args " in
 		*" wifi="*|*" wifi_step="*) [ -s fw-wifi/mac ] && args="$args wifi_mac=$(tr -d ' \n\r' < fw-wifi/mac)" ;;
 		esac
-		xnuloader/mkpayload.py -o run-payload.bin kernel=$K ${rd:+ramdisk=$rd} --cmdline "loader_return_after=${XL_SECS:-8} epoch=$(date +%s) sb_delay=${XL_SB_DELAY:-8} $args" >/dev/null || return 1
+		bootloader/loader/mkpayload.py -o run-payload.bin kernel=$K ${rd:+ramdisk=$rd} --cmdline "loader_return_after=${XL_SECS:-8} epoch=$(date +%s) sb_delay=${XL_SB_DELAY:-8} $args" >/dev/null || return 1
 		FB_TIMEOUT=30 fb stage run-payload.bin | grep -q OKAY || { echo "xl: upload failed"; return 1; }
 	fi
 	local live=; live_loader && live=1
@@ -188,8 +188,8 @@ recording() { # recording [file.mp4]
 	local out=${1:-logs/recording.mp4}
 	fb oem recording | grep -q OKAY || { echo "xl: the last run left no recording (boot-arg rec_secs=N)"; return 1; }
 	FB_TIMEOUT=120 fb get_staged logs/recording.raw >/dev/null
-	# (XL_REC_KEEP=1: the recording itself stays in logs/recording.raw, for tools/recording.py --frames)
-	tools/recording.py logs/recording.raw "$out" && { [ -n "$XL_REC_KEEP" ] || rm -f logs/recording.raw; }
+	# (XL_REC_KEEP=1: the recording itself stays in logs/recording.raw, for host/recording.py --frames)
+	host/recording.py logs/recording.raw "$out" && { [ -n "$XL_REC_KEEP" ] || rm -f logs/recording.raw; }
 }
 
 sound() { # sound [file.wav]
@@ -197,7 +197,7 @@ sound() { # sound [file.wav]
 	local out=${1:-logs/sound.wav}
 	fb oem sound | grep -q OKAY || { echo "xl: the last run left no sound recording (boot-arg rec_sound=N)"; return 1; }
 	FB_TIMEOUT=120 fb get_staged logs/sound.raw >/dev/null
-	tools/sound.py logs/sound.raw "$out" && rm -f logs/sound.raw
+	host/sound.py logs/sound.raw "$out" && rm -f logs/sound.raw
 }
 
 camera() { # camera [prefix]: the frames the last run's camera left (boot-arg cam=3 and up), as pictures
@@ -205,7 +205,7 @@ camera() { # camera [prefix]: the frames the last run's camera left (boot-arg ca
 	local out=${1:-logs/camera}
 	fb oem recording | grep -q OKAY || { echo "xl: the last run left no frames (boot-arg cam=3)"; return 1; }
 	FB_TIMEOUT=120 fb get_staged logs/camera.raw >/dev/null
-	tools/camraw.py logs/camera.raw "$out"
+	host/camraw.py logs/camera.raw "$out"
 }
 
 ramdisk() { # ramdisk [<file>|none]
@@ -262,7 +262,7 @@ PY
 not_anothers_run() { # not_anothers_run <command>
 	flock -n $PHONE.run true 2>/dev/null && return 0
 	[ "$(cat $PHONE.who 2>/dev/null)" = "$(pwd)" ] || [ -n "$XL_FORCE" ] && return 0
-	echo "xl: a run started from $(cat $PHONE.who 2>/dev/null) is in progress; XL_FORCE=1 ./xl $1 ends it all the same" >&2
+	echo "xl: a run started from $(cat $PHONE.who 2>/dev/null) is in progress; XL_FORCE=1 host/xl $1 ends it all the same" >&2
 	return 1
 }
 

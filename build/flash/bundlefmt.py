@@ -1,6 +1,6 @@
 """
 The on-flash formats of the installed mode, shared by mkbundle.py, flashctl.py and ownerkey.py. The loader's
-side is xnuloader/flashboot.c; the two must agree byte for byte (common/flash/qemu-test.sh checks they do).
+side is bootloader/loader/flashboot.c; the two must agree byte for byte (build/flash/qemu-test.sh checks they do).
 
 darwin's boot area, in 4 KiB blocks:
 

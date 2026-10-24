@@ -42,11 +42,11 @@
  *   the kernel     kRedwoodSurface (0x7e) turns an IOSurface into a GPU buffer and reports
  *                  its size, offset, row length and geometry (RedwoodGPU.cpp:821)
  *   the DRM shim   drmPrimeFDToHandle(fd, surface_id, &handle) -- the ID goes where Linux
- *                  puts a dmabuf descriptor (tools/mesa/redwood-drm/redwood_drm.c:189)
+ *                  puts a dmabuf descriptor (graphics/mesa/redwood-drm/redwood_drm.c:189)
  *   freedreno      fd_bo_from_dmabuf_drm takes it ("what comes in here is an IOSurface, and
  *                  the file descriptor its ID"), and fd_resource_from_handle lays a resource
  *                  over it with one pitch
- *   the contract   rwa_texture_from_surface (tools/mesa/air/air_metal.h)
+ *   the contract   rwa_texture_from_surface (graphics/mesa/air/air_metal.h)
  *
  * The last of those is new, and it is still looked up rather than linked: an image built
  * before it existed has a library without the symbol, and then this file refuses BY NAME
@@ -75,7 +75,7 @@
 
 /*
  * The two requests this file needs, by the numbers the kernel answers them on
- * (xnu/files/iokit/Kernel/RedwoodGPU.cpp:78-95): kRedwoodSurface is this port's own and
+ * (kernel/xnu/files/iokit/Kernel/RedwoodGPU.cpp:78-95): kRedwoodSurface is this port's own and
  * kDrmGemClose is Linux's. Repeated here rather than shared for the reason the structs are
  * repeated, and it is two lines.
  */
@@ -489,9 +489,9 @@ rwd_format_of_metal(unsigned metal_pixel_format, uint32_t *fourcc, unsigned *byt
  * uniques images by install_name, so a handle asked for this way is the one the driver
  * already has, or nothing when the driver never got one.
  *
- * The signature is tools/mesa/air/air_metal.h's, field for field: the shape the caller wants,
+ * The signature is graphics/mesa/air/air_metal.h's, field for field: the shape the caller wants,
  * the surface by its ID (which is where freedreno's import takes it --
- * drmPrimeFDToHandle(fd, surface, &handle) in tools/mesa/redwood-drm/redwood_drm.c:189), and
+ * drmPrimeFDToHandle(fd, surface, &handle) in graphics/mesa/redwood-drm/redwood_drm.c:189), and
  * the row length and offset the kernel reported, because fd_resource_from_handle takes those
  * from the caller and does not ask the kernel again.
  */

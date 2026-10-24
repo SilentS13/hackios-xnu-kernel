@@ -117,7 +117,7 @@ synthetic_dir(const char *path)
  * root_apfs=DEV: the root is to be the iOS root volume on /dev/DEV -- the phone's flash, read
  * only.  The kernel has started off the boot volume of flashboot.apfs (the resident image, md0,
  * its first container: stage0, firmware, mount points; the OS cryptex with the dyld shared cache
- * is its second container) and stage0 has mounted this image on /redwood.  What the big system image changes in iOS (userland/build.sh) is put in place on
+ * is its second container) and stage0 has mounted this image on /redwood.  What the big system image changes in iOS (system/build.sh) is put in place on
  * the volume instead, without writing to it:
  *   - our choice of launchd jobs instead of iOS's 500 (this image's LaunchDaemons, and
  *     nothing for NanoLaunchDaemons, LaunchAngels, nor xpc's launchd.plist, which launchd
@@ -205,7 +205,7 @@ flash_root(const char *dev)
 	if (stat("/jb-bin", &fw_st) == 0) {
 		/*
 		 * The package manager's prefix is in the boot volume (/jb), and Sileo runs mv, cp, rm, mkdir
-		 * and chmod from /bin, where iOS has df and ps alone (userland/build.sh, SILEO_BIN): the boot
+		 * and chmod from /bin, where iOS has df and ps alone (system/build.sh, SILEO_BIN): the boot
 		 * volume's jb-bin -- those five, links into the prefix -- over the volume's /bin as a union
 		 * mount, through which what it does not have is found in the /bin below.
 		 */
@@ -641,7 +641,7 @@ own_tree(const char *path, int uid)
 
 /*
  * The rootless prefix of a package manager, /var/jb: the Procursus bootstrap with Sileo in it
- * (tools/mk-jb.sh) rides in the system image as /jb (or in the boot volume, /private/preboot/jb,
+ * (host/mk-jb.sh) rides in the system image as /jb (or in the boot volume, /private/preboot/jb,
  * with the root on the flash), an APFS image that cannot be written to, while dpkg and apt must be
  * able to write anywhere in their own prefix.
  *
@@ -837,7 +837,7 @@ mount_writable(void)
 	}
 	check(ok, "mount a memory filesystem on /private/var");
 
-	/* the directories of the data volume, as listed in the template that ships with iOS (ios165/mkvarskel.py) */
+	/* the directories of the data volume, as listed in the template that ships with iOS (system/ios/mkvarskel.py) */
 	read_whole(in_image("/etc/var.skel"), skeleton, sizeof(skeleton));
 	for (char *line = skeleton; ok && *line;) {
 		char *end = strchr(line, '\n'), *f[6];
@@ -884,7 +884,7 @@ mount_writable(void)
 	check(ok && made > 50, "create the directories of the data volume");
 
 	/*
-	 * and the package manager's prefix, when the image was built with one (tools/mk-jb.sh): /jb of
+	 * and the package manager's prefix, when the image was built with one (host/mk-jb.sh): /jb of
 	 * the system image in RAM, or, with the iOS volume on the flash as the root, /private/preboot/jb
 	 * -- the boot volume, where a rootless jailbreak on an iPhone keeps its Procursus too
 	 * (/var/jb leads into /private/preboot there)
@@ -969,7 +969,7 @@ mount_writable(void)
  * What the last boot left in /private/var, back out of the phone's flash (var_store=1): the
  * memory filesystem is empty at every boot, so everything iOS writes -- the home screen's layout,
  * the applications' own data, the snapshots and the baked wallpaper -- would otherwise be new
- * again every time. userland/src/var_store.c keeps a copy in the partition darwin, past the iOS
+ * again every time. system/src/var_store.c keeps a copy in the partition darwin, past the iOS
  * volume and the cryptexes, and puts it back here, over the skeleton: a name the skeleton has and
  * the store has too comes out as the store has it. A store that is not there or does not check
  * out leaves what the skeleton made, and the boot goes on either way -- so a bad store cannot
@@ -1262,7 +1262,7 @@ run_rc(const char *path)
 {
 	/*
 	 * 64 KB and not 8 KB: a generated job list is one line per case, and
-	 * tools/air/intrincheck.py --emit writes 226 of them, 21 KB. At 8 KB this read the
+	 * graphics/air/intrincheck.py --emit writes 226 of them, 21 KB. At 8 KB this read the
 	 * first 94 lines and the rest was not there -- no error, no short line, simply jobs
 	 * that did not run, which looks exactly like a test that found nothing.
 	 */

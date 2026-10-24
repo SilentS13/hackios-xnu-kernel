@@ -21,7 +21,7 @@
 #
 # A canary runs first and after every eight kernels: probe_one_scalar stores a constant to
 # word 0 unconditionally, so when it stops writing the GPU has stopped answering. It needs
-# EXTRA_SHARE to carry tools/air's probe modules; without them those lines fail to open a
+# EXTRA_SHARE to carry graphics/air's probe modules; without them those lines fail to open a
 # file and the rest of the list still runs.
 #
 # The first line is the shader M1 is stated against, with --disasm: it proves the GPU is

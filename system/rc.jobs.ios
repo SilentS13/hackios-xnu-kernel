@@ -4,7 +4,7 @@
 # sees of it, in an ordinary session.  iOS's own mount and df first, then ours (vol_ls: ls, cat,
 # hashes through read(2) and through a mapping), then every file of /usr/sbin both ways.
 # The host's hashes: SystemVersion.plist 47687daabd864929, usr/lib/dyld 602fba9751ad6aa7,
-# usr/sbin/mediaserverd 895037cd97f96801 (tools/apfs/apfs-tool census, apfs.py).
+# usr/sbin/mediaserverd 895037cd97f96801 (host/apfs/apfs-tool census, apfs.py).
 /sbin/mount
 /bin/df
 /redwood/bin/vol_ls fs /System/Volumes/iOS

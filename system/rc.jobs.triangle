@@ -54,7 +54,7 @@
 #
 # AND THE WARNING THAT COMES WITH IT, for every list, not this one. The same sequence --
 # probe, class, -initWithAcceleratorPort:, MTLAddDevice, probe -- is in
-# userland/src/metal_drv_test.m (around :7340 and on), src/metal_dev.m and src/metal_stubdev.m.
+# system/src/metal_drv_test.m (around :7340 and on), src/metal_dev.m and src/metal_stubdev.m.
 # In a boot with the registry switch ON, every metal_drv_test mode that reaches it (--draw,
 # --picture, --time, --draw-attrib, --draw-depth, --draw-index ...) will abort at the same
 # instruction. Only --sweep is safe, because it returns at :7325 before that path, and
@@ -72,11 +72,11 @@
 #                      anything.
 #                      GL=1 for /redwood/lib/libredwoodair.dylib -- no compiler library, no
 #                      pipeline, and the driver says so by name. build.sh now hashes
-#                      tools/mesa/air/ against $M/built-from-air and rebuilds it when they
+#                      graphics/mesa/air/ against $M/built-from-air and rebuilds it when they
 #                      differ, so the stale-library trap of logs/235006-run.log (docs/metal.md
 #                      10.47: driver rebuilt, library byte for byte the same) is closed; this
 #                      is a double-check and not the only guard:
-#                        nm -gU xnu-deps/build/mesa/out/libredwoodair.dylib | grep from_surface
+#                        nm -gU kernel/deps/build/mesa/out/libredwoodair.dylib | grep from_surface
 #
 #                      QUIET=1 IS NOT OPTIONAL HERE, AND logs/055044-run.log IS WHY: that boot
 #                      had no QUIET, and the whole of this application's output is MISSING from
@@ -116,12 +116,12 @@
 #   AND NOT gpu_recover=1, which is the one boot-arg it would be tempting to add here. It is the
 #   way out of the gpuWait latch that the --layer step below is ordered around (docs/air.md: a hang would
 #   then cost one dispatch instead of the rest of the boot), and it HAS NEVER BEEN RUN -- its own
-#   measurement, userland/rc.jobs.metalrecover, is still waiting for a boot. Putting an untried
+#   measurement, system/rc.jobs.metalrecover, is still waiting for a boot. Putting an untried
 #   kernel path into the boot that is meant to try the drawable would mean two new things at once
 #   and no way to say which answer belonged to which.
 #
 #   AND TAKE THE SCREENSHOT while it is up, from another terminal:
-#     ./xl screenshot logs/triangle.png
+#     host/xl screenshot logs/triangle.png
 #   It may be taken more than once; the picture is identical every frame on purpose.
 #
 # THE PICTURE, WRITTEN DOWN BEFORE THE RUN. Three colours, and each means a different thing:
@@ -138,7 +138,7 @@
 # Why that half and not another, so that the prediction is derived and not hoped for. The
 # pipeline is asked for with NO vertex function, which makes the compiler library supply its own
 # full-screen quad; that quad's four corners are in a fixed order, (-1,-1), (1,-1), (-1,1),
-# (1,1) (rwa_quad_verts, tools/mesa/air/air_metal.c), so a draw of THREE vertices is the
+# (1,1) (rwa_quad_verts, graphics/mesa/air/air_metal.c), so a draw of THREE vertices is the
 # triangle through the first three. The viewport puts clip y = +1 in memory row 0
 # (docs/metal.md 10.28), so clip (-1,+1) is the top left, (-1,-1) the bottom left and (1,-1)
 # the bottom right -- and the interior is every pixel whose centre satisfies
@@ -307,7 +307,7 @@
 #    must have a RedwoodTriangle in it; if it does not, SpringBoard took the URL and the
 #    process died before exec, and the kernel's own lines above are where to look.
 #
-#    TAKE THE SCREENSHOT ANY TIME AFTER THIS LINE: ./xl screenshot logs/triangle.png
+#    TAKE THE SCREENSHOT ANY TIME AFTER THIS LINE: host/xl screenshot logs/triangle.png
 /redwood/bin/rwtouch wait 20
 /bin/ps -A
 #
@@ -470,7 +470,7 @@
 #       (0x181a34bc8), the process registered a second Metal device and Apple's own assertion
 #       killed it -- "MTLCreateSystemDefaultDevice doesn't know what to do with more than one
 #       device" -- and that is this application's own mistake and not a finding about the port.
-#       tools/metal/unslide.py reads such a stack.
+#       graphics/metal/unslide.py reads such a stack.
 #
 #   grep -a 'triangle: step:' logs/NNNNNN-run.log | tail -3
 #       where it stopped, if it stopped.

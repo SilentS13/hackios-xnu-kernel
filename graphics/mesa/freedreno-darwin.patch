@@ -7,7 +7,7 @@
 -if dep_libdrm.found()
 +if host_machine.system() == 'darwin' and with_gallium_freedreno
 +  # No DRM on this system: freedreno's requests go to the kernel's driver through a stand-in
-+  # for libdrm (src/redwood-drm, put there by Darwin on redwood's tools/mk-mesa.sh; its one
++  # for libdrm (src/redwood-drm, put there by Darwin on redwood's graphics/mk-mesa.sh; its one
 +  # source file is built with freedreno's drm layer, src/freedreno/drm).
 +  dep_libdrm = declare_dependency(
 +    include_directories : include_directories('src/redwood-drm'),

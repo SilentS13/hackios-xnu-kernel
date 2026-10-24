@@ -1,14 +1,14 @@
 /* ------------------------------------------------------------------------ */
 /* SHA-256, SHA-512 and Ed25519 signature checking                          */
 /*
- * Included by loader.c (and by tools/crypto-test.c, which checks it against Python's `cryptography` on
+ * Included by loader.c (and by host/crypto-test.c, which checks it against Python's `cryptography` on
  * the computer). Freestanding: no allocation, no tables bigger than the round constants, no secrets --
  * the loader only ever checks, so nothing here has to run in constant time.
  *
  * The Ed25519 part follows TweetNaCl (Bernstein, van Gastel, Janssen, Lange, Schwabe, Smetsers; public
  * domain): field elements of sixteen 16-bit limbs in int64_t, the extended twisted Edwards group law,
  * and the reduction modulo the group order L. Only `crypto_sign_open`'s check survives: an owner
- * signs a boot bundle on the computer (common/flash/ownerkey.py), the loader checks it here.
+ * signs a boot bundle on the computer (build/flash/ownerkey.py), the loader checks it here.
  */
 
 #define ROR32(x, n) (((x) >> (n)) | ((x) << (32 - (n))))

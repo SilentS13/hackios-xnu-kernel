@@ -292,7 +292,7 @@ main(int argc, char **argv)
 	 *
 	 * Resident Evil 4 asks the device almost nothing itself -- of the 1 238 selectors its
 	 * metal-cpp table registers, only -hasUnifiedMemory and -currentAllocatedSize have a
-	 * send site in its 200 MB of code (tools/metal/appsends.py). Its one real question goes
+	 * send site in its 200 MB of code (graphics/metal/appsends.py). Its one real question goes
 	 * through MetalFX, which it links and drives as a temporal upscaler: it sends
 	 * +[MTLFXTemporalScalerDescriptor supportsDevice:], and THAT asks
 	 * -supportsFamily:(MTLGPUFamilyApple7) and -gpuCoreCount (0x20b2f06b8). So this is the

@@ -7,20 +7,20 @@ into an Android boot image for `fastboot boot`.
 
 The boot shim copies the FD to its base and the payload to PAYLOAD_BASE.
 
-The UEFI pieces are taken from a Mu-Silicium tree built here (Mu-Silicium/, see uefi/README.md)
-or, when there is none, from prebuilt/uefi/.
+The UEFI pieces are taken from a Mu-Silicium tree built here (Mu-Silicium/, see bootloader/uefi/README.md)
+or, when there is none, from prebuilts/uefi/.
 
-usage: mkxnuimg.py [-p payload.bin] [-o out.img]
+usage: bootloader/mkbootimg.py [-p payload.bin] [-o out.img]
 
-Another device (common/devices/<name>.conf, read by common/build.sh) sets these in the environment:
+Another device (device/<vendor>/<name>/<name>.conf, read by build/build.sh) sets these in the environment:
   UEFI_TARGET   Mu-Silicium device name (default redwood)    UEFI_FD, DTB   files to use instead
   FD_BASE, FD_SIZE, PAYLOAD_BASE                              addresses from its UEFI port's memory map
 """
 import argparse, gzip, os, subprocess, sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-MU = os.path.join(HERE, 'Mu-Silicium')
-PREBUILT = os.path.join(HERE, 'prebuilt', 'uefi')
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MU = os.path.join(ROOT, 'Mu-Silicium')
+PREBUILT = os.path.join(ROOT, 'prebuilts', 'uefi')
 def env_int(name, default):
     v = os.environ.get(name, '')
     return int(v, 0) if v else default
@@ -30,7 +30,7 @@ PAYLOAD_BASE, PAYLOAD_MAX = env_int('PAYLOAD_BASE', 0xF0000000), 0x04000000
 
 ap = argparse.ArgumentParser()
 ap.add_argument('-p', '--payload')
-ap.add_argument('-o', '--output', default=os.path.join(HERE, 'xnu-redwood.img'))
+ap.add_argument('-o', '--output', default=os.path.join(ROOT, 'xnu-redwood.img'))
 ap.add_argument('--mode', default='RELEASE')
 args = ap.parse_args()
 
@@ -58,7 +58,7 @@ assert len(fd) == FD_SIZE, hex(len(fd))
 blob = shim + fd
 if args.payload:
     data = open(args.payload, 'rb').read()
-    # the payload file is a complete "XNUP" container (see xnuloader/mkpayload.py)
+    # the payload file is a complete "XNUP" container (see bootloader/loader/mkpayload.py)
     assert data[:4] == b'XNUP' and len(data) <= PAYLOAD_MAX - 0x1000, 'bad or oversized payload'
     blob += data
     blob += b'\0' * (-len(blob) % 16)
@@ -70,7 +70,7 @@ kernel = args.output + '.kernel~'
 open(kernel, 'wb').write(gzip.compress(blob, 6) + dtb)
 try:
     # board "HACKiOS": how the loader of an installed phone tells which A/B slot's boot partition is its own
-    # (xnuloader/flashboot.c, ab_switch_back) -- an Android boot image never has that name
+    # (bootloader/loader/flashboot.c, ab_switch_back) -- an Android boot image never has that name
     subprocess.check_call([sys.executable, parts['mkbootimg'], '--kernel', kernel, '--ramdisk', parts['ramdisk'],
                            '--header_version', '1', '--board', 'HACKiOS', '-o', args.output])
 finally:

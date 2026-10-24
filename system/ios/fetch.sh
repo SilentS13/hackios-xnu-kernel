@@ -1,6 +1,6 @@
 #!/bin/bash
 # Get the files of iOS 16.5 (20F66, iPhone X) that the system image is made of, straight from
-# Apple's servers, and lay them out the way ../userland/build.sh expects them:
+# Apple's servers, and lay them out the way ../build.sh expects them:
 #
 #   rootfs/                  the chosen part of the root filesystem (see select-system.py)
 #   system.files/.manifest   what was chosen, with owners, modes and symbolic links
@@ -25,7 +25,7 @@ ROOTFS_DMG=096-04088-077.dmg                    # the root filesystem, APFS
 CRYPTEX_DMG=096-04666-078.dmg                   # the OS cryptex: dyld shared cache and a few libraries
 APP_CRYPTEX_DMG=096-03536-083.dmg               # the App cryptex (BuildManifest: Cryptex1,AppOS)
 CACHE=20F66__iPhone10,3_6
-UNZBM=../xnu-deps/host/bin/unzbm
+UNZBM=../../kernel/deps/host/bin/unzbm
 
 for tool in python3 7z cc; do
 	command -v $tool >/dev/null || { echo "fetch.sh: $tool is not installed"; exit 1; }
@@ -33,7 +33,7 @@ done
 # 7z leaves files compressed with LZBITMAP as an empty file and two attribute files; unzbm finishes them
 if [ ! -x $UNZBM ]; then
 	mkdir -p "$(dirname $UNZBM)"
-	cc -O2 -w -o $UNZBM ../xnu-deps/build/lzbitmap/unzbm.c ../xnu-deps/build/lzbitmap/libzbitmap.c
+	cc -O2 -w -o $UNZBM ../../kernel/deps/build/lzbitmap/unzbm.c ../../kernel/deps/build/lzbitmap/libzbitmap.c
 fi
 unzbm_all() { # unzbm_all DIR: expand every LZBITMAP file below DIR
 	find "$1" -type f -name '*:com.apple.decmpfs' | sed 's/:com\.apple\.decmpfs$//' | tr '\n' '\0' | xargs -0 -r -n 200 $UNZBM
@@ -57,9 +57,9 @@ if [ ! -f .done-rootfs ] || [ select-system.py -nt .done-rootfs ]; then
 	rm -rf rootfs
 	7z x -y -orootfs rootfs.dmg @system.files > extract-system.log
 	# the two fonts too big for the image as they are, made smaller in place (see select-system.py)
-	python3 ../tools/font_trim.py emoji rootfs/System/Library/Fonts/CoreAddition/AppleColorEmoji-160px.ttc \
+	python3 ../../host/font_trim.py emoji rootfs/System/Library/Fonts/CoreAddition/AppleColorEmoji-160px.ttc \
 		rootfs/System/Library/Fonts/CoreAddition/AppleColorEmoji-160px.ttc 40,64,96
-	python3 ../tools/font_trim.py faces rootfs/System/Library/Fonts/LanguageSupport/PingFang.ttc \
+	python3 ../../host/font_trim.py faces rootfs/System/Library/Fonts/LanguageSupport/PingFang.ttc \
 		rootfs/System/Library/Fonts/LanguageSupport/PingFang.ttc '^\.?PingFang(SC|TC|HK)-(Regular|Semibold)$'
 	touch .done-rootfs
 	[ -n "$KEEP" ] || rm -f rootfs.dmg
@@ -88,7 +88,7 @@ if [ ! -f .done-cryptex ]; then
 fi
 
 # --- the App cryptex ------------------------------------------------------------------------------
-# kept as it is (the boot off the flash puts it in memory unchanged, ../userland/build.sh FLASHBOOT=1)
+# kept as it is (the boot off the flash puts it in memory unchanged, ../build.sh FLASHBOOT=1)
 # and unpacked (the system image has its files at /System/Cryptexes/App)
 if [ ! -f .done-cryptex-app ]; then
 	if [ ! -f cryptex-app.dmg ]; then

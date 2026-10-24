@@ -4,8 +4,8 @@
 # image.
 #
 # The on-disk structures are described in bsd/miscfs/apfs/apfs_format.h (exported to
-# xnu/files/); the layout this file assumes is checked against that header by
-# tools/apfs/run-tests.sh, so the two cannot drift apart silently.
+# kernel/xnu/files/); the layout this file assumes is checked against that header by
+# host/apfs/run-tests.sh, so the two cannot drift apart silently.
 #
 # usage: apfs.py info   IMAGE
 #        apfs.py ls     IMAGE [PATH]

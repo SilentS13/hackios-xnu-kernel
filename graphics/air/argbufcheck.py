@@ -1060,7 +1060,7 @@ def main():
 
     for prog, what in ((AIR2NIR, "air2nir"), (AIR_RUN, "air_run")):
         if not os.path.exists(prog) and not args.census:
-            print("argbufcheck.py: no %s: run tools/air/mk-host.sh first" % what)
+            print("argbufcheck.py: no %s: run graphics/air/mk-host.sh first" % what)
             return 2
 
     if args.census:

@@ -28,7 +28,7 @@ with either cannot be measured here at all, and no number of boots changes
 that. What would is a harness that knows what each buffer means -- which is the
 runtime's knowledge, not the compiler's.
 
-`tools/air/kinput.py` is that knowledge for eleven of the fourteen: which value
+`graphics/air/kinput.py` is that knowledge for eleven of the fourteen: which value
 each loop leaves on, which buffer and byte offset it is loaded from, and the
 bytes that end it. It also reads one of the fourteen back the other way --
 `confidence` leaves its loops on values that are clamped to constants before
@@ -48,10 +48,10 @@ AIR2NIR = os.environ.get(
     "AIR2NIR", os.path.join(ROOT, "build/mesa-host/build/src/compiler/air/air2nir"))
 
 LIBS = [
-    "ios165/rootfs/System/Library/VideoDecoders/AV1SW.metallib",
-    "ios165/rootfs/System/Library/Extensions/AppleMetalGLRenderer.bundle/default.metallib",
-    "ios165/rootfs/System/Library/CoreImage/PortraitFilters.cifilter/default.metallib",
-    "ios165/rootfs/System/Library/CoreImage/PortraitFilters.cifilter/portrait_filters.metallib",
+    "system/ios/rootfs/System/Library/VideoDecoders/AV1SW.metallib",
+    "system/ios/rootfs/System/Library/Extensions/AppleMetalGLRenderer.bundle/default.metallib",
+    "system/ios/rootfs/System/Library/CoreImage/PortraitFilters.cifilter/default.metallib",
+    "system/ios/rootfs/System/Library/CoreImage/PortraitFilters.cifilter/portrait_filters.metallib",
 ]
 
 DEPTH = 6   # how far back a value is traced; the shapes of interest are shallow
@@ -120,7 +120,7 @@ def loops_and_signals(ll):
 def main(argv):
     libs = [a for a in argv if not a.startswith("--")] or LIBS
     if not os.path.exists(AIR2NIR):
-        print("kstruct: run tools/air/mk-host.sh first", file=sys.stderr)
+        print("kstruct: run graphics/air/mk-host.sh first", file=sys.stderr)
         return 1
     rows = []
     for lib in libs:
@@ -166,7 +166,7 @@ def main(argv):
           "group is a statement about this harness: a loop that leaves on a value from a "
           "buffer does not leave when the buffer holds (i * 7 + 13) & 0xff, and no number of "
           "boots changes that -- it needs a harness that knows what each buffer means.")
-    print("kstruct: tools/air/kinput.py is that, for eleven of the first group: the value "
+    print("kstruct: graphics/air/kinput.py is that, for eleven of the first group: the value "
           "each loop leaves on, where it is loaded from, and the bytes that end it. It also "
           "names one row above as this signal over-reporting -- `confidence` clamps its "
           "bounds to constants, so it needs no input at all.")

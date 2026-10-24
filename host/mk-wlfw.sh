@@ -6,12 +6,12 @@
 # git does not: ath11k's text is BSD-3-Clause-Clear and is not kept in the repository.
 # Without that header hk_wlfw.c compiles to a line that says so.
 #
-# usage: tools/mk-wlfw.sh          then build the kernel (./xnu-build.sh); again after a clean build
+# usage: host/mk-wlfw.sh          then build the kernel (kernel/build.sh); again after a clean build
 set -e
 ROOT=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
-source "$ROOT/xnu-env.sh"
-ATH=$ROOT/xnu-deps/build/ath11k/src/ath11k
-[ -f "$ATH/qmi.c" ] || "$ROOT/tools/mk-ath11k.sh"
+source "$ROOT/kernel/env.sh"
+ATH=$ROOT/kernel/deps/build/ath11k/src/ath11k
+[ -f "$ATH/qmi.c" ] || "$ROOT/host/mk-ath11k.sh"
 OUT=$XNU_SRC/BUILD/obj/DEVELOPMENT_ARM64_${MACHINE:-BCM2837}/bsd/DEVELOPMENT
 [ -d "$OUT" ] || { echo "mk-wlfw.sh: no build directory $OUT: build the kernel once first" >&2; exit 1; }
 python3 - "$ATH" "$(cat "$ATH/../.release" | cut -d' ' -f1)" > "$OUT/hk_wlfw_ath11k.h.new" <<'PY'
@@ -22,7 +22,7 @@ src, release = sys.argv[1], sys.argv[2]
 c = open(src + '/qmi.c').read()
 h = open(src + '/qmi.h').read()
 print('/* ath11k\'s qmi.h and the message tables of its qmi.c (Linux %s, BSD-3-Clause-Clear), put together by' % release)
-print(' * tools/mk-wlfw.sh: not to be edited, not to be kept. */')
+print(' * host/mk-wlfw.sh: not to be edited, not to be kept. */')
 # the names qmi.h uses of a Linux kernel around it, outside its message definitions: nothing here does anything
 print('''#include <stdbool.h>
 #include <stddef.h>

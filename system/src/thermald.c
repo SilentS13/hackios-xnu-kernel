@@ -1,7 +1,7 @@
 /*
  * thermald: the phone's heat, as iOS hears about it.
  *
- * The kernel's thermal service (bsd/dev/redwood_thermal.c in hackios-xnu-kernel) reads the SoC's
+ * The kernel's thermal service (bsd/dev/redwood_thermal.c in kernel/xnu/files) reads the SoC's
  * sensors, slows the cores when they get hot, and keeps a pressure level in kern.redwood.thermal_pressure:
  * iOS's own scale, 0 nominal, 1 moderate, 2 heavy, 3 trapping, 4 sleeping. On an iPhone it is
  * thermalmonitord that says how hot the phone is; here nobody would, so apps would never hear of it --

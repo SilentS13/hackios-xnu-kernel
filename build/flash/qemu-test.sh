@@ -3,7 +3,7 @@
 # Qualcomm A/B attributes, Android's slot _b, a darwin partition with boot bundles and the boot state in its
 # boot area), the loader started with no payload, as the UEFI in boot_a would start it.
 #
-# usage: common/flash/qemu-test.sh [SCENARIO...]       (none: all of them; CI runs all)
+# usage: build/flash/qemu-test.sh [SCENARIO...]       (none: all of them; CI runs all)
 #
 #   boot        the countdown: the newest bundle boots, the kernel runs, the start is counted
 #   previous    down + power: "HackiOS, previous version" boots the older bundle
@@ -29,14 +29,13 @@ cd "$(dirname "$(readlink -f "$0")")/../.."
 W=out/qemu-flash; mkdir -p $W/esp/EFI/BOOT
 EFI=${QEMU_EFI:-/usr/share/AAVMF/AAVMF_CODE.fd}; [ -f "$EFI" ] || EFI=/usr/share/edk2/aarch64/QEMU_EFI.fd
 VARS=${QEMU_VARS:-/usr/share/AAVMF/AAVMF_VARS.fd}; [ -f "$VARS" ] || VARS=/usr/share/edk2/aarch64/QEMU_VARS.fd
-K=xnu-src/xnu-8796.121.2/BUILD/obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837; [ -f $K ] || K=prebuilt/mach.development.bcm2837
-HELLO=${HELLO:-userland/hello}; [ -f $HELLO ] || HELLO=prebuilt/userland/hello
-[ -f $HELLO ] || HELLO=../hackios-xnu-userland/prebuilt/userland/hello
+K=xnu-src/xnu-8796.121.2/BUILD/obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837; [ -f $K ] || K=prebuilts/mach.development.bcm2837
+HELLO=${HELLO:-userland/hello}; [ -f $HELLO ] || HELLO=prebuilts/userland/hello
 PASS=0; FAIL=0; FAILED=""
 
 bundle() {      # bundle OUT GENERATION [mkbundle args]
 	local out=$1 gen=$2; shift 2
-	python3 common/flash/mkbundle.py -o $out --kernel $K --ramdisk $HELLO --cmdline "-v loader_return_after=15" \
+	python3 build/flash/mkbundle.py -o $out --kernel $K --ramdisk $HELLO --cmdline "-v loader_return_after=15" \
 		--generation $gen --label "test gen $gen" "$@" > /dev/null
 }
 
@@ -46,7 +45,7 @@ disk() {        # a fresh "phone": slot _a (ours) active, _b (Android's) inactiv
 	for bit in 48 49 50 52 53; do sgdisk -A 1:set:$bit $W/disk.img > /dev/null; done
 	sgdisk -A 2:set:54 $W/disk.img > /dev/null
 	DARWIN_START=$(sgdisk -i 3 $W/disk.img | awk '/First sector/ {print $3}')
-	# boot_a holds HackiOS's image (a boot image header v1 named HACKiOS, as mkxnuimg.py makes it), boot_b an
+	# boot_a holds HackiOS's image (a boot image header v1 named HACKiOS, as bootloader/mkbootimg.py makes it), boot_b an
 	# Android one (header v4, no name): how the loader tells its own slot
 	python3 -c "import struct, sys
 h = bytearray(4096); h[:8] = b'ANDROID!'; struct.pack_into('<I', h, 40, 1); h[48:55] = b'HACKiOS'
@@ -63,14 +62,14 @@ put() {         # put FILE BLOCK: into darwin at 4 KiB block BLOCK
 slot() { put $1 $((2042368 + $2 * 24576)); }
 
 state() {       # state trying tries good bad [flags]: write a boot state
-	python3 -c "import sys; sys.path.insert(0, 'common/flash'); import bundlefmt as f
+	python3 -c "import sys; sys.path.insert(0, 'build/flash'); import bundlefmt as f
 open('$W/state.img', 'wb').write(f.make_state(trying=$1, tries=$2, good=$3, bad=$4, flags=${5:-0}))"
 	put $W/state.img 2091520
 }
 
 read_state() {
 	dd if=$W/disk.img bs=512 skip=$((DARWIN_START + 2091520 * 8)) count=8 status=none | python3 -c "
-import sys; sys.path.insert(0, 'common/flash'); import bundlefmt as f
+import sys; sys.path.insert(0, 'build/flash'); import bundlefmt as f
 s = f.parse_state(sys.stdin.buffer.read()); print('none' if s is None else 'trying=%(trying)d tries=%(tries)d good=%(good)d bad=%(bad)d boots=%(boots)d' % s)"
 }
 
@@ -108,7 +107,7 @@ expect() {      # expect NAME PATTERN...: every pattern in the log (a leading ! 
 	else FAIL=$((FAIL + 1)); FAILED="$FAILED $name"; echo "FAIL $name"; grep -aE "flash:|menu:|ab:" $W/log.txt | head -30 | sed 's/^/   | /'; fi
 }
 
-L=xnuloader/loader.efi; [ -f $L ] || L=prebuilt/loader.efi
+L=bootloader/loader/loader.efi; [ -f $L ] || L=prebuilts/loader.efi
 bundle $W/gen1.img 1; bundle $W/gen2.img 2
 DOWN=$'\e[B'; ENTER=$'\r'
 
@@ -142,7 +141,7 @@ scenario() {
 		expect android "menu: Android$" "ab: slots exchanged"
 		sgdisk -A 2:show $W/disk.img | grep -q "^2:50:1" || { echo "   boot_b is not active"; FAIL=$((FAIL+1)); FAILED="$FAILED android-ab"; }
 		dd if=$W/disk.img bs=512 skip=$((DARWIN_START + 2091520 * 8)) count=1 status=none | python3 -c "
-import sys; sys.path.insert(0, 'common/flash'); import bundlefmt as f
+import sys; sys.path.insert(0, 'build/flash'); import bundlefmt as f
 s = f.parse_state(sys.stdin.buffer.read()); sys.exit(0 if s and s['flags'] & f.STATE_LAST_ANDROID else 1)" ||
 			{ echo "   the choice was not remembered"; FAIL=$((FAIL+1)); FAILED="$FAILED android-remembered"; }
 		sgdisk -v $W/disk.img | grep -q "No problems found" || { echo "   GPT not sound"; FAIL=$((FAIL+1)); FAILED="$FAILED android-gpt"; } ;;
@@ -170,11 +169,11 @@ s = f.parse_state(sys.stdin.buffer.read()); sys.exit(0 if s and s['flags'] & f.S
 {"kind": "file", "file": "/data/hackios/darwin.img", "host": "userdata", "blocks": 2097152, "mark": "0123456789abcdef",
  "extents": [[1300000, 800000], [10, 697152], [697200, 600000]]}
 JSON
-		DARWIN_ID=../$W/file.darwin OUT=../$W/loader-file.efi xnuloader/build.sh > /dev/null || { echo "   no file loader"; FAIL=$((FAIL+1)); return; }
-		python3 common/flash/darwinid.py put $W/file.darwin $W/gen1.img $W/disk.img $UD 2042368
+		DARWIN_ID=../../$W/file.darwin OUT=../../$W/loader-file.efi bootloader/loader/build.sh > /dev/null || { echo "   no file loader"; FAIL=$((FAIL+1)); return; }
+		python3 build/flash/darwinid.py put $W/file.darwin $W/gen1.img $W/disk.img $UD 2042368
 		if [ $1 = file ]; then
-			python3 common/flash/darwinid.py mark $W/file.darwin $W/mark.img
-			python3 common/flash/darwinid.py put $W/file.darwin $W/mark.img $W/disk.img $UD 2091521
+			python3 build/flash/darwinid.py mark $W/file.darwin $W/mark.img
+			python3 build/flash/darwinid.py put $W/file.darwin $W/mark.img $W/disk.img $UD 2091521
 		fi
 		# the userdata blocks just outside every extent, and its first and last: none may change
 		outside() { for b in 0 9 697162 697199 1297200 1299999 2100000 2300000; do
@@ -185,8 +184,8 @@ JSON
 		if [ $1 = file ]; then
 			expect file "darwin: a file of userdata, 2097152 blocks in 3 extents, marker right" "booting slot 0, generation 1" \
 				"SHA-256 checked" "Darwin Kernel"
-			st=$(python3 common/flash/darwinid.py get $W/file.darwin $W/disk.img $UD 2091520 1 | python3 -c "
-import sys; sys.path.insert(0, 'common/flash'); import bundlefmt as f
+			st=$(python3 build/flash/darwinid.py get $W/file.darwin $W/disk.img $UD 2091520 1 | python3 -c "
+import sys; sys.path.insert(0, 'build/flash'); import bundlefmt as f
 s = f.parse_state(sys.stdin.buffer.read()); print('none' if s is None else 'trying=%(trying)d tries=%(tries)d boots=%(boots)d' % s)")
 			[ "$st" = "trying=1 tries=1 boots=1" ] || { echo "   state through the map: $st"; FAIL=$((FAIL+1)); FAILED="$FAILED file-state"; }
 		else
@@ -202,9 +201,9 @@ s = f.parse_state(sys.stdin.buffer.read()); print('none' if s is None else 'tryi
 	signed|forged)
 		export OWNER_KEY_H=$PWD/$W/owner_key.h
 		rm -f $W/owner.key $W/other.key
-		python3 common/flash/ownerkey.py init $W/owner.key > /dev/null
+		python3 build/flash/ownerkey.py init $W/owner.key > /dev/null
 		rm -f $W/loader-pinned.efi
-		OUT=../$W/loader-pinned.efi xnuloader/build.sh > /dev/null || { echo "   the pinned loader did not build"; FAIL=$((FAIL+1)); return; }
+		OUT=../../$W/loader-pinned.efi bootloader/loader/build.sh > /dev/null || { echo "   the pinned loader did not build"; FAIL=$((FAIL+1)); return; }
 		unset OWNER_KEY_H
 		if [ $1 = signed ]; then
 			bundle $W/gen1s.img 1 --sign $W/owner.key
@@ -212,7 +211,7 @@ s = f.parse_state(sys.stdin.buffer.read()); print('none' if s is None else 'tryi
 			run $W/loader-pinned.efi "" "flash: booting slot|Darwin Kernel"
 			expect signed "owner key pinned" "boot slot 1: not signed" "booting slot 0, generation 1 .*signature checked"
 		else
-			OWNER_KEY_H=$W/other.h python3 common/flash/ownerkey.py init $W/other.key > /dev/null
+			OWNER_KEY_H=$W/other.h python3 build/flash/ownerkey.py init $W/other.key > /dev/null
 			bundle $W/gen3x.img 3 --sign $W/other.key
 			disk; slot $W/gen3x.img 0
 			run $W/loader-pinned.efi "" "menu: no USB link|resetting|Developer mode \(USB, xl\) in 1 s"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the loader's SHA-256 and Ed25519 (xnuloader/crypto.c) against hashlib and `cryptography`."""
+"""Check the loader's SHA-256 and Ed25519 (bootloader/loader/crypto.c) against hashlib and `cryptography`."""
 import hashlib, os, random, subprocess, sys
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization

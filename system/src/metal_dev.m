@@ -17,7 +17,7 @@
  *
  * which is how Apple writes an abstract method, and doesNotRecognizeSelector: names the
  * RECEIVER's class, so the refusal reads exactly like a missing method. Nothing in the
- * Objective-C runtime can tell such a method from a working one; tools/metal/absmeth.py
+ * Objective-C runtime can tell such a method from a working one; graphics/metal/absmeth.py
  * tells them apart from the cache instead.
  *
  * So the device object is built by a subclass, and the question is which subclass. The
@@ -174,7 +174,7 @@ report_class(const char *name)
 	free(ivars);
 
 	/* An entry in the method list is not behaviour: see the header. The addresses are
-	 * printed unslid so that tools/metal/absmeth.py can say which are abstract stubs, and
+	 * printed unslid so that graphics/metal/absmeth.py can say which are abstract stubs, and
 	 * so that a disagreement with the cache shows up as a different address. */
 	printf("metal_dev:   of the selectors a driver owes, %s has, ITSELF or inherited:\n", name);
 	for (size_t i = 0; i < sizeof(wanted) / sizeof(wanted[0]); i++) {

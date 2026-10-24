@@ -45,9 +45,9 @@ instead, and when that does not come up either, the countdown goes to **Android*
 left alone always ends up in something that works. A choice made with the keys is always honoured (and counted).
 
 ```sh
-common/hackios health redwood      # what was started, how often, what came up, what was given up on
-common/hackios rollback redwood    # boot the previous version from now on
-common/hackios unhold redwood      # back to the newest, and forget what was given up on
+build/hackios health redwood      # what was started, how often, what came up, what was given up on
+build/hackios rollback redwood    # boot the previous version from now on
+build/hackios unhold redwood      # back to the newest, and forget what was given up on
 ```
 
 ## Verified boot held by the owner
@@ -57,23 +57,23 @@ anything else -- a stray tool, a broken update, someone with the phone for a min
 yours, made on your computer; no vendor holds it.
 
 ```sh
-common/hackios key init            # a new Ed25519 key in ~/.hackios/owner.key (keep a copy!), pinned into the loader
-xnuloader/build.sh                 # the loader, with the key in it
-common/hackios install redwood     # install.sh signs the bundle by itself when the key is there
-common/hackios verify redwood ~/.hackios/owner.key    # read both slots back: SHA-256 and signature
+build/hackios key init            # a new Ed25519 key in ~/.hackios/owner.key (keep a copy!), pinned into the loader
+bootloader/loader/build.sh                 # the loader, with the key in it
+build/hackios install redwood     # install.sh signs the bundle by itself when the key is there
+build/hackios verify redwood ~/.hackios/owner.key    # read both slots back: SHA-256 and signature
 ```
 
-Without a key the loader takes unsigned bundles, as before; `common/hackios key unpin` goes back to that.
+Without a key the loader takes unsigned bundles, as before; `build/hackios key unpin` goes back to that.
 
 ## Install
 
 Needs: an unlocked bootloader, Android with root (Magisk) and adb, the `darwin` partition with the iOS volume and
-the cryptexes on it, the workspace built (`common/setup.sh`, `ios165/fetch.sh`).
+the cryptexes on it, the workspace built (`build/setup.sh`, `system/ios/fetch.sh`).
 
 ```sh
-common/hackios detect              # is the phone on adb one of ours? (writes nothing)
-common/hackios doctor redwood      # every precondition, one by one (writes nothing)
-common/hackios install redwood
+build/hackios detect              # is the phone on adb one of ours? (writes nothing)
+build/hackios doctor redwood      # every precondition, one by one (writes nothing)
+build/hackios install redwood
 ```
 
 `doctor` and every command that writes refuse a phone whose `ro.product.device` is not one of the profile's
@@ -82,7 +82,7 @@ common/hackios install redwood
 darwin and the UEFI into the spare slot's `boot`, and reads every write back. Then:
 
 ```sh
-python3 common/flash/flashctl.py switch hackios      # from Android: bootctl set-active-boot-slot, reboot
+python3 build/flash/flashctl.py switch hackios      # from Android: bootctl set-active-boot-slot, reboot
 ```
 
 ## Update
@@ -90,7 +90,7 @@ python3 common/flash/flashctl.py switch hackios      # from Android: bootctl set
 A new kernel or boot volume goes into the boot slot that does not hold the running bundle:
 
 ```sh
-common/hackios update redwood
+build/hackios update redwood
 ```
 
 If that write is cut off (cable, battery), the phone still boots the previous bundle.
@@ -98,9 +98,9 @@ If that write is cut off (cable, battery), the phone still boots the previous bu
 ## Getting Android back -- three ways, from the easiest
 
 1. The HackiOS menu: **Android**.
-2. Fastboot (volume down + power): `python3 common/flash/flashctl.py switch android`, or by hand
+2. Fastboot (volume down + power): `python3 build/flash/flashctl.py switch android`, or by hand
    `fastboot --set-active=b && fastboot reboot` (the slot Android was on; the backup's `manifest.json` says which).
-3. Remove the UEFI: `python3 common/flash/flashctl.py restore` puts the spare `boot` back from the backup.
+3. Remove the UEFI: `python3 build/flash/flashctl.py restore` puts the spare `boot` back from the backup.
 
 Fastboot lives in the phone's own bootloader, which this install never writes: whatever happens to the UEFI or
 the loader, the phone can be brought back with a cable.
@@ -109,11 +109,11 @@ the loader, the phone can be brought back with a cable.
 
 * **Android updates (OTA)** write the spare slot -- they overwrite the UEFI, and for a while after an update the
   slots must not be switched (`flashctl.py switch` refuses while a Virtual A/B merge is pending). After an update:
-  `common/flash/install.sh <device>` again.
+  `build/flash/install.sh <device>` again.
 * **Do not lock the bootloader** with HackiOS installed.
 * The menu is a text console for now; the loader's own graphics are a later step.
 * Tested on every push (`.github/workflows/ci.yml`): the whole boot path in QEMU on a disk laid out like the phone,
-  every path of the menu -- `common/hackios test` runs the same eight scenarios (boot, previous version, the guard
+  every path of the menu -- `build/hackios test` runs the same eight scenarios (boot, previous version, the guard
   skipping a generation, falling back to Android, Android by hand with both GPTs checked, a tampered bundle, a
   signed one, a forged one). The loader's SHA-256 and Ed25519 are checked against Python's on every push too
-  (`tools/crypto-test/run.py`). The first install on a real phone should be done with the backup at hand.
+  (`host/crypto-test/run.py`). The first install on a real phone should be done with the backup at hand.

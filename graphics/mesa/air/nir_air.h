@@ -303,7 +303,7 @@ struct air_shader_info {
     * The frontend does not refuse such a shader -- the coarser guarantee is
     * still a correct one -- but it does not pass over it in silence either:
     * every resource with a group leaves a note in `notes`, which
-    * `air2nir --report` prints and tools/air/corpus.py counts.
+    * `air2nir --report` prints and graphics/air/corpus.py counts.
     */
    unsigned raster_order_groups;
 

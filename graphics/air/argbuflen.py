@@ -7,7 +7,7 @@ driver answers has to be Apple's and not the library's idea of what it needs: on
 too small and the application overlaps its own encodings, one too large and it
 wastes memory where nothing will notice until something runs out.
 
-tools/mesa/air/air_metal.c answers `8 * the members the set declares` and an
+graphics/mesa/air/air_metal.c answers `8 * the members the set declares` and an
 alignment of 8. That is a COMPUTATION, and this is the reading it has to agree
 with: the set's own `air.arg_type_size` and `air.arg_type_align_size`, parsed
 here out of the module's metadata by a different program in a different

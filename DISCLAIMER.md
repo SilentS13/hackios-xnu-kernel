@@ -10,7 +10,7 @@ say what the software works with.
 ## What these repositories contain
 
 - Our own code: the changes to XNU, the drivers, the EFI loader, the UEFI port, the image builder, scripts and
-  tools. The licences are listed in README.md ("Licenses") and in `prebuilt/NOTICES.md`.
+  tools. The licences are listed in README.md ("Licenses") and in `prebuilts/NOTICES.md`.
 - No iOS programs, libraries, frameworks, dyld shared cache, kernelcache or firmware images, and no data
   extracted from them. The loader describes the hardware to the kernel as what it is.
 - No decryption keys, no signing keys or certificates of Apple, and no tool that removes copy protection from
@@ -21,7 +21,7 @@ If you believe something in these repositories should not be here, open an issue
 
 ## What you do on your own machine
 
-The iOS files a HackiOS image is made of are **not distributed by us**. `ios165/fetch.sh` downloads Apple's own
+The iOS files a HackiOS image is made of are **not distributed by us**. `system/ios/fetch.sh` downloads Apple's own
 firmware archive from Apple's servers (`updates.cdn-apple.com`) to your computer, and the image is assembled
 there, for your own use.
 

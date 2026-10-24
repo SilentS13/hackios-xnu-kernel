@@ -15,7 +15,7 @@
  *
  * On this machine the screen is softpipe, so the whole path can be run with no
  * GPU at all. On the phone the same source wants the freedreno screen that
- * tools/mesa/freedreno-darwin.patch already creates inside the port's Mesa
+ * graphics/mesa/freedreno-darwin.patch already creates inside the port's Mesa
  * (osmesa_create_gpu_screen), and nothing else about it changes.
  *
  * usage: air_run FILE[.metallib] [FUNCTION]
@@ -56,7 +56,7 @@
 #include <mach-o/dyld.h>
 #include <signal.h>
 /* <sys/ucontext.h>, not <ucontext.h>: the latter refuses to be included
- * without _XOPEN_SOURCE on the iOS SDK, and userland/src/inject.c takes the
+ * without _XOPEN_SOURCE on the iOS SDK, and system/src/inject.c takes the
  * same route for the same reason.
  */
 #include <sys/ucontext.h>
@@ -102,7 +102,7 @@ texel_value(unsigned slot, unsigned x, unsigned y, unsigned z, float out[4])
 /*
  * A program that dies on this port leaves nothing behind: the kernel says
  * "Failed to send exception EXC_CORPSE_NOTIFY" and that is the end of it. So
- * print the fault before dying. These two functions are userland/src/inject.c's
+ * print the fault before dying. These two functions are system/src/inject.c's
  * say_the_fault()/watch_for_faults() (branch sileo2, 6683521), with the slide
  * taken from this program's own image rather than from the shared cache, since
  * the pc of interest is in air_run or in libOSMesa and not in iOS.
@@ -161,7 +161,7 @@ static bool library_fill = false;
  *
  * For the 14 kernels whose loops leave on a count or a sentinel read out of a
  * buffer, the pattern is not an input at all -- the loop never ends and the GPU
- * runs forever (docs/air.md section 5, tools/air/kstruct.py). Zeros are a
+ * runs forever (docs/air.md section 5, graphics/air/kstruct.py). Zeros are a
  * degenerate input but a *defined* one: a count of zero means the loop runs no
  * times, so the kernel reaches its end and the hardware answers. What that
  * proves is that the translated shader runs on the Adreno without hanging; it
@@ -226,7 +226,7 @@ pattern_byte(unsigned i)
  * It exists because the kernels that never finish do not need a whole buffer
  * chosen for them: they need a span table in one slot and a row index in
  * another, and the value their exit test compares against is a field or two
- * (tools/air/kinput.py works out which, and prints these arguments). A file is
+ * (graphics/air/kinput.py works out which, and prints these arguments). A file is
  * one fill for every buffer, so it cannot say "this slot and not that one".
  * Offsets are decimal so that a job line stays readable; init.c splits a line
  * on blanks and knows no variables, so each kernel has to be one line.
@@ -388,7 +388,7 @@ quad_vertex_shader(const nir_shader_compiler_options *options, unsigned num_vary
 
 /* What a Gallium driver expects of a shader it is handed: NIR's own system
  * values lowered to the hardware's, and I/O as intrinsics rather than
- * variables. The same three passes are in tools/mesa/air-ir3.patch; when a
+ * variables. The same three passes are in graphics/mesa/air-ir3.patch; when a
  * fourth place needs them they should become one function of the frontend.
  */
 static int
@@ -458,7 +458,7 @@ finalize_for_gallium(nir_shader *nir, struct pipe_screen *screen)
     * over the generated vertex stage, which gives every vertex the SAME texcoord -- flat
     * and smooth are identical over a constant. And ir3_compiler, the tool the corpus's
     * "compiles through ir3" column comes from, passes this flag already
-    * (tools/mesa/air-ir3.patch): the tool was lowering correctly while the two harnesses
+    * (graphics/mesa/air-ir3.patch): the tool was lowering correctly while the two harnesses
     * that actually draw were not.
     */
    NIR_PASS(_, nir, nir_lower_io, nir_var_shader_in | nir_var_shader_out,
@@ -485,7 +485,7 @@ finalize_for_gallium(nir_shader *nir, struct pipe_screen *screen)
  * evidence that it ran and no evidence about atomicity: a sum written by
  * threads that never raced looks exactly like a sum written by threads that
  * did. The kernel that can tell them apart is written for the purpose rather
- * than Apple's -- tools/air/atomiccheck.py, which makes each thread report the
+ * than Apple's -- graphics/air/atomiccheck.py, which makes each thread report the
  * value its own fetch_add returned, so the sixteen of them must be 0..15 with
  * nothing repeated whatever order the threads ran in. Even that is only
  * evidence of atomicity where the threads really do run at once, which here
@@ -695,7 +695,7 @@ print_own_sampler(unsigned slot, const struct air_sampler_state *a, bool compare
  * distinct values over a 4x4 texture, every one exactly representable in binary32 and
  * every one a different answer -- so a comparison that read the wrong texel answers
  * differently, and a reference landing between two of them is exact on both sides.
- * tools/air/sampcheck.py computes its expectations from this same expression.
+ * graphics/air/sampcheck.py computes its expectations from this same expression.
  */
 static float
 depth_texel_value(unsigned x, unsigned y)
@@ -935,7 +935,7 @@ dispatch_kernel(struct pipe_screen *screen, const struct air_shader_info *info,
     * a patched word looked changed by the kernel. Keeping the fill is also the
     * only way to say which words a kernel touched when it touches them past
     * the sixteen the dump prints -- and that is exactly what a prediction out
-    * of tools/air/kinput.py has to be compared against.
+    * of graphics/air/kinput.py has to be compared against.
     */
    uint8_t *before[32] = { 0 };
    unsigned sizes[32] = { 0 };
@@ -1336,7 +1336,7 @@ main(int argc, char **argv)
     * device has no shell to set one with. iOS 16.5's own root carries no sh at
     * all -- /bin holds df and ps -- and the job list that runs this is read by
     * our init, which splits a line on blanks and has no notion of a variable
-    * (userland/src/init.c, run_command). So a generated suite whose every
+    * (system/src/init.c, run_command). So a generated suite whose every
     * module reads its own bytes could not be run on the phone until this
     * option existed: with it each module is one ordinary job line.
     */
@@ -1435,7 +1435,7 @@ main(int argc, char **argv)
     * otherwise. The same source therefore runs on this machine (no msm
     * device, so it falls back and draws in software) and on the phone, where
     * it opens the Adreno exactly as the port's own Mesa does
-    * (osmesa_create_gpu_screen in tools/mesa/freedreno-darwin.patch).
+    * (osmesa_create_gpu_screen in graphics/mesa/freedreno-darwin.patch).
     * AIR_RUN_SOFTWARE=1 forces software even where a GPU is present.
     */
    struct pipe_screen *screen = NULL;
@@ -1449,7 +1449,7 @@ main(int argc, char **argv)
           * dereferences it. A zeroed one died at address 0x10 on the phone --
           * the first thing this program ever did on a machine that has a GPU,
           * and invisible on any machine that has not. This is the sequence
-          * osmesa_create_gpu_screen() uses in tools/mesa/freedreno-darwin.patch,
+          * osmesa_create_gpu_screen() uses in graphics/mesa/freedreno-darwin.patch,
           * which is the one CoreAnimation goes through on this device daily.
           */
          static const driOptionDescription freedreno_options[] = {
@@ -1531,7 +1531,7 @@ main(int argc, char **argv)
       if (base != GLSL_TYPE_FLOAT && base != GLSL_TYPE_FLOAT16 &&
           base != GLSL_TYPE_DOUBLE) {
          /* unsigned, not signed: an LLVM integer carries no signedness, so
-          * both this and tools/air/cpuref.py print the bits unsigned and the
+          * both this and graphics/air/cpuref.py print the bits unsigned and the
           * two can be compared
           */
          rt_format = PIPE_FORMAT_R32G32B32A32_UINT;
@@ -1553,7 +1553,7 @@ main(int argc, char **argv)
           * double rounding. None of the pool's values does, but a future one
           * might, and that is a property of the harness and not of the GPU.
           */
-         /* As of now nothing reaches this branch: tools/air/intrincheck.py packs
+         /* As of now nothing reaches this branch: graphics/air/intrincheck.py packs
           * every float-ish result into a float4, so no generated shader declares
           * a half output. It is here because the target was one of the two things
           * missing and is the half that belongs on this side; the other half needs

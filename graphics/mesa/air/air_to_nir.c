@@ -549,7 +549,7 @@ air_load_ptr(struct air_ctx *c, struct air_ptr ptr, const struct air_type *type,
        * own interface with the runtime rather than something read out of
        * Apple's: component i sits at bit i*width, which is the word a memcpy
        * of the value would produce on this little-endian target. NOTHING HERE
-       * MEASURES THAT -- every harness in tools/air supplies zero for every
+       * MEASURES THAT -- every harness in graphics/air supplies zero for every
        * constant, so all components are zero whatever the packing, and the
        * first thing that would tell a wrong packing from a right one is a
        * pipeline that sets one of these two constants.
@@ -2238,7 +2238,7 @@ translate_cast(struct air_ctx *c, const struct air_inst *in)
     * components, and NIR has an operation for exactly one redistribution of
     * exactly one width: pack_32_2x16 and unpack_32_2x16. That is the whole of
     * what this corpus asks for, and the number is the reason this is two cases
-    * and not a general repacker -- `tools/air/typecensus.py` over all 7 879 of
+    * and not a general repacker -- `graphics/air/typecensus.py` over all 7 879 of
     * Resident Evil 4's modules, reading the types out of llvm-dis rather than
     * out of our own reader, finds 111 657 bitcasts of 14 distinct type pairs,
     * and the ONLY two that change shape are:
@@ -2269,7 +2269,7 @@ translate_cast(struct air_ctx *c, const struct air_inst *in)
     * `dst.x = src0.x; dst.y = src0.x >> 16` -- the same halves in the same
     * order. Getting that backwards would not crash and would not look wrong:
     * both halves are still finite halves, so the shader would draw with every
-    * pair of 16-bit values transposed. tools/air/loweringcheck.py gives the
+    * pair of 16-bit values transposed. graphics/air/loweringcheck.py gives the
     * two halves values that cannot be confused for each other (13 and 113, 1
     * and -2) and checks them twice -- against LLVM running the same module on
     * this processor, and against the four numbers written out in the case

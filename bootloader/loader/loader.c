@@ -510,7 +510,7 @@ static const struct platform platform_redwood = {
 
 /*
  * The devices the loader knows, told apart by the framebuffer base their UEFI reports. A port to another
- * device adds its description here (common/new-device.sh writes a starting point, docs/PORTING.md says
+ * device adds its description here (build/new-device.sh writes a starting point, docs/PORTING.md says
  * where each value comes from); a display that matches none is QEMU's ramfb.
  */
 static const struct platform *const platforms[] = {
@@ -1094,7 +1094,7 @@ charger_poll(void)
  * The phone's storage as Qualcomm's own UFS driver in this UEFI sees it (UFSDxe): every raw
  * logical unit, every GPT partition with its name, place and size, and for the partitions there
  * are reference images of -- firmware-update/ in the ROM's fw.zip -- an FNV-1a hash of exactly
- * as many bytes as the image has, which tools/ufs-survey.py computes from the images on the host.
+ * as many bytes as the image has, which host/ufs-survey.py computes from the images on the host.
  * Where the two agree, reading through this driver gives the bytes that are on the flash, and that
  * is the ground a block device for the kernel is to stand on.
  *
@@ -1299,7 +1299,7 @@ ufs_dump_userdata(efi_block_io *bio)
  * Android's own system (system, vendor, product, ...) is not in GPT partitions but in logical ones
  * inside "super", which liblp's metadata at its start describes: a geometry at 4096 (and its copy
  * at 8192), then its metadata slots from 12288 on -- each a header and its tables of partitions,
- * extents, groups and block devices. Printed raw for tools/ufs-super.py, which checks their SHA-256 sums and
+ * extents, groups and block devices. Printed raw for host/ufs-super.py, which checks their SHA-256 sums and
  * says where in super nothing lies: a place a volume of this port's own could have without
  * anything of Android's being moved.
  */
@@ -1439,7 +1439,7 @@ ufs_survey(void)
 /*
  * The one partition a write may reach, and from which of its blocks. darwin is the port's own
  * 20 GiB at the end of logical unit 0 (README, "The port's partition"); what the build puts there
- * from the computer (tools/darwin-write.py) is the iOS volume at its start and the two cryptexes
+ * from the computer (host/darwin-write.py) is the iOS volume at its start and the two cryptexes
  * behind it, and nothing of this port reads or writes the rest -- so the data of iOS lives there
  * and a write is refused before that block. The identity is the whole of darwin-write.py's: the
  * same partition, named the same, of the same size, in the same place, on logical unit 0.
@@ -1447,7 +1447,7 @@ ufs_survey(void)
 #define BLOCK_WRITE_FIRST  2042368ULL                  /* darwin's blocks of 4096: past both cryptexes */
 /*
  * Its first and last LBA of unit 0 as the GPT has them, and its unique GUID: this phone's, from its identity
- * file (phones/<serial>.darwin, made when its darwin was cut: common/flash/darwinid.py), which xnuloader/build.sh
+ * file (phones/<serial>.darwin, made when its darwin was cut: build/flash/darwinid.py), which bootloader/loader/build.sh
  * turns into darwin_identity.h (DARWIN_ID=file); without one, the phone the port was brought up on.
  */
 #include "darwin_identity.h"
@@ -2531,7 +2531,7 @@ parse_payload(struct payload_info *pi, int verbose)
 		}
 		if (str_eq(e->name, "resident")) {
 			/* what `xl ramdisk` uploads over USB, carried by the payload instead: an installed phone's boot
-			 * bundle has no computer to upload it (common/flash/mkbundle.py --resident) */
+			 * bundle has no computer to upload it (build/flash/mkbundle.py --resident) */
 			pi->resident = p + sizeof(*e);
 			pi->resident_size = e->size;
 		} else if (str_eq(e->name, "ramdisk")) {
@@ -3945,7 +3945,7 @@ efi_main(efi_handle image, efi_system_table *st)
 
 	/*
 	 * One-shot mode: run the kernel that came with the image, then reset. A payload with the loader alone
-	 * (an installed device's boot partition: common/flash/install.sh) has no kernel: that is the menu's.
+	 * (an installed device's boot partition: build/flash/install.sh) has no kernel: that is the menu's.
 	 */
 	if (have_payload && pi.kernel != NULL) {
 		run_kernel(0, 0);

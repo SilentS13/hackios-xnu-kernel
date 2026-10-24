@@ -2,9 +2,9 @@
 """
 Make a boot bundle for an installed device: the "XNUP" container the loader runs (kernel, boot volume,
 command line -- the same one `xl run` sends) behind a header that the loader checks before it boots it:
-the container's SHA-256 and, with --sign, an Ed25519 signature by the owner key (common/flash/ownerkey.py).
+the container's SHA-256 and, with --sign, an Ed25519 signature by the owner key (build/flash/ownerkey.py).
 
-The bundle goes into one of the two boot slots of darwin (formats: common/flash/bundlefmt.py).
+The bundle goes into one of the two boot slots of darwin (formats: build/flash/bundlefmt.py).
 
 usage: mkbundle.py -o bundle.img --kernel K --ramdisk R [--cmdline "..."] [--generation N] [--label TEXT]
                    [--sign [KEYFILE]]
@@ -33,7 +33,7 @@ args = ap.parse_args()
 
 with tempfile.TemporaryDirectory() as td:
     cont = os.path.join(td, 'payload.bin')
-    subprocess.check_call([sys.executable, os.path.join(ROOT, 'xnuloader', 'mkpayload.py'), '-o', cont,
+    subprocess.check_call([sys.executable, os.path.join(ROOT, 'bootloader', 'loader', 'mkpayload.py'), '-o', cont,
                            f'kernel={args.kernel}', f'ramdisk={args.ramdisk}'] +
                           ([f'resident={args.resident}'] if args.resident else []) + ['--cmdline', args.cmdline],
                           stdout=subprocess.DEVNULL)

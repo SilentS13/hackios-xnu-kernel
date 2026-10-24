@@ -35,7 +35,7 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import metallib  # noqa: E402
-sys.path.insert(0, os.path.join(ROOT, "tools/air"))
+sys.path.insert(0, os.path.join(ROOT, "graphics/air"))
 import airdefs  # noqa: E402  (LLVM-IR definitions for the exactly defined air.*)
 
 AIR2NIR = os.environ.get(

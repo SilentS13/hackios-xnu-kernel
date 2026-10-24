@@ -34,7 +34,7 @@ one mean anything:
                   writes through whatever x8 held.
 
 usage:
-  C=ios165/20F66__iPhone10,3_6/dyld_shared_cache_arm64
+  C=system/ios/20F66__iPhone10,3_6/dyld_shared_cache_arm64
   for i in /System/Library/Frameworks/Metal.framework/Metal \
            /System/Library/Extensions/AGXMetalA11.bundle/AGXMetalA11 \
            /System/Library/PrivateFrameworks/IOGPU.framework/IOGPU; do
@@ -43,7 +43,7 @@ usage:
           ipsw dyld extract $C $i --output ext                   # the metadata
   done
   clang -target arm64-apple-ios16.5 -isysroot ~/theos/sdks/iPhoneOS16.5.sdk -w -S \
-        userland/src/redwoodmetal.m -o redwoodmetal.s
+        system/src/redwoodmetal.m -o redwoodmetal.s
   owes.py --dump Metal.txt --dump AGXMetalA11.txt --dump IOGPU.txt \
           --images ext --selmap selmap.txt --asm redwoodmetal.s [--verbose]
 
@@ -304,7 +304,7 @@ def declared_encodings(images, selmap):
 def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument("--dump", action="append", default=[], required=True)
-    ap.add_argument("--src", default=os.path.join(ROOT, "userland/src/redwoodmetal.m"))
+    ap.add_argument("--src", default=os.path.join(ROOT, "system/src/redwoodmetal.m"))
     ap.add_argument("--class", dest="only", action="append", default=[])
     ap.add_argument("--images", help="directory of images extracted with `ipsw dyld extract`")
     ap.add_argument("--selmap", action="append", default=[],

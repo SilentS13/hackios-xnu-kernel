@@ -8,7 +8,7 @@
 # writes out the ones that are and the driver cannot tell the difference -- every block it
 # asks for is there.
 #
-# The blocks are found by walking with tools/apfs/apfs.py, which reads the image the same
+# The blocks are found by walking with host/apfs/apfs.py, which reads the image the same
 # way the kernel's C does (run-tests.sh step 5 checks that), and recording every block it
 # touches.  A cache of a different size only changes how often a block is re-read, not
 # which blocks are needed, so the set is safe to hand to the kernel.

@@ -108,7 +108,7 @@ def decode(e, blob):
 def mtlb_length(data, pos):
     """The length of the MTLB container at pos, or None if that is not one.
 
-    The same three header fields tools/metallib.py reads: a container says its
+    The same three header fields graphics/metallib.py reads: a container says its
     own total size at 0x10 and its function table at 0x18, and a library always
     puts that table at 0x58.
     """

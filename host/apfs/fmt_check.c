@@ -1,6 +1,6 @@
 /*
  * Print the size of every structure in apfs_format.h and the offset of every field the
- * reader depends on, so that the header and tools/apfs/apfs.py can be checked against
+ * reader depends on, so that the header and host/apfs/apfs.py can be checked against
  * each other instead of being trusted to agree.  Built and run by run-tests.sh.
  *
  * Output is one line per item: "name<TAB>offset<TAB>size", and "name<TAB>sizeof" for a

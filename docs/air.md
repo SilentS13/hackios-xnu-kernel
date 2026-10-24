@@ -14,7 +14,7 @@ document assumes those measurements and records the decisions taken on top of th
 
 ## Where it stands, and what that does not mean
 
-Of the 456 modules of the device's system `.metallib` files (`tools/air/check.sh`, and
+Of the 456 modules of the device's system `.metallib` files (`graphics/air/check.sh`, and
 `docs/air-report.md` for the breakdown):
 
 | | of 456 |
@@ -26,7 +26,7 @@ Of the 456 modules of the device's system `.metallib` files (`tools/air/check.sh
 | **run on the phone's GPU with a result it finished** — 7 drawn, 23 kernels | **30** |
 | dispatched on the phone's GPU without it finishing them (section 5) | 24 |
 
-And of the `air.*` operations Apple's own code calls (`tools/air/intrincheck.py`, which reads
+And of the `air.*` operations Apple's own code calls (`graphics/air/intrincheck.py`, which reads
 every `.metallib` in the device image and not only the corpus's five — 821 declarations, 119 of
 them the corpus's, and 14 libraries of 128 it cannot read at all):
 
@@ -71,11 +71,11 @@ comparison has folded, the branch under it is dead and the phi below it has one 
 adding them costs the comparison nothing and bought 15 of those 20. It is worth naming because
 the missing 20 looked like a property of those shaders and were a property of the pass list.
 
-`tools/air/libcheck.py` prints that table and refuses to print it when the rows do not add up.
+`graphics/air/libcheck.py` prints that table and refuses to print it when the rows do not add up.
 The last two rows are the ones that count, and they are deliberately two. LLVM is a full
 reference only for a function that calls no `air.*` at all, because an `air.*` call is an
 undefined symbol on the host — 21 of those, and all 21 agree. For the 57 that call only exactly
-defined operations, `tools/air/airdefs.py` writes an LLVM-IR body for each operation and llc can
+defined operations, `graphics/air/airdefs.py` writes an LLVM-IR body for each operation and llc can
 then execute the function: 54 of the 57 agree bit for bit, 0 differ, and the 3 left out are ones
 our own folder does not reduce to a constant, so the missing side is ours. That row is weaker and
 kept apart from the 21: there, LLVM decides everything; here, LLVM decides the function's own
@@ -109,7 +109,7 @@ as an fma chain in Python gives the Adreno's word exactly — `-0.249999732`, bi
 while evaluating it left to right in binary32, rounding each step, gives the folder's
 `-0.249999762`, bits 3196059632. Metal compiles with `air.compile.fast_math_enable`, which permits
 the hardware to fuse; so does ir3. The other two carry more arithmetic and are consistent with the
-same cause rather than demonstrated. `tools/air/libcheck.py` puts a difference down to contraction
+same cause rather than demonstrated. `graphics/air/libcheck.py` puts a difference down to contraction
 only within 32 ulp, and anything beyond that stays in a row called *no explanation*, which is the
 row that would mean a defect.
 
@@ -127,7 +127,7 @@ alignment). That ABI is the runtime's, not the compiler's, and it is not impleme
 is this project's own calling convention, invented to make the bodies runnable.
 
 **And what the 456 itself is not: the number of shaders on the device.** It is the number of
-modules in the `.metallib` *files* under `ios165/rootfs`. A library can also be a blob inside a
+modules in the `.metallib` *files* under `system/ios/rootfs`. A library can also be a blob inside a
 dylib — `GPUCompiler`'s own `GNR.videoprocessor` carries one in `__DATA`, found while looking for
 something else — so every statement here of the form "the corpus contains no X" is bounded by how
 the corpus was collected, not by what the system contains. Where that distinction matters, this
@@ -172,7 +172,7 @@ of counted. The numbers above are from suites where 11 of each conversion's 22 i
 
   On 20 October that stopped being true. All 78 declarations ran on the phone's own Adreno, and
   twice: once as the port stood, and once with the one-line `ir3` rounding fix this tree now
-  carries (`tools/mesa/ir3-round-default.patch`). **The 56 declarations the reader has reached
+  carries (`graphics/mesa/ir3-round-default.patch`). **The 56 declarations the reader has reached
   since have not been asked there**, and four of them are exactly where the 21 October
   disagreements were (section 4, item 4): the phone's row in the table above is still the suite of
   20 October.
@@ -216,7 +216,7 @@ of counted. The numbers above are from suites where 11 of each conversion's 22 i
   goes up is a figure nobody is checking; this one went up three times for work and down once for
   a better instrument.
 - **Two traps this frontend's own checks fell into, kept here for the instances; the general forms
-  are in the "How our own checks lie" notes (docs/checks.md in hackios-xnu-kernel), which collects all six and belongs there because
+  are in the "How our own checks lie" notes (docs/checks.md), which collects all six and belongs there because
   the others came from the camera, the services and the build rather than from AIR.** Comparing one
   file of Mesa's `main` against ours had to start from a fresh tarball extract, because ours carries
   our own patch — 202 487 bytes against 202 144 clean — so a comparison from this tree would have
@@ -280,7 +280,7 @@ of counted. The numbers above are from suites where 11 of each conversion's 22 i
 
   **The prediction that followed has been tested and holds, by a peer session rather than here.**
   The port's OpenGL ES goes through the same ir3 and the same instruction, so a GLES shader should
-  truncate identically — and `userland/src/u2f_test.c` (`RC=rc.u2f`) asks GLSL ES 3.0 the same
+  truncate identically — and `system/src/u2f_test.c` (`RC=rc.u2f`) asks GLSL ES 3.0 the same
   question through the same Mesa, with no AIR anywhere in it. Four of its six inputs disagree with
   C on `freedreno; Adreno 7c+ Gen 3; OpenGL ES 3.2 Mesa 25.0.7`, and the two that agree are exactly
   the two where truncation and rounding give the same answer — so agreement there is the absence of
@@ -332,7 +332,7 @@ of counted. The numbers above are from suites where 11 of each conversion's 22 i
 
   The fix is one line, and unlike the `ir3_cmdline` bug this one is in a file upstream still
   carries, with reproduction down two independent paths — so it is the first thing in this work
-  that can actually be reported. The change is now carried here as `tools/mesa/ir3-round-default.patch`, measured on the
+  that can actually be reported. The change is now carried here as `graphics/mesa/ir3-round-default.patch`, measured on the
   phone before and after down both paths.
 
   **The same branch covers `TYPE_F16`, and that half is answered now: the ten `half`-returning
@@ -417,7 +417,7 @@ of counted. The numbers above are from suites where 11 of each conversion's 22 i
   `fast_pow` with a base that can go negative will behave differently on this phone than in any
   test on this machine.
 - **The atomics compute the right thing and the barrier waits; whether the atomics are *atomic*
-  is still open.** `tools/air/atomiccheck.py` dispatches two kernels written for the purpose
+  is still open.** `graphics/air/atomiccheck.py` dispatches two kernels written for the purpose
   (section 4, item 5) and all eight operations the corpus uses agree — five on device memory
   (`add.s`, `load`, `max.s`, `min.s`, `store`), three on threadgroup memory (`add.u`, `load`,
   `store`) across two `air.wg.barrier`s. Among them a signed minimum taken across negative
@@ -497,7 +497,7 @@ of counted. The numbers above are from suites where 11 of each conversion's 22 i
   Adreno on purpose: one kernel hangs the GPU and this port's driver does not recover, so how
   many results are real depends on where in the boot each kernel ran. The paragraphs after the
   table give the measurements.
-  `tools/air/kernelcheck.py` prints where each one stops, as a table whose rows are checked
+  `graphics/air/kernelcheck.py` prints where each one stops, as a table whose rows are checked
   against the total before it is printed:
 
   | | on softpipe | **on the Adreno** |
@@ -605,8 +605,8 @@ of counted. The numbers above are from suites where 11 of each conversion's 22 i
   sub-dword SSBO access by the size of the instruction while the hardware counts in the IBO
   descriptor's texels, so every one of those reads landed four bytes apart instead of two and
   the four lists became a cycle with no sentinel in it
-  (`tools/mesa/ir3-ssbo-subdword.patch`). With that patch in, the kernel finishes on the
-  Adreno both ways -- given the structured input `tools/air/kinput.py` builds for it and given
+  (`graphics/mesa/ir3-ssbo-subdword.patch`). With that patch in, the kernel finishes on the
+  Adreno both ways -- given the structured input `graphics/air/kinput.py` builds for it and given
   zeros -- and in both cases it changes not one byte, which is exactly what Apple's own
   instructions do with that input on the processor (`logs/102453-run.log`, and the canary
   wrote its six words all three of its turns). So the row above is superseded rather than
@@ -614,7 +614,7 @@ of counted. The numbers above are from suites where 11 of each conversion's 22 i
   made endless.
 
   That leaves the real limit, which is the harness's, and it can be counted rather than gestured
-  at. `tools/air/kstruct.py` reads every kernel and sorts them by what they do with their
+  at. `graphics/air/kstruct.py` reads every kernel and sorts them by what they do with their
   buffers:
 
   | | of 47 |
@@ -631,7 +631,7 @@ of counted. The numbers above are from suites where 11 of each conversion's 22 i
 
   **That last sentence has since been answered a different way, and this row is out of date.** The
   harness does not need to know what a buffer means to know where its fields are: the layout is in
-  the module's own `air.struct_type_info`, and `tools/air/kinput.py` reads the exit values out of
+  the module's own `air.struct_type_info`, and `graphics/air/kinput.py` reads the exit values out of
   it. Eleven of the 14 now have a job line and end on the device. Section 5d has what they then
   measured, which was three compiler bugs rather than a column of agreements.
 
@@ -652,7 +652,7 @@ of counted. The numbers above are from suites where 11 of each conversion's 22 i
   resets the 3D core's own half after a timeout, brings it back with the same two steps the boot
   uses, gives up the submission that hung and lets `gpuWait` wait again, so a hang costs one
   dispatch instead of the rest of a boot. `docs/metal.md` section 10.36 has what is done and
-  which source says so; `userland/rc.jobs.metalrecover` is the measurement — the canary before
+  which source says so; `system/rc.jobs.metalrecover` is the measurement — the canary before
   and after three hangs of two different shapes, with both outcomes written down in advance.
   Until a boot says it works, every number in this section stands as it is and the ordering rules
   above — hangers last, a canary between jobs, nothing below a wedge is evidence — stay in force.
@@ -776,7 +776,7 @@ of counted. The numbers above are from suites where 11 of each conversion's 22 i
   Images are read back after a dispatch, which also matters for the textures: most of these
   kernels write *only* an image, so without the readback a dispatch would have reported success
   with nothing examined — and that is the shape this check has been caught by three times
-  (docs/checks.md in hackios-xnu-kernel). The readback is what `air.write_texture_2d/3d` needed
+  (docs/checks.md). The readback is what `air.write_texture_2d/3d` needed
   as well, which `texopcheck.py` had listed as having no case for exactly this reason.
 
   So the atomics being checked (above) is still a statement about two kernels written here for
@@ -795,9 +795,9 @@ the 258 is and is not.
 
 **Decision: a Mesa frontend in Mesa's tree, shaped like `src/compiler/spirv`.** Its entry point
 is one function, `air_to_nir()` (`nir_air.h`), the analogue of `spirv_to_nir()`. In this
-repository the sources are `tools/mesa/air/`; `tools/mk-mesa.sh` and `tools/air/mk-host.sh` copy
-them to `src/compiler/air/` of the pinned Mesa release, exactly as `tools/mesa/redwood-drm/` is
-copied to `src/redwood-drm/`, and `tools/mesa/air.patch` adds the two lines of meson that build
+repository the sources are `graphics/mesa/air/`; `graphics/mk-mesa.sh` and `graphics/air/mk-host.sh` copy
+them to `src/compiler/air/` of the pinned Mesa release, exactly as `graphics/mesa/redwood-drm/` is
+copied to `src/redwood-drm/`, and `graphics/mesa/air.patch` adds the two lines of meson that build
 it. The tree is the shape an upstream merge request would have.
 
 Why not a standalone library that Mesa links:
@@ -838,7 +838,7 @@ This is the biggest commitment of the project, so both sides in full.
 - **The cost lands in every Metal process.** libLLVM is 50–100 MB of C++ with global constructors,
   a static option registry and its own copy of libc++ assumptions, loaded into every app that
   touches Metal. On this port that is every app: CoreAnimation, CoreImage and UIKit all link
-  Metal. The port's Mesa is built with `-Dllvm=disabled` (`tools/mk-mesa.sh`) for exactly this
+  Metal. The port's Mesa is built with `-Dllvm=disabled` (`graphics/mk-mesa.sh`) for exactly this
   reason today.
 - **It would have to be cross-built for iOS** with the port's toolchain (the `xnu-clang` wrapper,
   the iOS SDK, ld64). That is a multi-hour build and a second large dependency to keep building
@@ -879,7 +879,7 @@ silently: they make the module fail with the record's name, and the corpus repor
 the price is visible as a number rather than as a wrong shader.
 
 **It is written, and it agrees with LLVM on all 456 modules of the corpus** —
-`tools/air/reader-check.sh`, 1 900 lines of C for the reader and its printer. What the check
+`graphics/air/reader-check.sh`, 1 900 lines of C for the reader and its printer. What the check
 compares is described in section 4; the two things it does *not* keep are function and parameter
 attributes (`nounwind`, `captures(none)`, the attribute groups) and the order of declarations,
 because the translation uses neither. Everything else — types, constants, every instruction,
@@ -1011,7 +1011,7 @@ LLVM parameter type, and the NIR value is cut or converted to it.
 | `i1/i8/i16/i32/i64`, `half/float/double`, vectors ≤ 4 | the same bit sizes; wider vectors are split |
 | structs and arrays as SSA values (`insertvalue`, `extractvalue`) | trees of SSA values inside the translator, never NIR values |
 | `br`, `phi` (unstructured CFG) | an unstructured `nir_function_impl`, then `nir_lower_goto_ifs` — the path Mesa's OpenCL frontend uses |
-| `switch` | NIR has none: a chain of `nir_goto_if`, one test per case in a block of its own, the last falling to the default. Checked against LLVM on the processor (`tools/air/loweringcheck.py`) |
+| `switch` | NIR has none: a chain of `nir_goto_if`, one test per case in a block of its own, the last falling to the default. Checked against LLVM on the processor (`graphics/air/loweringcheck.py`) |
 | a call returning a **struct** | one out-parameter per member, not one for the value: a NIR parameter carries a number. A member that is not a number (the `[8 x i8]` tail padding Metal puts on a vertex-output struct) takes no parameter and nothing may read it |
 | a constant-expression `getelementptr` | the base pointer with a constant byte offset and a narrowed pointee, the index walk done in integers |
 | `select` between two **pointers** | the choice is kept (`AIR_VAL_PTR_SELECT`); a later index is pushed into both sides and a load through it loads **both** and selects the values, which leaves a note |
@@ -1078,7 +1078,7 @@ all of them because of what the lowering does rather than what the metadata says
 **What is not checked, and cannot be here.** No value. `cpuref.py` runs the module under LLVM on
 the processor, where there is no framebuffer; `air_run` draws it, but on softpipe, and softpipe's
 TGSI interpreter does not implement `FBFETCH` at all (the opcode exists in `p_shader_tokens.h` and
-`tgsi_exec.c` has no case for it). What `tools/air/fbfetchcheck.py` checks instead is the shape --
+`tgsi_exec.c` has no case for it). What `graphics/air/fbfetchcheck.py` checks instead is the shape --
 the intrinsic at the target the module names, the flag set, the narrowing done with a float
 conversion, an integer target refused, an `air.arg_unused` one not turned into a fetch at all --
 and that ir3 emits the instruction:
@@ -1126,7 +1126,7 @@ for -- safe, and slower. There is no way to give exactly the ask and none to giv
 `raster_order_group` and `air_shader_info` a `raster_order_groups` bitmask, and every resource
 with a group leaves a **note**: a third thing beside a refusal and a clean translation, for a
 shader that was accepted while something other than exactly what it asked for was done.
-`air2nir --report` prints notes on its line and `tools/air/corpus.py` counts them under "What was
+`air2nir --report` prints notes on its line and `graphics/air/corpus.py` counts them under "What was
 translated with a caveat", so a caveat is a number rather than a sentence in a document. A group
 number past the bitmask's 32 bits is **refused**, because recording it would fold it onto a
 different group, which is worse than not recording it.
@@ -1156,7 +1156,7 @@ whose geometry stage sets `gl_Layer` and whose fragment shader does not read it 
 today. The patch would have made it read layer 0. **No fragment-shader-only transform can tell
 the two apart, because the fragment shader is byte-identical in both**, so the information the
 fix needs is not in the module `nir_lower_fb_read` is handed. That is the whole answer, and it is
-why no patch is in `tools/mesa/`.
+why no patch is in `graphics/mesa/`.
 
 *What the correct fix costs.* The information exists at **link** time: `ir3_link_shaders` knows
 `ir3_find_output` missed. It cannot change the already-compiled fragment shader, so the fix has
@@ -1192,7 +1192,7 @@ What that took, in the order the groups were worked:
 | — | a name 37 characters long | `split_name`'s per-part buffer was 32, so `air.normalize_function_constant_predicate.i8` was refused as "a name this cannot take apart" — which reads like a malformed module and was a buffer |
 | — | a constant-expression `getelementptr` | the base pointer with a constant byte offset; the census in section 2 said the only constant expression in the corpus was a pointer bitcast, and that was a census of one corpus |
 | — | a static initializer with branches | translated as a `nir_function` the entry point calls, rather than in place (section 3) |
-| 4 | a pointer chosen at run time | `select i1 %c, ptr %a, ptr %b` and a `getelementptr` on the result. The choice is **kept** and made where the pointer is used: a load through it loads **both** sides and selects the values, and a later index is pushed into both. Checked against LLVM on the processor, each side taken once (`tools/air/loweringcheck.py`) |
+| 4 | a pointer chosen at run time | `select i1 %c, ptr %a, ptr %b` and a `getelementptr` on the result. The choice is **kept** and made where the pointer is used: a load through it loads **both** sides and selects the values, and a later index is pushed into both. Checked against LLVM on the processor, each side taken once (`graphics/air/loweringcheck.py`) |
 
 **Seven of those rows bought nothing, and that is the useful part of the ledger.** Everything from
 `air.is_function_constant_defined` down was found by peeling walls off the same six `fixed_*`
@@ -1412,7 +1412,7 @@ a constant position, so after ir3's optimisation its input entry is zero-filled 
 `cm=0`, `regid 63` — while `emit_vfd_dest` still counts it. The entry is harmless; reading the
 interface off it would not be.
 
-*The measurement.* `tools/air/vattrcheck.py`, a stage of `check.sh`, and it compares **no value**:
+*The measurement.* `graphics/air/vattrcheck.py`, a stage of `check.sh`, and it compares **no value**:
 `air_run`'s only vertex stage is its own generated quad, so nothing on this machine draws with a
 translated vertex shader, and the contract the Metal driver uses carries no vertex layout at all
 (below). What it does check is sixteen generated modules — the attribute index reaching ir3's own
@@ -1441,7 +1441,7 @@ why the census does not move and why the gate is the thing that proves it.
 *The demand, counted.* QuartzCore's library: 14 of its 39 vertex modules, 46 attributes, 8 of them
 `air.arg_unused` and 6 gated by a function constant, `float4` 20, `float2` 18, `half4` 6,
 `float` 2, indices 0 to 4. Resident Evil 4, counted over the 7 879 libraries
-`tools/air/repak.py` extracts (section 8.1) and over their `air2nir --ll`: **942 of 1 127** vertex
+`graphics/air/repak.py` extracts (section 8.1) and over their `air2nir --ll`: **942 of 1 127** vertex
 modules, **4 764 attributes**, up to 14 in one module, and the types are
 `float4` 1 396, `float2` 1 180, `float3` 972, `uint` 782, `uint2` 263, `uint4` 115, `uint3` 48,
 `float` 3, `int2` 2, `half3` 2, `half2` 1 — so **a quarter of a real engine's attributes are
@@ -1564,7 +1564,7 @@ only flag:
 
 What each `air.*` name means was a guess until this was read, and one of the guesses was wrong.
 `AGXCompilerCore` — the back end of Apple's own shader compiler, in **this device's** shared
-cache (`ios165/20F66__iPhone10,3_6`, never another device's) — carries its whole operation
+cache (`system/ios/20F66__iPhone10,3_6`, never another device's) — carries its whole operation
 vocabulary as a run of C strings at file offsets `0x16cf9f`–`0x16d400`, which is virtual
 `0x1bbf43f9f`–`0x1bbf44400` (`__cstring` begins at file 1 482 768 for `0x1bbf41010`). 137 names,
 and they are suffixes: the full function is `air.` + name + `.` + a type suffix, which is why
@@ -1679,7 +1679,7 @@ two separate 16-bit halves that a wrong layout would not land on — and `coord:
 by the arithmetic of the shaders themselves: `MetalFaceMask_DilateCubeLuma` samples at
 `float(gid) + 0.5` with integer offsets, which is a pixel-space idiom.
 
-**And decoding is not applying.** `tools/air/sampcheck.py` generates a fragment shader per (word,
+**And decoding is not applying.** `graphics/air/sampcheck.py` generates a fragment shader per (word,
 coordinate), samples with the shader's own sampler, and compares against what Apple's rules say
 the answer must be: texel *i* centred at pixel coordinate *i*+0.5, `nearest` by `floor(u)` with
 the tie at a boundary going to the higher index, `linear` by `frac(u − 0.5)` so an integer
@@ -1771,7 +1771,7 @@ rendered either way is a picture, not an error.
 
 **What checks the table, and the case that distinguishes one direction from the other.** A
 comparison's wrong answer is in range — 0 and 1 are both legal pixels — so the check cannot be
-"it came back plausible". `tools/air/sampcheck.py` samples a **depth** texture with
+"it came back plausible". `graphics/air/sampcheck.py` samples a **depth** texture with
 `air.sample_compare_depth_2d` and the shader's own word. `air_run`'s depth texel is `(x + 4y)/16`,
 so texel (1, 1) is 0.3125 and texel (3, 0) is 0.1875 — sixteen distinct values, every one exactly
 representable in binary32, so a reference placed between two of them is exact on both sides. Three
@@ -1884,7 +1884,7 @@ above, and the six-line listing of `clearFragment01` in `docs/metal.md` section 
 substitutes for the thing it came from, and both carry the analysis they exist to support. Nothing
 committed anywhere is corpus bytes as an input: `docs/air-report.md` holds module names, counts and
 error strings, which are facts about Apple's shaders and not Apple's shaders, and no test here has
-a fixture — `tools/air/check.sh` reads `ios165/rootfs`, which is not in the repository and cannot
+a fixture — `graphics/air/check.sh` reads `system/ios/rootfs`, which is not in the repository and cannot
 be.
 
 The part needing a decision rather than a convention: whether that line is the right one, and what
@@ -1896,7 +1896,7 @@ artwork and a different class again. That belongs to whoever owns the repository
 A shader is reported as *working* only when its output was compared, never because it compiled.
 Three references, each independent of the translator:
 
-1. **LLVM on the CPU (the strongest).** `tools/air/cpuref.py` changes the module's triple to the
+1. **LLVM on the CPU (the strongest).** `graphics/air/cpuref.py` changes the module's triple to the
    host's, compiles it with `llc`, fills a buffer per `air.buffer` argument with a fixed pattern
    and calls the entry point; `air2nir --eval` replaces the same buffer loads in *our* NIR with
    the same bytes and folds it with `nir_opt_constant_folding` (no algebraic rewriting, so the
@@ -1953,7 +1953,7 @@ Three references, each independent of the translator:
    actually writes.
 3. **NIR's own checks:** `nir_validate` after every pass (the translator runs with validation
    on), and unit tests on Mesa's `nir_tests` framework for the translator's building blocks.
-4. **Each `air.*` operation on its own, against C's own functions.** `tools/air/intrincheck.py`
+4. **Each `air.*` operation on its own, against C's own functions.** `graphics/air/intrincheck.py`
    takes the declarations Apple's own code actually uses — `air2nir --ll` over every `.metallib`
    in the device image, which is 222 declarations, of which 119 are the 456-module corpus's — and
    for each one generates a fragment shader that calls it on constant arguments and returns the
@@ -2019,7 +2019,7 @@ Three references, each independent of the translator:
    embarrassment.** That day's frontend work (constants built at a cursor that does not dominate,
    `f2u1`, `switch`, struct-returning calls, function constants, framebuffer fetch,
    `[[stage_in]]`) raised the declarations this check can *fold* from 71 to 134 without one line
-   of `intrincheck.py` changing — `git log 816462e..HEAD -- tools/air/intrincheck.py` is empty —
+   of `intrincheck.py` changing — `git log 816462e..HEAD -- graphics/air/intrincheck.py` is empty —
    and four of the newly reached ones disagreed at once. The jump is in the reader's reach, not in
    the check: 688f5de's own message records `check.sh` still reading `intrincheck 71/0` with that
    commit's `f2u1` fix already in, so all four of these were first evaluated by the commits after
@@ -2296,7 +2296,7 @@ Three references, each independent of the translator:
    not hiding a disagreement, it was hiding the fact that nothing had been asked.
 
    What it says now, which was invisible before: **14 of the 128 `.metallib` files under
-   `ios165/rootfs` cannot be read at all,** and the reasons are four different things:
+   `system/ios/rootfs` cannot be read at all,** and the reasons are four different things:
 
    - **nine are not LLVM bitcode** — no `BC` 0xC0DE magic, so a container this reader does not
      know rather than a parse failure. Five are AGXMetalA11's ray-tracing runtime (`ei_rt`,
@@ -2428,7 +2428,7 @@ Three references, each independent of the translator:
    figure above is from the run that executed them.)
 
    **Two more things had to be found before the suite would report anything, and neither was in the
-   GPU.** The first was in `init` and is written up where it belongs (`userland/src/init.c`,
+   GPU.** The first was in `init` and is written up where it belongs (`system/src/init.c`,
    `read_whole`): three configuration files were each read with one `read()` into a fixed buffer
    with no check, so a file longer than its buffer silently lost its tail. The job list is 21 KB
    against a 8 KB buffer, so 94 of its 244 lines were read and about 150 modules did not run —
@@ -2446,7 +2446,7 @@ Three references, each independent of the translator:
    and from the length of the session both. What is actually diagnostic is the size of the file:
    1 466 58x bytes *is* the cap, so a log that size is truncated however many drop markers it
    carries (the intact run here has two and lost nothing; a truncated one had one). `README.md`
-   carries this beside `./xl log`, with the three runs tabulated, because it catches anything
+   carries this beside `host/xl log`, with the three runs tabulated, because it catches anything
    verbose and not just this suite.
 
    **How much room is left is worth knowing before the suite grows.** In the run that worked, at
@@ -2466,7 +2466,7 @@ Three references, each independent of the translator:
    raced looks exactly like a sum written by threads that did. Detecting a lost update needs the
    expected total to depend on every thread having contributed — which needs a kernel whose
    arithmetic is known, i.e. one written for the purpose rather than one of Apple's."
-   `tools/air/atomiccheck.py` is that kernel, generated as AIR, assembled with `llvm-as` and
+   `graphics/air/atomiccheck.py` is that kernel, generated as AIR, assembled with `llvm-as` and
    dispatched by `air_run` over its 4×4 threads, with both device buffers' initial bytes chosen
    rather than left to the harness's pattern.
 
@@ -2507,7 +2507,7 @@ Three references, each independent of the translator:
    those stay untested because the names Apple would emit for them are a guess, and a test of a
    guessed name is a test of the guess.
 
-6. **The texture operations, on more than one texel.** `tools/air/texcheck.sh` runs the corpus's
+6. **The texture operations, on more than one texel.** `graphics/air/texcheck.sh` runs the corpus's
    own texture shaders and 6 of its 55 return the exact texel on the Adreno; 49 cannot be run,
    most of them because they are `air.visible` library functions and not entry points. Two things
    that leaves undone, and the second is the serious one:
@@ -2517,7 +2517,7 @@ Three references, each independent of the translator:
      `air_run`'s vertex shader puts the coordinate. A lowering that ignored the coordinate
      entirely and always fetched `(1, 1)` would pass all six of them.
 
-   `tools/air/texopcheck.py` generates a fragment shader per operation *and coordinate*, asking
+   `graphics/air/texopcheck.py` generates a fragment shader per operation *and coordinate*, asking
    for the corners as well as the middle. **All 35 calls return exactly what was put there**,
    covering 13 of the 31 texture declarations: `read_texture_2d` with 32- and with 16-bit
    coordinates, the two size queries, `sample_texture_2d` and `sample_texture_3d`, each of those
@@ -2562,7 +2562,7 @@ Three references, each independent of the translator:
      shader reading an attachment nothing stored to is one of the four tests this port has
      already had pass for the wrong reason.
 
-7. **Framebuffer fetch, where no value can be compared.** `tools/air/fbfetchcheck.py`, 5 cases.
+7. **Framebuffer fetch, where no value can be compared.** `graphics/air/fbfetchcheck.py`, 5 cases.
    This is the one interface key whose result nothing on this machine can answer: LLVM has no
    framebuffer and softpipe has no `FBFETCH`, so the check is of the *shape* -- the intrinsic at
    the target the module names, `info.fs.uses_fbfetch_output` set, a half target narrowed with a
@@ -2570,7 +2570,7 @@ Three references, each independent of the translator:
    plus the fact that ir3 emits the Adreno instruction. It says so in its own last line rather
    than letting five passes read as five verified shaders (section 3.1).
 
-8. **The lowerings done by hand, against LLVM on the processor.** `tools/air/loweringcheck.py`,
+8. **The lowerings done by hand, against LLVM on the processor.** `graphics/air/loweringcheck.py`,
    16 modules. Three things AIR has and NIR does not, so the frontend builds them out of something
    else: a `switch` (a chain of `nir_goto_if`), a call returning a struct (one out-parameter
    per member), and a pointer chosen at run time (the choice kept, both sides loaded at the use). Counting modules says nothing about whether either *computes* the right thing —
@@ -2610,7 +2610,7 @@ Three references, each independent of the translator:
    fixed, and the generated modules work around it by indexing through struct fields, whose offsets
    the frontend emits as immediates.
 
-9. **Vertex attributes, where no value can be drawn.** `tools/air/vattrcheck.py`, 16 generated
+9. **Vertex attributes, where no value can be drawn.** `graphics/air/vattrcheck.py`, 16 generated
    modules and 14 real ones. The second interface key with no oracle here, and for a different
    reason from framebuffer fetch: `air_run`'s only vertex stage is its own generated quad, so
    nothing on this machine draws with a translated vertex shader at all. What *is* decidable is
@@ -2651,11 +2651,11 @@ the SPIR-V frontend does) and **I/O lowering** (variables with locations, then `
 
 ## 5. Milestones and how each is measured
 
-The corpus report (`tools/air/corpus.py report`) is the progress meter: every number below comes
-out of it, and it runs from `tools/air/check.sh` (section 6). Two corpora:
+The corpus report (`graphics/air/corpus.py report`) is the progress meter: every number below comes
+out of it, and it runs from `graphics/air/check.sh` (section 6). Two corpora:
 
-- **the device image** — the five `.metallib` files the port installs (`ios165/rootfs` +
-  `ios165/cryptex`): 456 modules. This is the corpus the milestones are stated against.
+- **the device image** — the five `.metallib` files the port installs (`system/ios/rootfs` +
+  `system/ios/cryptex`): 456 modules. This is the corpus the milestones are stated against.
 - **the full IPSW** — all 134 MTLB libraries of the iOS 16.5 root filesystem and cryptexes,
   16 841 functions, extracted from `rootfs.dmg` with 7-Zip. Reported alongside, because the
   device image is a selection and the system's own shaders are this set.
@@ -2784,7 +2784,7 @@ an unhandled metadata key), so "features not yet handled" is a ranked list, not 
   and four of the sixteen masks are palindromes (None, All, green|blue, red|alpha), so a suite
   built out of "write everything" and "write nothing" would not notice. Two independent sources pin
   the numbering: Apple's `MTLRenderPipeline.h` for this release, which
-  `userland/src/redwoodmetal.m` `_Static_assert`s against so a disagreement is a *build failure*;
+  `system/src/redwoodmetal.m` `_Static_assert`s against so a disagreement is a *build failure*;
   and `Metal.framework`'s own value-to-string code on the device, where `MTLBlendFactorString`
   (`0x181b08730`) bounds its argument at 18 over a nineteen-entry table and
   `MTLColorWriteMaskString` (`0x181b08754`) tests bit 3 for "R" and bit 0 for "A", which *is* the
@@ -2839,10 +2839,10 @@ an unhandled metadata key), so "features not yet handled" is a ranked list, not 
   **What still needs a boot**: whether the Adreno's blender agrees, which no log can say. The
   photograph is that measurement — icon labels as white text on the wallpaper with no box behind
   them, the Search pill translucent, the dock without its dark red border
-  (`userland/rc.jobs.blend` has the greps and the two ways it could come back still wrong).
+  (`system/rc.jobs.blend` has the greps and the two ways it could come back still wrong).
 
   **Six texture shaders have now been run and return the exact texel**
-  (`tools/air/texcheck.sh`). `air_run` binds a texture whose texel is
+  (`graphics/air/texcheck.sh`). `air_run` binds a texture whose texel is
   `(100+x, 200+y, 300+x+y+z, 400)` — 4×4 for a 2D sampler, 4×4×4 for a 3D one — a nearest
   sampler with clamped addressing, and a coordinate at the centre of texel (1, 1). A single
   sample or fetch must then return that texel *exactly*: nearest filtering at a texel centre has
@@ -2909,8 +2909,8 @@ This was the open question, because nothing here had run. The answer is that the
 the Mesa already on the phone rather than being built from nothing:
 
 - The port's Mesa **already creates a Gallium screen for the Adreno**:
-  `osmesa_create_gpu_screen()` in `tools/mesa/freedreno-darwin.patch` opens the kernel's `msm`
-  driver through `tools/mesa/redwood-drm` and calls `fd_drm_screen_create_renderonly()`. It also
+  `osmesa_create_gpu_screen()` in `graphics/mesa/freedreno-darwin.patch` opens the kernel's `msm`
+  driver through `graphics/mesa/redwood-drm` and calls `fd_drm_screen_create_renderonly()`. It also
   already has `osmesa_surface_resource()`, which wraps an IOSurface as a `pipe_resource`. So the
   Gallium layer is reachable inside the library CoreAnimation already draws iOS through.
 - **freedreno takes NIR natively** (`PIPE_SHADER_CAP_SUPPORTED_IRS` includes
@@ -2921,11 +2921,11 @@ the Mesa already on the phone rather than being built from nothing:
   `osmesa_create_gpu_screen()` makes, and **no line below that changes**.
 
 **That is now built and in the image, and no export was needed.** `air_run` is built *inside* the
-Mesa cross build (`AIR=1 tools/mk-mesa.sh`), so it links Gallium's own static libraries and opens
-the Adreno itself — `drmOpenWithType("msm", …)` through `tools/mesa/redwood-drm`, then
+Mesa cross build (`AIR=1 graphics/mk-mesa.sh`), so it links Gallium's own static libraries and opens
+the Adreno itself — `drmOpenWithType("msm", …)` through `graphics/mesa/redwood-drm`, then
 `fd_drm_screen_create_renderonly()`, exactly as `osmesa_create_gpu_screen()` does. It needs
 nothing exported from `libOSMesa` and does not load it: a 9.8 MB arm64 Mach-O against libSystem,
-libz and IOKit alone. `userland/build.sh` puts it in `/redwood/bin`, and `rc.jobs.air` runs it.
+libz and IOKit alone. `system/build.sh` puts it in `/redwood/bin`, and `rc.jobs.air` runs it.
 
 The same source takes the GPU where there is one and falls back to software where there is not,
 so it is the binary tested on this machine — not a variant of it. Its first line says which it
@@ -2934,7 +2934,7 @@ below it is believed. `AIR_RUN_SOFTWARE=1` forces software even on the phone, fo
 two on the same device.
 
 **It runs on iOS, and the numbers are exact there.** In QEMU (`CMDLINE="cpus=4
-RC_JOBS=rc.jobs.air" qemu/run-ios.sh 420`, a clean boot: 72 `[ ok ]` lines, SpringBoard up),
+RC_JOBS=rc.jobs.air" host/qemu/run-ios.sh 420`, a clean boot: 72 `[ ok ]` lines, SpringBoard up),
 `air_run` translated `clearFragment01`, found no `msm` device, fell back to softpipe as designed,
 drew the quad and read back
 
@@ -3037,7 +3037,7 @@ was owed to the whole port rather than to this frontend, and the answer is yes. 
 is up and holding it. A refusal is a finding the whole port needs, not just this frontend, so
 either answer is worth the run.
 
-(Counting anything out of a QEMU log here: `qemu/run-ios.sh` prints every line twice, and
+(Counting anything out of a QEMU log here: `host/qemu/run-ios.sh` prints every line twice, and
 `sort -u` does not catch it because the pairs are separated by other output.)
 
 ### 5b. Dispatching a kernel
@@ -3121,10 +3121,10 @@ set it, which needs what the buffers mean -- CoreImage's knowledge, not the comp
 
 The table above says 14 of the 47 kernels cannot be dispatched here at all, because a loop that
 leaves on a count or a sentinel from a buffer does not leave when the harness fills buffers with
-noise. That is no longer the whole truth. `tools/air/kinput.py` works the exit values out of each
+noise. That is no longer the whole truth. `graphics/air/kinput.py` works the exit values out of each
 module's own metadata -- the struct layouts are in `air.struct_type_info`, so the harness can be
 told where a `rowCount` and a `nextSpanID` live without being told what they mean -- and prints
-them as `air_run --zero --buffer N@OFF=HEX` job lines (`userland/rc.jobs.kinput`). Eleven of the
+them as `air_run --zero --buffer N@OFF=HEX` job lines (`system/rc.jobs.kinput`). Eleven of the
 fourteen have a line; with it, the kernels do end.
 
 What the lines then bought was not a column of agreements. They bought **three compiler bugs, each
@@ -3164,7 +3164,7 @@ always `PIPE_FORMAT_R32_UINT` (`fd6_ssbo_descriptor()`), and leaves
 elsewhere, for the buffer length, "a byte length divided by IBO_0_FMT". Nothing in GL reaches this,
 because a GLSL SSBO member is 32 bits and 4-byte aligned; a Metal `ushort` field is not.
 
-`tools/mesa/ir3-ssbo-subdword.patch` makes `ir3_mem_access_size_align()` ask for dwords when the
+`graphics/mesa/ir3-ssbo-subdword.patch` makes `ir3_mem_access_size_align()` ask for dwords when the
 descriptor is one. `nir_lower_mem_access_bit_sizes` then reads with a masked offset and a shift and
 writes with the `iand`/`ior` pair of 32-bit atomics it already keeps for this -- atomics, because
 sixteen threads write `uchar` fields that share a dword. After it, the eight `MetalFaceMask_*`
@@ -3206,7 +3206,7 @@ without saying so. `fbs_bistochastize_iter` reads exactly that, and its four out
 1/sqrt(3+i) in word i is the signature of that read returning 0 for every thread: the loop then
 runs `i + 1` times instead of one, and sums `i + 1` ones onto its 2.0. The three `fbs_*` kernels of
 the eleven carry the shape; the eight `MetalFaceMask_*` ones do not.
-`tools/mesa/ir3-shift-split.patch` splits the constant out only when it survives the shift and
+`graphics/mesa/ir3-shift-split.patch` splits the constant out only when it survives the shift and
 cannot be a subtraction. In the Adreno assembly the `0x3fffffff` in the constant file is replaced
 by `add.u r0.w, -4, r0.w` before the shift.
 
@@ -3216,7 +3216,7 @@ the sentinel the kernel returns on was gone. The cause is not the phi. `air_get(
 constant the first time it is asked for and caches the def; built at the cursor of that first use,
 a constant LLVM shares between a conditional block and a block after it is a use its def does not
 dominate -- and nothing complains, because `nir_lower_goto_ifs` runs `nir_repair_ssa`, which
-repairs such a use into a phi whose other edge is `undef`. `tools/air/phiconst.ll` reproduces it in
+repairs such a use into a phi whose other edge is `undef`. `graphics/air/phiconst.ll` reproduces it in
 twenty-five lines, and a one-character change to them -- `-1` on the edge spelled `-2`, so that it
 is no longer the same constant as the compare's -- makes it translate correctly even without the
 fix, which is what says the sharing and not the width is the cause. Constants are now built at the top of the entry block, which
@@ -3323,8 +3323,8 @@ have to be a fault that `pipe->flush` never returns from, since nothing after `l
 ## 6. Running it
 
 ```
-tools/air/mk-host.sh            # Mesa for this machine (x86-64): the frontend, ir3, softpipe
-tools/air/check.sh              # the reader against llvm-dis, the corpus report, LLVM, the operations
+graphics/air/mk-host.sh            # Mesa for this machine (x86-64): the frontend, ir3, softpipe
+graphics/air/check.sh              # the reader against llvm-dis, the corpus report, LLVM, the operations
 ```
 
 and on one shader:
@@ -3335,35 +3335,35 @@ build/mesa-host/build/src/compiler/air/air2nir       FILE[.metallib] [FUNCTION] 
 build/mesa-host/build/src/compiler/air/air2nir --eval FILE[.metallib] [FUNCTION]  # folded to numbers
 build/mesa-host/build/src/gallium/drivers/freedreno/ir3_compiler \
         --chip-id 0x007506030500 FILE[.metallib] [FUNCTION]                      # Adreno code
-tools/air/cpuref.py --compare FILE[.metallib] [FUNCTION]   # ours against LLVM's own answer
-tools/air/cpuref.py --all --draw FILE.metallib             # every function: LLVM, folded, drawn
-tools/air/intrincheck.py [-v] [OP ...]                     # one air.* operation at a time, folded
-tools/air/intrincheck.py --run --few [OP ...]              # the same, drawn by a real driver
-tools/air/intrincheck.py --emit DIR --few                  # modules + inputs + run.sh, to carry
-tools/air/intrincheck.py --check DIR RUN.LOG               # judge what the runner printed
-tools/air/atomiccheck.py [--keep DIR]                      # the atomics, with its own kernel
+graphics/air/cpuref.py --compare FILE[.metallib] [FUNCTION]   # ours against LLVM's own answer
+graphics/air/cpuref.py --all --draw FILE.metallib             # every function: LLVM, folded, drawn
+graphics/air/intrincheck.py [-v] [OP ...]                     # one air.* operation at a time, folded
+graphics/air/intrincheck.py --run --few [OP ...]              # the same, drawn by a real driver
+graphics/air/intrincheck.py --emit DIR --few                  # modules + inputs + run.sh, to carry
+graphics/air/intrincheck.py --check DIR RUN.LOG               # judge what the runner printed
+graphics/air/atomiccheck.py [--keep DIR]                      # the atomics, with its own kernel
 build/mesa-host/build/src/gallium/drivers/freedreno/air_run \
         FILE[.metallib] [FUNCTION]                         # draw with it, print the pixel
-tools/air/texcheck.sh [FILE.metallib ...]                  # every texture shader, the texel it returns
-tools/air/texopcheck.py [-v] [--keep DIR]                  # the texture calls, several texels each
-tools/air/vattrcheck.py [-v]                               # [[stage_in]] attributes, and what must be refused
+graphics/air/texcheck.sh [FILE.metallib ...]                  # every texture shader, the texel it returns
+graphics/air/texopcheck.py [-v] [--keep DIR]                  # the texture calls, several texels each
+graphics/air/vattrcheck.py [-v]                               # [[stage_in]] attributes, and what must be refused
 build/mesa-host/build/src/compiler/air/air2nir \
         --interface FILE[.metallib] [FUNCTION]             # what air_shader_info says the shader expects
-tools/air/texdecl.sh [FILE.metallib ...]                   # what each function declares per texture slot
+graphics/air/texdecl.sh [FILE.metallib ...]                   # what each function declares per texture slot
 build/mesa-host/build/src/gallium/drivers/freedreno/air_metal_test \
         --textures FILE.metallib [FUNCTION]                # the same, one library, from the library itself
 ```
 
 `texdecl.sh` prints an expectation, not a measurement: the slot, `MTLTextureType`, the element class and
-`air.arg_type_name` itself -- what `rwa_module_textures` answers the driver (`tools/mesa/air/air_metal.h`).
-`userland/src/metal_drv_test.m --draw-all` uses that same answer to bind textures **per shader**: before it, the
+`air.arg_type_name` itself -- what `rwa_module_textures` answers the driver (`graphics/mesa/air/air_metal.h`).
+`system/src/metal_drv_test.m --draw-all` uses that same answer to bind textures **per shader**: before it, the
 sweep bound one view type and one format for the whole library, and 13 of the 271 fragment shaders of
 `AppleMetalGLRenderer` were refused by name -- they declare `texture3d`, `texture2d<int>` or a
 multisampled texture. The refusal was honest, but it was about the sweep, not about the shaders.
 
 `intrincheck.py` with no argument checks every operation the corpus calls; with one or more names
 it checks only those, which is how it is used while changing a lowering:
-`tools/air/intrincheck.py atan2`.
+`graphics/air/intrincheck.py atan2`.
 
 `--run` is the same operations *executed* instead of folded, and it is a different check, not a
 slower one — section 4 item 4 says what each can see that the other cannot. `--emit` writes the
@@ -3373,17 +3373,17 @@ phone's Darwin userland and not this machine's shell. `--check` then judges the 
 was produced: the arithmetic reference never leaves the host.
 
 `0x007506030500` is how freedreno names the redwood's Adreno 7c+ Gen 3 (A635); it has no
-`gpu-id`, which is why `tools/mesa/air-ir3.patch` adds `--chip-id` to that tool.
+`gpu-id`, which is why `graphics/mesa/air-ir3.patch` adds `--chip-id` to that tool.
 
 There is no hosted CI: the corpus is Apple's code and stays out of the repository (and out of
 GitHub). `check.sh` is the CI; it takes about five minutes, most of it the two per-operation checks, so it runs before every commit that touches
 the frontend, and the report it writes is committed as `docs/air-report.md` with the numbers of
 that commit.
 
-The frontend lives in `tools/mesa/air/` and `mk-host.sh` links it into the pinned Mesa as
+The frontend lives in `graphics/mesa/air/` and `mk-host.sh` links it into the pinned Mesa as
 `src/compiler/air` — a link, not a copy, so there is no stale copy to build by mistake (a trap
-this project has already fallen into once with `tools/mk-mesa.sh` and the freedreno patches).
-`tools/mesa/air-ir3.patch` is the two-file change that teaches `ir3_compiler` to read AIR and
+this project has already fallen into once with `graphics/mk-mesa.sh` and the freedreno patches).
+`graphics/mesa/air-ir3.patch` is the two-file change that teaches `ir3_compiler` to read AIR and
 declares `air_run` beside it; it also removes a call of `ir3_nir_lower_variant` that tool makes
 itself, which is a bug of the tool — `ir3_context_init` already calls it on its own clone, and
 the const-state setup inside asserts the second time. It shows on every vertex shader and on
@@ -3408,7 +3408,7 @@ needs a real `msm` device and this machine has none.
 
 A working copy also needs the phone's own firmware for the GPU to start at all: `fw-gpu/`
 (`a660_gmu.bin`, `a660_sqe.fw`, the `a660_zap.*` pieces), which is not in the repository and which
-`tools/new-workspace.sh` does not copy. Without it the kernel says so plainly and the system falls
+`host/new-workspace.sh` does not copy. Without it the kernel says so plainly and the system falls
 back to software, so a run that looks fine can be a run on no GPU.
 
 Needed on this machine: meson, ninja, bison, flex, python3 with venv, and LLVM's `llvm-as` /
@@ -3583,7 +3583,7 @@ device. The acceptance test this port is aimed at is a game — Resident Evil 4 
 and a game's shaders are a different population: compiled by a different toolchain, from a
 different source language, for a different engine's idea of how resources reach a shader. This
 section is the census of that population, taken with the same meter as section 5
-(`tools/air/corpus.py`, stage by stage), so the two numbers can be put beside each other.
+(`graphics/air/corpus.py`, stage by stage), so the two numbers can be put beside each other.
 
 The three numbers first, of the **7 879 Metal library modules** in the game's package:
 
@@ -3604,12 +3604,12 @@ Those columns are the frontend as built on 21 October at 19:44. `air2nir` and `i
 copied aside with their timestamps before the run, so that a rebuild by someone else in this shared
 tree could not change the compiler under the measurement — and the staleness guard in `corpus.py`
 still judges the copies by their real age. Reproducing the four numbers is
-`tools/air/repak.py libs` followed by `corpus.py --ir3 --list`, about a minute in all.
+`graphics/air/repak.py libs` followed by `corpus.py --ir3 --list`, about a minute in all.
 
 **No byte of this library is in this tree**, as no byte of Apple's is: the pak was read out of the
 `.ipa` in a scratch directory, the containers were written there, and what came back into the
 repository is this section, the numbers in it and the two tools that produced them
-(`tools/air/repak.py`, `tools/air/decltry.py`). The repository may explain these shaders; it is
+(`graphics/air/repak.py`, `graphics/air/decltry.py`). The repository may explain these shaders; it is
 not a place to get them.
 
 ### 8.1 Getting them out: the pak opened, and how that reading was checked
@@ -3621,7 +3621,7 @@ a 16-byte header (magic, version, file count, a word) and then one 48-byte recor
 two name-hash words, then the offset, the compressed size, the uncompressed size, an attribute
 word and a checksum. 2 303 records here, and the attribute word's low nibble is the compression:
 **zstd for 1 153 of them, deflate for 884, stored for 266, and encrypted for none**.
-`tools/air/repak.py check` reads that table and prints the checks below.
+`graphics/air/repak.py check` reads that table and prints the checks below.
 
 Four things say that reading is right rather than plausible, which matters because a
 mis-parsed table produces garbage that still decompresses sometimes:
@@ -3635,8 +3635,8 @@ mis-parsed table produces garbage that still decompresses sometimes:
   extents** and is the shape a deduplicating packer produces, not the shape of a misread table.
 
 The names are hashes and were not resolved, which costs nothing here: a Metal library is findable
-by content. `tools/air/repak.py libs` looks for the MTLB magic anywhere in a decoded entry and
-validates the container header the way `tools/metallib.py` reads it — the total size, and the
+by content. `graphics/air/repak.py libs` looks for the MTLB magic anywhere in a decoded entry and
+validates the container header the way `graphics/metallib.py` reads it — the total size, and the
 function table where a library always puts it — before keeping it:
 **20 877 containers in 302 of the 2 124 entries**, one candidate rejected by that header check, and
 12 998 of the 20 877 are byte-for-byte duplicates of another, leaving **7 879 distinct libraries**.
@@ -4085,7 +4085,7 @@ everything else, and the lesson is the one this project keeps relearning: the ch
 was the one that re-reads Apple's metadata a second way and compares, not any of the ones that
 count modules.
 
-**The check stage: `tools/air/argbufcheck.py`**, which the paragraph this replaces asked for. It is
+**The check stage: `graphics/air/argbufcheck.py`**, which the paragraph this replaces asked for. It is
 in `check.sh`, it needs no corpus, and it is three references rather than one:
 
 - the modules are **written by the script**, so what the set declares is known rather than read:
@@ -4137,7 +4137,7 @@ compiled against the old header reads every field it knows at the right offset a
 `resources[]` by 112 where the library writes 120**: resource 0 is right and every one after it is
 read from eight bytes before itself, which is a texture index landing where a size was. One
 resource is the common case and would look perfectly well, which is the dangerous part. Both
-sides have to be built from one header, which is what the staleness stamp on `tools/mesa/air/`
+sides have to be built from one header, which is what the staleness stamp on `graphics/mesa/air/`
 exists to enforce.
 
 ##### 8.2.2 Built: the runtime's half, where an encoder records and nothing is written
@@ -4146,7 +4146,7 @@ The design above says the runtime "cannot be a writer; it has to be a **recorder
 now, in the library (`air_metal.c`, `air_metal.h`) and in the driver (`redwoodmetal.m`), and the
 measurement is differential: **the same pixel comes out of an argument buffer as out of direct
 arguments**, and every record deliberately made wrong prints a different picture that is named in
-advance. `tools/air/argbufruncheck.sh` is that run — **20 checks, 0 failed**, on this machine,
+advance. `graphics/air/argbufruncheck.sh` is that run — **20 checks, 0 failed**, on this machine,
 through the contract and nothing else: three about what a module declares and what the two
 pipelines report, three about the differential pixel and the arithmetic behind it, two records
 exchanged on purpose, two offsets on a member and three on a direct argument, five refusals, and
@@ -4159,7 +4159,7 @@ that destroying one member's texture leaves the other three encodings drawing wh
 driver answering `-[MTLFunction newArgumentEncoderWithBufferIndex:]` has a function's bitcode and
 no pipeline and no descriptor to read a layout off. Those numbers have to be **Apple's**, because
 the application allocates its buffer from them and then encodes at multiples of them, and the
-census says they are. `tools/air/argbuflen.py` parses the metadata a second time, in Python,
+census says they are. `graphics/air/argbuflen.py` parses the metadata a second time, in Python,
 without going through the frontend, over all 7 879 modules of Resident Evil 4
 (`repak.py libs` first, then `argbuflen.py --list`):
 
@@ -4249,8 +4249,8 @@ reasoned: the dylib's undefined private-class imports are the same nine
 `_MTLSamplerState`) that it imported before this work, and it has no `__objc_catlist` section at
 all.
 
-**The differential, and the pictures.** `tools/air/argbuf_set.ll` is a fragment shader whose five
-resources all arrive through one `air.indirect_buffer`; `tools/air/argbuf_direct.ll` is the same
+**The differential, and the pictures.** `graphics/air/argbuf_set.ll` is a fragment shader whose five
+resources all arrive through one `air.indirect_buffer`; `graphics/air/argbuf_direct.ll` is the same
 shader with five direct arguments at the indices the frontend allocates for those members. Both
 are drawn on softpipe through `rwa_render_draw`, and the four channels of one pixel are four
 members:
@@ -4362,13 +4362,13 @@ compute path got a new symbol (`rwa_dispatch_buffers`) instead of two more field
 is absent in an older library is something `dlsym` can see, and a struct that is a different shape
 is not. The two info structs are filled in BY the library, so a driver built against the shorter
 one is handed more than it has room for; both sides are built from one header and the staleness
-stamp on `tools/mesa/air/` is what enforces it.
+stamp on `graphics/mesa/air/` is what enforces it.
 
 **What this does not establish.**
 
 - **No draw goes through an argument buffer on the device.** That needs a `.metallib` holding a
   shader that declares one, and this port has no container writer: Apple's libraries have none
-  (0 of 456) and the game's are not something a job list can reach. `userland/rc.jobs.argbuf`
+  (0 of 456) and the game's are not something a job list can reach. `system/rc.jobs.argbuf`
   measures the three things the phone *can* answer — whose answer `newArgumentEncoderWithBufferIndex:`
   gives, the descriptor-built encoder's length, alignment and record count, and the window
   server's own offset through Apple's own shader against the host's reference words — and says so
@@ -4388,7 +4388,7 @@ system corpus and **136 new to this frontend**. 593 of the 7 879 modules call no
 What the frontend does with each of the 254 cannot be read off the corpus run, because 7 620 of
 these modules stop before an intrinsic is translated. So each declaration was put in a shader of
 its own, called on constants with its result stored, and translated —
-**`tools/air/decltry.py`**, whose verdict is the frontend's own message and not a judgement:
+**`graphics/air/decltry.py`**, whose verdict is the frontend's own message and not a judgement:
 
 | declarations | verdict |
 | --- | --- |
@@ -4630,11 +4630,11 @@ them, both of NIR's intrinsics are wrong about it by the same amount.
 none for DEMOTE, so its interpreter falls through to its own `assert(0)` — which is why `air_run`
 now refuses a discarding shader by name instead of aborting inside it, and why that refusal is
 also how `info.fs.uses_discard` is checked (the refusal reads that flag and nothing else).
-`tools/air/discardcheck.py` is what is decidable here — it translates, the NIR carries `demote`,
+`graphics/air/discardcheck.py` is what is decidable here — it translates, the NIR carries `demote`,
 ir3 compiles it, the Adreno instruction is `kill` — and `--emit` writes the two modules that would
 settle the rest on the phone: one that discards every fragment (the attachment must still hold the
 clear colour) and one that keeps the pixel at (0, 0), discards its three quad partners and takes a
-derivative (3 if the neighbour's value was still there). `userland/rc.jobs.airdiscard` is that job
+derivative (3 if the neighbour's value was still there). `system/rc.jobs.airdiscard` is that job
 list, with the greps that read its log.
 
 #### `llvm.fmuladd` is translated fused, and the fast-math flag is not what licenses it
@@ -4649,7 +4649,7 @@ performed between the multiplication and addition steps", and that a caller who 
 and this frontend's is the fused one (`nir_ffma`, one rounding).
 
 Checked by folding against C's `fma` over **9 534 cases** in three widths and two vector
-shapes — `tools/air/intrincheck.py` reads `llvm.fmuladd` and `llvm.fabs` now, not only `air.*`.
+shapes — `graphics/air/intrincheck.py` reads `llvm.fmuladd` and `llvm.fabs` now, not only `air.*`.
 LLVM on this processor is *not* a second reference for it: `llc` without `-mattr=+fma` lowers the
 intrinsic to a multiply and an add, which is the other legal answer, so a disagreement would be a
 measurement of LLVM's choice. The Adreno's `mad` is a question for the phone, and
@@ -4690,7 +4690,7 @@ NIR's three exact quad swaps, and `nir_lower_subgroups` leaves the quad intrinsi
 
 #### What the textures were proved with, and the one thing they were not
 
-`tools/air/texopcheck.py` goes from 35 texture calls to **62, every one returning exactly the
+`graphics/air/texopcheck.py` goes from 35 texture calls to **62, every one returning exactly the
 texel that was put there**, through softpipe — a second engine, since it executes TGSI and its
 answer is not pre-decided by our folder. The new 27 are array samples, reads, gathers and
 1d-array samples at coordinates whose **layer differs from their x and y**, so a layer read out of
@@ -4746,7 +4746,7 @@ the work was deciding that it is **one** case:
 | vertex | 1 127 | 431 | **504** | 504 |
 
 The system corpus does not move, and here it is stated in the strongest form the report allows:
-`tools/air/check.sh` regenerated `build/air-report.json` and `docs/air-report.md` with the new
+`graphics/air/check.sh` regenerated `build/air-report.json` and `docs/air-report.md` with the new
 frontend and both came out **byte for byte identical** to the committed ones — the same 456 rows,
 the same verdicts, the same NIR instruction count and the same Adreno instruction count on every
 one of them, so `git diff` on the report is the comparison and it is empty. For this change that
@@ -4766,7 +4766,7 @@ run-time index.
 
 A refusal stops a module at its **first** offending instruction, so the histogram says how many
 modules stop and nothing about what they would have asked for next. A case written for what the
-histogram shows would mangle whatever was behind it. `tools/air/typecensus.py` reads every
+histogram shows would mangle whatever was behind it. `graphics/air/typecensus.py` reads every
 `bitcast` of every module out of `llvm-dis` — LLVM's own reading of the types, not ours — and
 classifies each by air_to_nir's own shape test, component count and scalar width. Over **all 7 879
 modules**, 111 657 bitcasts in 14 distinct type pairs, and exactly **two** of the fourteen change
@@ -4806,7 +4806,7 @@ that backwards is the failure this operation invites, because it does not crash 
 wrong: both halves are still finite halves, so the shader would draw with every pair of 16-bit
 values transposed.
 
-So `tools/air/loweringcheck.py` grew four cases, with halves that cannot be mistaken for each
+So `graphics/air/loweringcheck.py` grew four cases, with halves that cannot be mistaken for each
 other, checked **twice**:
 
 | the module | the four lanes | what the transposed order would have given |
@@ -4870,7 +4870,7 @@ shlg    r48.w, 16, r48.w, r48.z ; (high << 16) | low
 So the a6xx takes the low half of the word as element 0 of the vector, which is the thing the
 transposition would have got wrong, and it is in the instruction stream rather than inferred. It
 is still not a measurement: nobody has read a pixel back. That half is written as a job list
-rather than claimed: `userland/rc.jobs.pack16`, emitted by
+rather than claimed: `system/rc.jobs.pack16`, emitted by
 `loweringcheck.py --emit <dir>` and judged afterwards by `loweringcheck.py --check <dir> <log>`
 against expectations that are not in the image. The greps are in its header, and one of them is
 `grep -ac 'Unknown NIR opcode' LOG` — which must be 0, because that sentence is `nir_to_tgsi`, so
@@ -4944,7 +4944,7 @@ asked for, and nothing in this tree can check a vertex clip distance numerically
 
 #### What the run that measured this found about the run itself
 
-`tools/air/check.sh` does **not** exit 0 in this tree, and it did not before this change either. One
+`graphics/air/check.sh` does **not** exit 0 in this tree, and it did not before this change either. One
 section fails, `== the same operations run, not folded` (`intrincheck.py --run --cases 4`), with
 **34 of 171 exactly defined operations differing** from the reference when executed on softpipe
 rather than folded. Three measurements say it is not this change:

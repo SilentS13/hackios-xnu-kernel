@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """What to put in the buffers so that the kernels whose loops read control data end.
 
-`tools/air/kstruct.py` sorts the corpus's 47 kernels by what they do with their
+`graphics/air/kstruct.py` sorts the corpus's 47 kernels by what they do with their
 buffers and names 14 whose loop leaves on a value *loaded from* a buffer. For
 those, `(i * 7 + 13) & 0xff` -- or zeros, or `0xff` -- is not an input: the
 value the loop compares against is a count, an index, or a sentinel, and the
@@ -9,7 +9,7 @@ pattern contains none of them. docs/air.md section 5 records what one such
 dispatch costs: `gpuWait` latches after a single timeout, every later wait
 returns false at once, so every dispatch after it reads as "finished and
 empty", and the next boot panics in the GPU ramp. That is why
-`userland/rc.jobs.metalcompute` leaves seven of the sixteen buffer-only kernels
+`system/rc.jobs.metalcompute` leaves seven of the sixteen buffer-only kernels
 out by name.
 
 This builds the missing input. For each kernel it says which loop does not end,
@@ -90,10 +90,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 AIR2NIR = os.environ.get(
     "AIR2NIR", os.path.join(ROOT, "build/mesa-host/build/src/compiler/air/air2nir"))
 
-LIB = "ios165/rootfs/System/Library/CoreImage/PortraitFilters.cifilter/default.metallib"
+LIB = "system/ios/rootfs/System/Library/CoreImage/PortraitFilters.cifilter/default.metallib"
 ON_DEVICE = "/System/Library/CoreImage/PortraitFilters.cifilter/default.metallib"
 
-# The harness this input is built for: userland/src/metal_drv_test.m makes
+# The harness this input is built for: system/src/metal_drv_test.m makes
 # sixteen buffers of 4096 bytes, memsets them to zero and binds buffer i at
 # index i; it dispatches one threadgroup of 4x4x1. Both numbers are load
 # bearing and neither is ours to choose here:
@@ -954,7 +954,7 @@ def report(kernels, hexonly, jobs):
     if jobs:
         print("# Kernels kstruct.py calls endless, with the buffer contents that let "
               "them end")
-        print("# (tools/air/kinput.py --jobs). Read the table -- kinput.py with no "
+        print("# (graphics/air/kinput.py --jobs). Read the table -- kinput.py with no "
               "arguments --")
         print("# before running a line: it says what each number is and how sure it is.")
         print("# --buffer N@OFF=HEX is not a flag metal_drv_test has yet.")
@@ -1090,7 +1090,7 @@ AFTER = {
                                             "an entry nobody wrote)"),
 }
 
-# The canary of userland/rc.jobs.kinput, and what a healthy boot's dump of it
+# The canary of system/rc.jobs.kinput, and what a healthy boot's dump of it
 # looks like: six words and no others, measured on softpipe and on the device.
 # After one hung dispatch this port's GPU stops making writes visible without
 # saying so, and the canary is the only thing in a log that distinguishes "the
@@ -1302,11 +1302,11 @@ def check(path):
     # kernels. So a difference here is no longer about the two references
     # disagreeing on what a thread is. What it can still be about is the
     # compiler: two bugs in ir3 answer for every difference in this table as of
-    # logs/065057-run.log, and a run with tools/mesa/ir3-ssbo-subdword.patch
+    # logs/065057-run.log, and a run with graphics/mesa/ir3-ssbo-subdword.patch
     # and ir3-shift-split.patch in is the one that says so.
     print("  the reference is the same grid air_run dispatches (4x4x1, scalar ids 0..3),")
     print("  so a difference here is not the two references disagreeing about threads. It")
-    print("  can still be the compiler: see tools/mesa/ir3-ssbo-subdword.patch and")
+    print("  can still be the compiler: see graphics/mesa/ir3-ssbo-subdword.patch and")
     print("  ir3-shift-split.patch, and whether this log was made with them in.")
     if boundary < len(runs):
         print("  the canary stopped writing at job %d of %d (%s): NOTHING from there on "
@@ -1384,7 +1384,7 @@ def main(argv):
         return max(check(l) for l in logs)
     want = [a for a in argv if not a.startswith("--")]
     if not os.path.exists(AIR2NIR):
-        print("kinput: run tools/air/mk-host.sh first", file=sys.stderr)
+        print("kinput: run graphics/air/mk-host.sh first", file=sys.stderr)
         return 1
     if not os.path.exists(os.path.join(ROOT, LIB)):
         print("kinput: missing %s" % LIB, file=sys.stderr)
@@ -1431,7 +1431,7 @@ def main(argv):
                         pattern_word(8) - pattern_word(0)), 8))
     print("kinput: %s" % wrap(
         "air_run has --buffer N@OFF=HEX now, and the lines above are ready to run as "
-        "userland/rc.jobs.kinput. Two things about running them. It needs --zero as "
+        "system/rc.jobs.kinput. Two things about running them. It needs --zero as "
         "well: these bytes say what the control fields hold and nothing about the rest, "
         "so under air_run's byte pattern every field not named here is noise -- which is "
         "how the first run of that file lost nine of its eleven lines. And "

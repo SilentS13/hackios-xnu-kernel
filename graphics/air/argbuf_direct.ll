@@ -1,4 +1,4 @@
-; The control for tools/air/argbuf_set.ll: THE SAME SHADER with direct arguments.
+; The control for graphics/air/argbuf_set.ll: THE SAME SHADER with direct arguments.
 ;
 ; Every channel is computed from the same resource with the same instruction at the same
 ; coordinate; the only difference is how the resource reaches the shader -- five
@@ -26,7 +26,7 @@
 ; therefore which member. air_metal_test.c --draw-argbuf runs both and also runs the
 ; deliberately wrong records, whose pictures are named there.
 ;
-;   llvm-as -o argbuf_direct.bc tools/air/argbuf_direct.ll
+;   llvm-as -o argbuf_direct.bc graphics/air/argbuf_direct.ll
 
 source_filename = "argbuf_direct"
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v24:32:32-v32:32:32-v48:64:64-v64:64:64-v96:128:128-v128:128:128-v192:256:256-v256:256:256-v512:512:512-v1024:1024:1024-n8:16:32"

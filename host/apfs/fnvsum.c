@@ -1,5 +1,5 @@
 /*
- * fnvsum: the FNV-1a 64 of files, as tools/apfs/apfs-tool census and the kernel's apfs_check
+ * fnvsum: the FNV-1a 64 of files, as host/apfs/apfs-tool census and the kernel's apfs_check
  * hash contents.  Paths one per line on stdin, "HASH<TAB>PATH" out.  (Python is a hundred
  * times slower at it, and an image of the system is gigabytes.)
  */

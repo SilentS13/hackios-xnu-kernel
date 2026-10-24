@@ -1,7 +1,7 @@
 /*
  * fiemap FILE: where FILE's blocks lie on its device (FS_IOC_FIEMAP), in 4 KB blocks from the start of
  * the partition -- to see whether a file that cannot be moved (a pinned swap file, say) sits in the part of
- * userdata that tools/userdata-carve.py would take. Reads only. Built like f2fs-resize (tools/android/build.sh).
+ * userdata that host/userdata-carve.py would take. Reads only. Built like f2fs-resize (host/android/build.sh).
  */
 typedef unsigned long u64;
 typedef unsigned int u32;

@@ -1,13 +1,13 @@
 /*
  * f2fs-resize MOUNTPOINT BLOCKS: ask Android's kernel to shrink the mounted f2fs at MOUNTPOINT to
  * BLOCKS blocks of 4 KB (F2FS_IOC_RESIZE_FS). The kernel moves whatever lies past the new end
- * (here nothing does: see tools/userdata-carve.py) and rewrites the superblocks and the
+ * (here nothing does: see host/userdata-carve.py) and rewrites the superblocks and the
  * checkpoint; the partition itself stays as it is until its GPT entry is changed.
  * "f2fs-resize MOUNTPOINT probe" only asks whether the kernel has that ioctl at all, by asking
  * for a size it must refuse (one block more than there is): EINVAL means it has, ENOTTY not.
  *
  * Built without any C library (raw system calls), for adb's root shell:
- *   tools/android/build.sh
+ *   host/android/build.sh
  */
 typedef unsigned long u64;
 

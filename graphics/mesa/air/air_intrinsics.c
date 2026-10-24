@@ -82,7 +82,7 @@ is_signed_part(const char *s)
  *
  * and ir3 lowers it to the same three instructions (ir3_compiler.c sets
  * .lower_fmod). Two things are wrong with the formula, and
- * tools/air/intrincheck.py counted both: of 264 cases of air.fmod.f32 it
+ * graphics/air/intrincheck.py counted both: of 264 cases of air.fmod.f32 it
  * reported 47 wrong, 25 of them a sign and 22 of them a number.
  *
  *   - THE SIGN OF A ZERO IS LOST. fmod(-0, 5) is -0 and fmod(-1.5, 0.5) is
@@ -329,7 +329,7 @@ math_op(struct air_ctx *c, const struct air_inst *in, const struct air_name *n, 
        * A DIFFERENCE OF TWO EXPONENTIALS HAS NO LOW BITS LEFT NEAR ZERO: at
        * x = 1e-8 both e^x and e^-x round to 1.0 in a float, so the formula
        * answers 0 where sinh(1e-8) is 1e-8 -- not an imprecise answer but a
-       * wrong one, and the first thing tools/air/intrincheck.py said about
+       * wrong one, and the first thing graphics/air/intrincheck.py said about
        * this lowering. sinh(x) = x + x^3/6, so below the x where x^3/6 falls
        * under the type's own precision the argument IS the answer, exactly;
        * 2^-12 is that point for a float (x^2/6 < 2^-24) and 2^-5 for a half.
@@ -684,7 +684,7 @@ atomic_op(struct air_ctx *c, const struct air_inst *in, const struct air_name *n
     * (load *expected, nir_atomic_op_cmpxchg, store the old value back through
     * `expected`, whose conditional-on-failure store may be unconditional
     * because on success it writes the value already there), and what stops it
-    * is not the operation but the check: nothing in tools/air/atomiccheck.py
+    * is not the operation but the check: nothing in graphics/air/atomiccheck.py
     * can make a wrong compare-exchange show, and an atomic that is only
     * compiled is the one kind this project will not claim.
     */
@@ -1134,7 +1134,7 @@ llvm_op(struct air_ctx *c, const struct air_inst *in, const char *name)
     * Which answer the Adreno gives is then ir3's: nir_ffma is one rounding,
     * and a backend that has no fused multiply-add would lower it. softpipe
     * does not have one -- TGSI's own specification lets MAD round the product
-    * first and its interpreter does -- which is why tools/air/intrincheck.py
+    * first and its interpreter does -- which is why graphics/air/intrincheck.py
     * sets air.fma aside on softpipe and leaves it to the phone. The same
     * applies to every llvm.fmuladd this translates.
     */

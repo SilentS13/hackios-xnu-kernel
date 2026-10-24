@@ -4,19 +4,19 @@
 # without the phone) and softpipe (so it can be run without a GPU at all).
 #
 # This is the frontend's development and test build. The one that goes on the
-# phone is tools/mk-mesa.sh, which cross-compiles for iOS; both take the
-# frontend from tools/mesa/air, so what is tested here is what runs there.
+# phone is graphics/mk-mesa.sh, which cross-compiles for iOS; both take the
+# frontend from graphics/mesa/air, so what is tested here is what runs there.
 #
 # Nothing of Mesa is in the repository: the pinned release is fetched, patched
-# with tools/mesa/*.patch, and src/compiler/air is a symbolic link back to
-# tools/mesa/air so that editing the frontend needs no copying.
+# with graphics/mesa/*.patch, and src/compiler/air is a symbolic link back to
+# graphics/mesa/air so that editing the frontend needs no copying.
 #
 # What comes out, in build/mesa-host/build:
 #   src/compiler/air/air2nir                           the frontend alone
 #   src/gallium/drivers/freedreno/ir3_compiler         AIR -> NIR -> Adreno
 #   src/gallium/drivers/freedreno/air_run              AIR -> NIR -> drawn, pixel read back
 #   src/gallium/drivers/freedreno/libredwoodair.so     the same path as the library the Metal
-#                                                      driver links (tools/mesa/air/air_metal.h)
+#                                                      driver links (graphics/mesa/air/air_metal.h)
 #   src/gallium/drivers/freedreno/air_metal_test       that library driven through its own header
 set -e
 ROOT=$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)
@@ -31,13 +31,13 @@ cd "$B"
 # belongs here as much as in the cross build -- this tool is where the corpus's "compiled by ir3"
 # column comes from and where its Adreno instructions are read, so a host ir3 that differs from the
 # device's would make both of those say something about a compiler nothing runs. The other patches
-# in tools/mesa are for the Darwin cross build and are deliberately left out.
-PATCHES=$(cat "$ROOT"/tools/mesa/air*.patch "$ROOT"/tools/mesa/ir3-*.patch | sha256sum | cut -d' ' -f1)
+# in graphics/mesa are for the Darwin cross build and are deliberately left out.
+PATCHES=$(cat "$ROOT"/graphics/mesa/air*.patch "$ROOT"/graphics/mesa/ir3-*.patch | sha256sum | cut -d' ' -f1)
 if [ ! -d "$SRC" ] || [ "$(cat "$SRC/.air-patches" 2>/dev/null)" != "$PATCHES" ]; then
 	if [ ! -f mesa-$VERSION.tar.xz ]; then
 		# the cross build may already have fetched it
-		if [ -f "$ROOT/xnu-deps/build/mesa/mesa-$VERSION.tar.xz" ]; then
-			cp "$ROOT/xnu-deps/build/mesa/mesa-$VERSION.tar.xz" .
+		if [ -f "$ROOT/kernel/deps/build/mesa/mesa-$VERSION.tar.xz" ]; then
+			cp "$ROOT/kernel/deps/build/mesa/mesa-$VERSION.tar.xz" .
 		else
 			curl -sL --fail -o mesa-$VERSION.tar.xz \
 				https://archive.mesa3d.org/mesa-$VERSION.tar.xz
@@ -46,7 +46,7 @@ if [ ! -d "$SRC" ] || [ "$(cat "$SRC/.air-patches" 2>/dev/null)" != "$PATCHES" ]
 	echo "$SHA256  mesa-$VERSION.tar.xz" | sha256sum -c --quiet
 	rm -rf "$SRC" build
 	tar xJf mesa-$VERSION.tar.xz
-	for p in "$ROOT"/tools/mesa/air-*.patch "$ROOT"/tools/mesa/ir3-*.patch; do
+	for p in "$ROOT"/graphics/mesa/air-*.patch "$ROOT"/graphics/mesa/ir3-*.patch; do
 		patch -s --no-backup-if-mismatch -d "$SRC" -p1 < "$p"
 	done
 
@@ -79,10 +79,10 @@ if [ ! -d "$SRC" ] || [ "$(cat "$SRC/.air-patches" 2>/dev/null)" != "$PATCHES" ]
 	PY
 
 	# the frontend itself, as a link: no copy to forget to refresh. The one
-	# line of meson that reaches it comes from tools/mesa/air-frontend.patch,
+	# line of meson that reaches it comes from graphics/mesa/air-frontend.patch,
 	# applied above, so this build and the cross build get it the same way.
 	rm -rf "$SRC/src/compiler/air"
-	ln -s "$ROOT/tools/mesa/air" "$SRC/src/compiler/air"
+	ln -s "$ROOT/graphics/mesa/air" "$SRC/src/compiler/air"
 
 	echo "$PATCHES" > "$SRC/.air-patches"
 fi

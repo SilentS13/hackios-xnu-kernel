@@ -12,16 +12,16 @@ instead of being believed.
 The two sides:
 
   the device   a boot log, logs/<HHMMSS>-run.log. One process per kernel
-               (userland/rc.jobs.metalcompute), printing through a console shared
+               (system/rc.jobs.metalcompute), printing through a console shared
                with launchd, so nothing may be inferred from the order of the
                lines; the loader drops the middle of a long log and its heartbeat
                reprints the console's tail, so a whole stretch can appear twice.
                Everything here is therefore keyed on the kernel's name, and a
                name that shows up twice with two different results is named as
                such rather than resolved by taking the first.
-  the host     air_run --zero on softpipe, on the metallib of ios165/rootfs that
+  the host     air_run --zero on softpipe, on the metallib of system/ios/rootfs that
                the log names (the on-device path is the same string without the
-               ios165/rootfs prefix).
+               system/ios/rootfs prefix).
 
 Both sides must be the same computation before the numbers mean anything:
 
@@ -55,7 +55,7 @@ a pass. The three that occur are kept apart because they mean different things:
 
 What agreement here does NOT prove: both sides compile Apple's bitcode with the
 same frontend of ours (libredwoodair.dylib on the device is air_run's own path
-through air_to_nir, tools/mk-mesa.sh), so a mistranslation of the bitcode is on
+through air_to_nir, graphics/mk-mesa.sh), so a mistranslation of the bitcode is on
 both sides and invisible here. What this catches is ir3 and the Adreno
 disagreeing with nir_to_tgsi and softpipe. Independence from our frontend lives
 in cpuref.py, where LLVM runs the module.
@@ -78,7 +78,7 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-IOS = os.environ.get("IOS", os.path.join(ROOT, "ios165"))
+IOS = os.environ.get("IOS", os.path.join(ROOT, "system/ios"))
 AIR2NIR = os.environ.get(
     "AIR2NIR", os.path.join(ROOT, "build/mesa-host/build/src/compiler/air/air2nir"))
 AIR_RUN = os.environ.get(
@@ -90,7 +90,7 @@ AIR_RUN = os.environ.get(
 # a log is a run of is decided by overlap with the kernels found in it, and the
 # choice is printed -- comparing a log against the wrong list would report most of
 # another batch as lost.
-JOB_GLOB = os.path.join(ROOT, "userland/rc.jobs.metal*")
+JOB_GLOB = os.path.join(ROOT, "system/rc.jobs.metal*")
 LOGS = os.environ.get("LOGS", os.path.join(ROOT, "logs"))
 
 # The grid and the fill both sides have to be using. Written out rather than
@@ -104,7 +104,7 @@ TIMEOUT = 180               # a kernel softpipe cannot finish is a named row, no
 # The driver's MTLCommandBufferStatus used to be its own invention -- committed 3,
 # scheduled 4, completed 6, and 6 is not a status at all -- and since 2026-10-21 it is
 # Metal's: NotEnqueued 0, Enqueued 1, Committed 2, Scheduled 3, Completed 4, Error 5
-# (userland/src/redwoodmetal.m). The logs under logs/ are evidence and are not going to
+# (system/src/redwoodmetal.m). The logs under logs/ are evidence and are not going to
 # be regenerated, so this tool does not reinterpret their numbers and does not quietly
 # follow the new ones: it DATES each log and reads it in the numbering it was written in.
 #
@@ -127,17 +127,17 @@ RE_CB_SCHEME = re.compile(r"redwoodmetal: MTLCommandBufferStatus: committed (\d+
 # every status the device's test printed, whichever of its lines it was on
 RE_ANY_STATUS = re.compile(r"drvtest: [^\n]*?status (\d+)")
 # What the test does with a status, which is NOT this tool's to change
-# (userland/src/metal_drv_test.m compares [cmd status] with the literal 6 in five places
+# (system/src/metal_drv_test.m compares [cmd status] with the literal 6 in five places
 # and prints the literal "status 6" in a sixth): with the driver on Metal's numbers and
 # the test still on the old ones, a buffer that completed is called a failure, so the row
 # carries its status and no readback at all. That shape is named where it shows up rather
 # than counted as a loss, because the fix for it is in that file.
 TEST_KEYS_ON_SIX = ("the device's test still compares [cmd status] with the literal 6 "
-                    "(userland/src/metal_drv_test.m): with the driver on Metal's numbers a "
+                    "(system/src/metal_drv_test.m): with the driver on Metal's numbers a "
                     "completed buffer is called a failure there, so the row carries a status "
                     "and no readback")
 
-# What the device's test prints (userland/src/metal_drv_test.m). Matched by
+# What the device's test prints (system/src/metal_drv_test.m). Matched by
 # search and not anchored at the start of the line: the console is shared, and a
 # line can carry another writer's bytes in front of this one.
 RE_LIB = re.compile(r"drvtest: (/\S+\.metallib), (\d+) bytes")
@@ -483,7 +483,7 @@ ROWS = [
             "only reference these have"),
     ("hostfail", "not compared: the host reference could not be produced"),
     ("harness", "not compared: air_run did not run the device's grid on the device's input"),
-    ("nolib", "not compared: the log's metallib is not under ios165/rootfs"),
+    ("nolib", "not compared: the log's metallib is not under system/ios/rootfs"),
     ("twice", "not compared: the log reports the kernel twice with different results"),
     ("refused", "not compared: the driver refused the dispatch, so no kernel ran -- not a "
                 "result about the kernel"),
@@ -542,7 +542,7 @@ def host_pixel(lib, shader):
     DRAW_NOREF so that the reasons can be counted apart instead of read.
 
     air_run prints exactly one pixel, and WHICH one is its decision rather than
-    something to search for: `read_rt` in tools/mesa/air/air_run.c is the lowest
+    something to search for: `read_rt` in graphics/mesa/air/air_run.c is the lowest
     colour attachment the shader declares, because a shader that writes only
     DATA2 leaves target 0 holding the clear colour and that number looks exactly
     like a result. The device prints every attachment of its render pass and
@@ -685,7 +685,7 @@ def draw_section(path):
     device = [int(w) for w in pixel.group(4).split()]
     path = os.path.join(IOS, "rootfs") + lib
     if not os.path.exists(path):
-        print("    not compared: %s is not under ios165/rootfs" % lib)
+        print("    not compared: %s is not under system/ios/rootfs" % lib)
         return True
     host_rt, host, _row, why = host_pixel(path, shader)
     if host is None:
@@ -801,7 +801,7 @@ DA_OUTCOMES = {
 
 
 # MTLTextureType and MTLPixelFormat as names, read out of Apple's own headers --
-# the ones userland/build.sh builds the test against, or the copy in xnu-deps.
+# the ones system/build.sh builds the test against, or the copy in kernel/deps.
 # Not a table written here from memory: the numbers in the log are whatever that
 # SDK says they are, and a name this invented would be a caption on somebody
 # else's picture. Where no header can be read the number is printed bare.
@@ -812,7 +812,7 @@ def mtl_name(kind, value):
     """"MTLTextureType2D" for (texture, 2), or "2" when no header says so."""
     if not _MTL_ENUMS:
         sdks = [os.path.expanduser("~/theos/sdks/iPhoneOS16.5.sdk"),
-                os.path.join(ROOT, "xnu-deps/sdk/iPhoneOS16.5.xnu.sdk")]
+                os.path.join(ROOT, "kernel/deps/sdk/iPhoneOS16.5.xnu.sdk")]
         if os.environ.get("THEOS"):
             sdks.insert(0, os.path.join(os.environ["THEOS"], "sdks/iPhoneOS16.5.sdk"))
         for which, header in (("texture", "MTLTexture.h"), ("format", "MTLPixelFormat.h")):
@@ -855,7 +855,7 @@ def position_dependent(lib, name):
 
 
 def sweep_library(path):
-    """The library the sweep drew, as the test's own line names it, under ios165/rootfs."""
+    """The library the sweep drew, as the test's own line names it, under system/ios/rootfs."""
     raw = open(path, "rb").read()
     text = raw.decode("utf-8", errors="replace").replace("\x00", "")
     m = re.search(r"drvtest: (\S+\.metallib), \d+ bytes", text)
@@ -911,7 +911,7 @@ def drawall_section(path, library_hint):
 
     lib = library_hint
     if lib is None or not os.path.exists(lib):
-        print("metalcheck: the sweep's library is not under ios165/rootfs, so no reference "
+        print("metalcheck: the sweep's library is not under system/ios/rootfs, so no reference "
               "can be produced for it")
         return True
 
@@ -1206,7 +1206,7 @@ def main(argv):
         print("metalcheck: no such log %s" % log, file=sys.stderr)
         return 1
     if not os.path.exists(AIR_RUN):
-        print("metalcheck: run tools/air/mk-host.sh first (%s)" % AIR_RUN, file=sys.stderr)
+        print("metalcheck: run graphics/air/mk-host.sh first (%s)" % AIR_RUN, file=sys.stderr)
         return 1
 
     status_completed, _, scheme_note, scheme_brief = status_scheme(log)
@@ -1374,7 +1374,7 @@ def main(argv):
     # `log`, and it used to be `path` -- which this function never binds: it was
     # the last job list of the loop above, leaked out of it. A log holding both a
     # dispatch and a draw therefore had its draw and its sweep read out of
-    # userland/rc.jobs.* , where there is no draw, and both sections returned
+    # system/rc.jobs.* , where there is no draw, and both sections returned
     # "nothing here" without a word. Nothing in this project's logs took that
     # branch, which is the only reason it was never seen.
     ok_draw = draw_section(log)
