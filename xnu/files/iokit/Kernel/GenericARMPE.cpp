@@ -383,22 +383,14 @@ GenericARMPE::excludeList(void)
 }
 
 /*
- * hw.machine. On Apple's devices it is the product type ("iPhone10,3"), from the device tree's
- * "model", and iOS decides from it what kind of device it is on: with anything it does not know
- * MobileGestalt settles for an iPod touch.
+ * hw.machine: the device tree's "model", which the loader sets to the name of its platform
+ * ("redwood", "qemu-virt"). Boot-arg machine_name=0: the plain "arm64" this used to be.
  */
 bool
 GenericARMPE::getMachineName(char * name, int maxLength)
 {
 	uint32_t real = 1;
 
-	/*
-	 * hw.machine is the model the loader put into the device tree, "iPhone10,3". It has to
-	 * begin with "iPhone": CoreFoundation picks the device-specific variants of resources
-	 * (Something~iphone.plist, Key~iphone in an Info.plist) by this string, and for a name it
-	 * does not know it picks none at all -- Control Center, for one, then lays its modules out
-	 * without their sizes. (boot-arg machine_name=0: the plain "arm64" this used to be.)
-	 */
 	PE_parse_boot_argn("machine_name", &real, sizeof(real));
 	if (!real || !IODTPlatformExpert::getMachineName(name, maxLength) || name[0] == 0) {
 		strlcpy(name, "arm64", maxLength);

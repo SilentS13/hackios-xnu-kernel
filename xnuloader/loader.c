@@ -10,7 +10,6 @@
  *   - exits boot services, turns the MMU off and jumps to the kernel entry
  */
 #include "efi.h"
-#include "identity.h"         /* who iOS shall think we are: from the iPhone's own device tree (mkidentity.py) */
 
 /* ------------------------------------------------------------------------ */
 /* Fixed conventions shared with the boot shim, the packer and the kernel   */
@@ -446,50 +445,6 @@ firmware_epoch(void)
 		secs += (int64_t)t.timezone * 60;       /* local time = UTC - timezone */
 	}
 	return secs;
-}
-
-/* A string in a field of fixed size, the rest zeros. */
-static void
-dt_prop_padded(struct dt_writer *w, const char *name, const char *value, uint32_t size)
-{
-	uint8_t field[64];
-
-	memset(field, 0, sizeof(field));
-	memcpy(field, value, str_len(value));
-	dt_prop(w, name, field, size);
-}
-
-/*
- * Properties copied from the iPhone's device tree (identity.h), but one: the iPhone X's display is a
- * wide-gamut one ("artwork-display-gamut" P3), and with it iOS takes the screen for one that shows
- * extended colour (MobileGestalt's HasExtendedColorDisplay): WebKit then draws a page's tiles into
- * surfaces of ten bits a colour ('w30r', 'b3a8'), which neither the kernel's surfaces nor the window
- * server's renderer here do (eight bits, BGRA), and every page comes out black. Here the screen is
- * what the framebuffer is: sRGB.
- */
-static int gamut_p3;    /* boot-arg gamut=p3 (a test): the iPhone's own "P3" left in place */
-
-static void
-dt_identity(struct dt_writer *w, const struct identity_prop *props, uint32_t count, const unsigned char *data)
-{
-	for (uint32_t i = 0; i < count; i++) {
-		if (str_eq(props[i].name, "artwork-display-gamut") && !gamut_p3) {
-			dt_prop(w, props[i].name, "sRGB", 5);
-			continue;
-		}
-		dt_prop(w, props[i].name, data + props[i].offset, props[i].length);
-	}
-}
-
-/* One property of those copied from the iPhone's device tree, by name. */
-static void
-dt_identity_one(struct dt_writer *w, const struct identity_prop *props, uint32_t count, const unsigned char *data, const char *name)
-{
-	for (uint32_t i = 0; i < count; i++) {
-		if (str_eq(props[i].name, name)) {
-			dt_prop(w, props[i].name, data + props[i].offset, props[i].length);
-		}
-	}
 }
 
 static void
@@ -2901,12 +2856,8 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 	uint64_t this_mpidr = READ_SYSREG(MPIDR_EL1) & 0xFFFFFF, kernel_mpidr = this_mpidr;
 	/* "cpus=N" or "cpumask=M" there too: the kernel may have more cores than the one it starts on */
 	int more_cores = 0, battery_requested = 0, ufs_requested = 0;
-	/* "torch=N" (not 0) there too: the phone's flashlight is the kernel's (bsd/dev/hk_torch.c) */
-	int torch_requested = 0;
-	/* "cam=5" there too: the phone's wide camera is iOS's (bsd/dev/hk_camera.c) */
+	/* "cam=5" there too: the phone's wide camera is the kernel's (bsd/dev/hk_camera.c) */
 	int camera_requested = 0;
-	/* (the loader stays for run after run: what the last run's arguments said must not hold for this one) */
-	gamut_p3 = 0;
 	/* a run that does not ask for writes does not get them, whatever an earlier run of this
 	 * loader asked for (the loader stays resident across runs) */
 	block_write_requested = 0;
@@ -2918,9 +2869,7 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 		more_cores |= (starts_with(c, "cpus=") || starts_with(c, "cpumask=")) && (c == pi.cmdline || c[-1] == ' ');
 		battery_requested |= starts_with(c, "battery=1") && (c == pi.cmdline || c[-1] == ' ') &&
 		    (c[9] == 0 || c[9] == ' ');
-		torch_requested |= starts_with(c, "torch=") && (c == pi.cmdline || c[-1] == ' ') && c[6] >= '1' && c[6] <= '9';
 		camera_requested |= starts_with(c, "cam=5") && (c == pi.cmdline || c[-1] == ' ') && (c[5] == 0 || c[5] == ' ');
-		gamut_p3 |= starts_with(c, "gamut=p3") && (c == pi.cmdline || c[-1] == ' ');
 		if (starts_with(c, "ufs=") && (c == pi.cmdline || c[-1] == ' ') && c[4] >= '1' && c[4] <= '2' &&
 		    (c[5] == 0 || c[5] == ' ')) {
 			ufs_requested = c[4] - '0';
@@ -3103,18 +3052,11 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 
 	dt_begin(&w, "device-tree");
 	/*
-	 * The identity is the iPhone's (model, compatible, target-type ...): iOS user space looks
-	 * its device up by these, and its files -- the dyld shared cache to begin with -- are
-	 * those of that phone. XNU itself does not care; the hardware is described further down.
+	 * The device as it is: the platform's name is its model. XNU publishes it as hw.machine
+	 * (iokit/Kernel/GenericARMPE.cpp); the hardware is described further down.
 	 */
-	dt_identity(&w, identity_root, sizeof(identity_root) / sizeof(identity_root[0]), identity_root_data);
-	dt_prop_str(&w, "platform-name", "t8015");
-	/* what iBoot takes from the factory configuration of a real phone; fixed size fields */
-	dt_prop_padded(&w, "serial-number", "RDW00POCOX5P", 32);
-	dt_prop_padded(&w, "mlb-serial-number", "RDW00POCOX5PMLB00", 32);
-	dt_prop_padded(&w, "model-number", "MQAC2", 32);
-	dt_prop_padded(&w, "region-info", "LL/A", 32);
-	dt_prop_padded(&w, "regulatory-model-number", "A1865", 32);
+	dt_prop_str(&w, "model", PLAT->name);
+	dt_prop_str(&w, "compatible", PLAT->name);
 	dt_prop_u32(&w, "#address-cells", 2);
 	dt_prop_u32(&w, "#size-cells", 2);
 
@@ -3196,32 +3138,6 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 	 */
 	dt_begin(&w, "defaults");
 	dt_prop_u32(&w, "kern.vm_compressor", 2);
-	dt_end(&w);
-
-	/* the product: screen class, artwork scale, name ... as on the real phone */
-	dt_begin(&w, "product");
-	dt_identity(&w, identity_product, sizeof(identity_product) / sizeof(identity_product[0]), identity_product_data);
-	/*
-	 * and its haptics: "closed-loop" (MobileGestalt's DeviceSupportsClosedLoopHaptics) makes iOS play
-	 * its vibrations and feedbacks as waveforms on the "Actuator" audio device (the audio plug-in
-	 * hands them to the kernel's motor driver); without it iOS looks for an IOKit vibration motor
-	 * that the iPhone X does not have, and nothing vibrates.
-	 */
-	dt_begin(&w, "haptics");
-	dt_identity(&w, identity_haptics, sizeof(identity_haptics) / sizeof(identity_haptics[0]), identity_haptics_data);
-	dt_end(&w);
-	/*
-	 * and of its camera what is here: with torch=N the flash (MobileGestalt's camera-flash; without
-	 * it Control Center has no flashlight); with cam=5 the node itself, for a camera there is (with it
-	 * MobileGestalt's video-camera). The rest of the iPhone's camera is not here, nor said to be.
-	 */
-	if (torch_requested || camera_requested) {
-		dt_begin(&w, "camera");
-		if (torch_requested) {
-			dt_identity_one(&w, identity_camera, sizeof(identity_camera) / sizeof(identity_camera[0]), identity_camera_data, "flash");
-		}
-		dt_end(&w);
-	}
 	dt_end(&w);
 
 	/* IOKit publishes its NVRAM object on this node; without it IOKit asserts. */

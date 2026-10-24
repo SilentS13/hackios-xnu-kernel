@@ -1,5 +1,5 @@
 #!/bin/bash
-# Refresh prebuilt/ from what is built in this tree: the kernel, the loader, our user-space programs
+# Refresh prebuilt/ from what is built in this tree: the kernel, our user-space programs
 # and the pieces of the phone's UEFI. With them somebody without the cross toolchain can still make the
 # images and run the system (QEMU or the phone); see README.md.
 set -e
@@ -9,7 +9,6 @@ K=${KERNEL:-xnu-src/xnu-8796.121.2/BUILD/obj/DEVELOPMENT_ARM64_BCM2837/mach.deve
 MU=Mu-Silicium
 mkdir -p prebuilt/userland prebuilt/uefi
 cp $K prebuilt/mach.development.bcm2837
-cp xnuloader/loader.efi prebuilt/loader.efi
 cp userland/hello prebuilt/userland/
 for f in init child stage0 hello_dyn svc_test surf_test rwtouch mg_test cpu_test sound_test libhackios.dylib libhackios-sb.dylib \
 	libhackios-media.dylib libhackios-app.dylib libhackios-tweaks.dylib HKAudio net_test; do
@@ -23,7 +22,7 @@ fi
 {
 	echo "Built $(date '+%Y-%m-%d %H:%M') from this tree."
 	echo
-	sha256sum prebuilt/mach.development.bcm2837 prebuilt/loader.efi prebuilt/uefi/* 2>/dev/null
+	sha256sum prebuilt/mach.development.bcm2837 prebuilt/uefi/* 2>/dev/null
 } > prebuilt/SHA256SUMS
 {
 	echo "Built $(date '+%Y-%m-%d %H:%M') from this tree."
