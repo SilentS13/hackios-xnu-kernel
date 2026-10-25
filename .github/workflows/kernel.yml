@@ -1,4 +1,4 @@
-name: kernel
+﻿name: kernel
 
 # Builds mach.development.bcm2837 on a Linux runner: XNU 8796.121.2 + this repository's patch,
 # with theos providing the cctools linker and the iPhoneOS 16.5 SDK. Also builds `tools/show.c`,
@@ -42,6 +42,9 @@ jobs:
           clang -target arm64-apple-ios16.5 -isysroot "$THEOS/sdks/iPhoneOS16.5.sdk" \
             --ld-path="$THEOS/toolchain/linux/iphone/bin/ld" -O2 -o out/show tools/show.c
           ls -l out/show
+          clang -target arm64-apple-ios16.5 -isysroot "$THEOS/sdks/iPhoneOS16.5.sdk" \
+            --ld-path="$THEOS/toolchain/linux/iphone/bin/ld" -O2 -o out/varskel tools/varskel.c
+          ls -l out/varskel
 
       - name: xnu sources and dependencies
         run: |
@@ -69,5 +72,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: show
-          path: out/show
+          path: |
+            out/show
+            out/varskel
           if-no-files-found: error
