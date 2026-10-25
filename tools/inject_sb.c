@@ -184,31 +184,15 @@ hook_method(char kind, const char *class_name, const char *selector, IMP replace
 
 /* ---- screen bounding path (avoid crash on missing complex notch/corner asset) ---------------------- */
 
-static id
-my_boundingPathUtilitiesForScreen(id self, SEL sel, id screen)
-{
-	say("redwood: +[_UIScreenBoundingPathUtilities boundingPathUtilitiesForScreen:] -> forcing Rectangular\n");
-	Class rect_cls = objc_getClass("_UIScreenRectangularBoundingPathUtilities");
-	if (rect_cls) {
-		id util = ((id (*)(Class, SEL))objc_msgSend)(rect_cls, sel_registerName("alloc"));
-		if (util) {
-			return ((id (*)(id, SEL, id))objc_msgSend)(util, sel_registerName("initWithScreen:"), screen);
-		}
-	}
-	return nil;
-}
+static id (*original_loadBitmapForScreen)(id self, SEL sel, id screen, long long type);
 
 static id
 my_loadBitmapForScreen(id self, SEL sel, id screen, long long type)
 {
-	say("redwood: -[_UIScreenComplexBoundingPathUtilities _loadBitmapForScreen:type:] called\n");
-	return nil;
-}
-
-static id
-my_boundingPathForWindow(id self, SEL sel, id window)
-{
-	say("redwood: -[_UIScreenComplexBoundingPathUtilities boundingPathForWindow:] called\n");
+	say("redwood: _loadBitmapForScreen:type:%lld -> loading type 0\n", type);
+	if (original_loadBitmapForScreen) {
+		return original_loadBitmapForScreen(self, sel, screen, 0);
+	}
 	return nil;
 }
 
@@ -1176,10 +1160,9 @@ redwood_springboard_init(void)
 	setvbuf(stdout, NULL, _IONBF, 0);
 	slide = (uintptr_t)_dyld_get_shared_cache_range(&length) - CACHE_BASE;
 
-	/* Hook screen bounding path to use rectangular utility instead of crashing on missing complex notch assets */
-	hook_method('+', "_UIScreenBoundingPathUtilities", "boundingPathUtilitiesForScreen:", (IMP)my_boundingPathUtilitiesForScreen);
-	hook_method('-', "_UIScreenComplexBoundingPathUtilities", "_loadBitmapForScreen:type:", (IMP)my_loadBitmapForScreen);
-	hook_method('-', "_UIScreenComplexBoundingPathUtilities", "boundingPathForWindow:", (IMP)my_boundingPathForWindow);
+	/* Hook screen bounding path to avoid crash on missing -room:type:1 asset by loading type 0 */
+	original_loadBitmapForScreen = (id (*)(id, SEL, id, long long))hook_method('-',
+	    "_UIScreenComplexBoundingPathUtilities", "_loadBitmapForScreen:type:", (IMP)my_loadBitmapForScreen);
 
 	activation = replace_method("SBLockdownManager", "_setupActivationState", 0x1c4bc8dfcUL, (IMP)setup_activation_state);
 	_dyld_register_func_for_add_image(image_added);         /* Siri's orb, whose framework comes late */
