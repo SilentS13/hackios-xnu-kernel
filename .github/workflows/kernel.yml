@@ -1,9 +1,8 @@
-﻿name: kernel
+name: kernel
 
 # Builds mach.development.bcm2837 on a Linux runner: XNU 8796.121.2 + this repository's patch,
-# with theos providing the cctools linker and the iPhoneOS 16.5 SDK. The kernel is what carries
-# the display-node fix (canvas-width/canvas-height on the node IOMobileFramebuffer.framework
-# counts, and one log line per opener of the display).
+# with theos providing the cctools linker and the iPhoneOS 16.5 SDK. Also builds `tools/show.c`,
+# the small "print a file" program a port without a shell needs to read a spindump report back.
 on:
   workflow_dispatch:
   push:
@@ -24,10 +23,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential git curl xz-utils libssl-dev flex bison m4 \
-            autoconf automake python3 python-is-python3 perl clang lld llvm zlib1g-dev libelf-dev bc cpio uuid-dev libbsd-dev libcap-dev
+            autoconf automake python3 python-is-python3 perl clang lld llvm zlib1g-dev libelf-dev \
+            bc cpio uuid-dev libbsd-dev libcap-dev
           clang --version
-          ld.lld --version
-          python --version
 
       - name: theos and its SDK
         run: |
@@ -37,6 +35,13 @@ jobs:
           cp -a /tmp/theos-sdks/iPhoneOS16.5.sdk "$THEOS/sdks/"
           ls "$THEOS/toolchain/linux/iphone/bin" | head
           ls "$THEOS/sdks"
+
+      - name: userland tool show
+        run: |
+          mkdir -p out
+          clang -target arm64-apple-ios16.5 -isysroot "$THEOS/sdks/iPhoneOS16.5.sdk" \
+            --ld-path="$THEOS/toolchain/linux/iphone/bin/ld" -O2 -o out/show tools/show.c
+          ls -l out/show
 
       - name: xnu sources and dependencies
         run: |
@@ -59,4 +64,10 @@ jobs:
         with:
           name: mach.development.bcm2837
           path: xnu-src/xnu-8796.121.2/BUILD/obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: show
+          path: out/show
           if-no-files-found: error
