@@ -90,6 +90,13 @@ enum {
 
 static uint64_t gFBLogged[2];           /* selectors already reported */
 static uint8_t  gFBCalls[128];          /* how many calls of each selector were traced */
+/*
+ * Who opened the display first. Every framebuffer call prints it, so a call made long after the
+ * boot (when launchd's own log has stopped scrolling the panel) says by itself whether the window
+ * server ever took the display -- the question a boot otherwise buries in its first minute.
+ */
+static char     gFBFirstOpener[48];
+static int      gFBFirstOpenerPid;
 
 /*
  * The display user space is told about. The system carries the identity of the iPhone X
@@ -1173,6 +1180,10 @@ IOMobileFramebufferUserClient::start(IOService * provider)
 	/* one line per opener, so a boot says by itself whether CoreAnimation ever asked for the display */
 	proc_selfname(procname, sizeof(procname));
 	IOLog("MiniIOMobileFramebuffer: the display was opened by %s[%d]\n", procname, proc_selfpid());
+	if (gFBFirstOpener[0] == 0) {
+		snprintf(gFBFirstOpener, sizeof(gFBFirstOpener), "%s[%d]", procname, proc_selfpid());
+		gFBFirstOpenerPid = proc_selfpid();
+	}
 	fLock = IOLockAlloc();
 	fVSyncCall = thread_call_allocate(&IOMobileFramebufferUserClient::vsyncFired, this);
 	return fLock != NULL && fVSyncCall != NULL;
@@ -1298,16 +1309,31 @@ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMetho
 	uint64_t * out = args->scalarOutput;
 	MiniIOSurface * s;
 
+	/*
+	 * GetDisplaySize is asked for rarely, and by MobileGestalt when a query needs the panel. It is
+	 * logged every time, without the per-selector limit below, together with who opened the display
+	 * first: a query made later in the boot (mg_test from etc/rc.jobs) then puts that on the panel
+	 * after launchd's own log has stopped scrolling it away.
+	 */
+	if (selector == kFBMethodGetDisplaySize) {
+		char who[32] = "?";
+
+		proc_selfname(who, sizeof(who));
+		IOLog("MiniIOMobileFramebuffer: GetDisplaySize from %s[%d]; first opener %s\n", who, proc_selfpid(),
+		    gFBFirstOpener[0] != 0 ? gFBFirstOpener : "nobody yet");
+	}
+
 	if (selector < 128 && gFBCalls[selector] < gFBTrace) {
 		char procname[32] = "?";
 
 		gFBCalls[selector]++;
 		proc_selfname(procname, sizeof(procname));
 		IOLog("MiniIOMobileFramebuffer: %s[%d] selector %u (scalars %u in [0x%llx 0x%llx 0x%llx 0x%llx], %u out; "
-		    "structure %u in, %u out)\n", procname, proc_selfpid(), selector, args->scalarInputCount,
+		    "structure %u in, %u out; first opener %s)\n", procname, proc_selfpid(), selector, args->scalarInputCount,
 		    args->scalarInputCount > 0 ? in[0] : 0, args->scalarInputCount > 1 ? in[1] : 0,
 		    args->scalarInputCount > 2 ? in[2] : 0, args->scalarInputCount > 3 ? in[3] : 0, args->scalarOutputCount,
-		    args->structureInputSize, args->structureOutputSize);
+		    args->structureInputSize, args->structureOutputSize,
+		    gFBFirstOpener[0] != 0 ? gFBFirstOpener : "nobody yet");
 	}
 
 	switch (selector) {
