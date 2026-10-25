@@ -1,4 +1,4 @@
-/*
+﻿/*
  * varskel -- put the data volume in order, from user land.
  *
  *   varskel [-q]
@@ -133,7 +133,9 @@ main(int argc, char ** argv)
 		if (count == 5 && f[0][0] == 'd') {
 			mode_t mode = (mode_t) number(f[1], 8);
 			if (mkdir(f[4], mode) != 0 && errno != EEXIST) {
-				printf("varskel: mkdir %s: %s\n", f[4], strerror(errno));
+				if (!quiet) {
+					printf("varskel: mkdir %s: %s\n", f[4], strerror(errno));
+				}
 				bad++;
 			} else {
 				dirs++;
@@ -149,7 +151,9 @@ main(int argc, char ** argv)
 			    (gid_t) number(f[3], 10)) == 0) {
 				files++;
 			} else {
-				printf("varskel: %s: %s\n", f[4], strerror(errno));
+				if (!quiet) {
+					printf("varskel: %s: %s\n", f[4], strerror(errno));
+				}
 				bad++;
 			}
 		}
@@ -158,8 +162,6 @@ main(int argc, char ** argv)
 		}
 		line = end + 1;
 	}
-	if (!quiet) {
-		printf("varskel: %d directories, %d files, %d links, %d failed\n", dirs, files, links, bad);
-	}
+	printf("varskel: %d directories, %d files, %d links, %d failed\n", dirs, files, links, bad);
 	return bad == 0 ? 0 : 1;
 }
