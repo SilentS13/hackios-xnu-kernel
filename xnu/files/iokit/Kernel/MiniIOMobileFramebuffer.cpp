@@ -97,6 +97,20 @@ static uint8_t  gFBCalls[128];          /* how many calls of each selector were 
  */
 static char     gFBFirstOpener[48];
 static int      gFBFirstOpenerPid;
+static uint32_t gFBSwapsShown;          /* frames handed to the panel, for the line after a minute */
+
+/*
+ * Sixty seconds in -- after launchd's own log has stopped scrolling the panel -- say who opened
+ * the display and how many frames were shown. On the vili port this is the line that matters: if
+ * the first opener is not backboardd, the window server never took the display and no amount of
+ * waiting will produce a picture.
+ */
+static void
+reportAfterAMinute(thread_call_param_t param __unused, thread_call_param_t unused __unused)
+{
+	IOLog("MiniIOMobileFramebuffer: 60 s in: first opener %s, %u frames shown\n",
+	    gFBFirstOpener[0] != 0 ? gFBFirstOpener : "nobody yet", gFBSwapsShown);
+}
 
 /*
  * The display user space is told about. The system carries the identity of the iPhone X
@@ -495,6 +509,17 @@ IOMobileFramebuffer::start(IOService * provider)
 	publishModes();
 	setName("disp0");
 	registerService();
+	{
+		/* the one line that must still be readable when the panel has stopped scrolling: a minute
+		   after the driver starts, say who opened the display and how many frames were shown */
+		thread_call_t call = thread_call_allocate(reportAfterAMinute, NULL);
+		uint64_t deadline;
+
+		if (call != NULL) {
+			clock_interval_to_deadline(60, NSEC_PER_SEC, &deadline);
+			thread_call_enter_delayed(call, deadline);
+		}
+	}
 	return true;
 }
 
@@ -1061,6 +1086,7 @@ IOMobileFramebuffer::show(const uint8_t * swap, MiniIOSurface ** surfaces)
 		record(recorded);
 	}
 	fSwapsShown++;
+	gFBSwapsShown++;
 	if (gTouchLat) {
 		redwood_tl("tl: v %u ready %llu shown %llu done %llu\n", swapWord(swap, SWAP_ID), micros(ready), micros(shown),
 		    micros(drawn));
