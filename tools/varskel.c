@@ -118,6 +118,27 @@ main(int argc, char ** argv)
 	const char * path = "/redwood/etc/var.skel";
 	int dirs = 0, files = 0, links = 0, bad = 0;
 
+	/* what is actually there: a missing directory and a dangling symlink both look like ENOENT */
+	{
+		const char * const paths[] = { "/private", "/private/var", "/var", "/tmp", "/private/etc" };
+		struct stat ps;
+		char target[256];
+
+		for (unsigned i = 0; i < sizeof(paths) / sizeof(paths[0]); i++) {
+			if (lstat(paths[i], &ps) != 0) {
+				printf("varskel: %s: %s\n", paths[i], strerror(errno));
+			} else if (S_ISLNK(ps.st_mode)) {
+				ssize_t n = readlink(paths[i], target, sizeof(target) - 1);
+				target[n > 0 ? n : 0] = 0;
+				printf("varskel: %s: symlink to %s%s\n", paths[i], target,
+				    stat(paths[i], &ps) == 0 ? "" : " (dangling)");
+			} else {
+				printf("varskel: %s: %s %o\n", paths[i],
+				    S_ISDIR(ps.st_mode) ? "directory" : "file", ps.st_mode & 07777);
+			}
+		}
+	}
+
 	data_volume();
 
 	int in = open(path, O_RDONLY, 0);
