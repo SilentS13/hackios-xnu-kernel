@@ -1,24 +1,27 @@
 /*
- * varskel -- apply the data volume skeleton (etc/var.skel) from user land.
+ * varskel -- put the data volume in order, from user land.
  *
  *   varskel [-q]
  *
- * init does this at boot (src/init.c, mount_writable), but it stops at the first entry that
- * fails -- a mkdir that already exists, a chown the filesystem refuses -- and everything after it
- * is never made. On the vili port that left /private/var/tmp missing and put the ByHost migration
- * records where iOS would not look. This does the same work without ever giving up, and says what
- * failed, so the panel shows it.
+ * Two jobs, because init does neither reliably on this port:
  *
- * Line format (tab separated), as produced for /redwood/etc/var.skel:
- *   d  MODE UID GID PATH
- *   l  TARGET LINK
- *   f  MODE UID GID PATH SOURCE-IN-THE-IMAGE
+ * 1. /private/var. init mounts a ramfs there (src/init.c, mount_writable), but the mount point
+ *    does not exist on this root and it does not create it: the mount fails with ENOENT and the
+ *    whole skeleton below is then applied to a directory that is not there. One boot of the vili
+ *    port showed "df" with no /private/var at all and 148 skeleton entries failing with
+ *    "No such file or directory" -- so iOS ran with no data volume, no /tmp, and no ByHost
+ *    migration record. This creates the mount point and mounts the ramfs.
+ *
+ * 2. etc/var.skel. init stops at the first entry that fails; this does not, and says what failed.
+ *
+ * Line format (tab separated): d MODE UID GID PATH | l TARGET LINK | f MODE UID GID PATH SOURCE
  */
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mount.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -63,12 +66,41 @@ static int copy_file(const char * from, const char * to, mode_t mode, uid_t uid,
 	return 0;
 }
 
+/* Make sure there is a data volume, and say clearly what happened. */
+static void
+data_volume(void)
+{
+	struct stat st;
+
+	if (stat("/private/var", &st) != 0) {
+		if (stat("/private", &st) != 0) {
+			if (mkdir("/private", 0755) != 0 && errno != EEXIST) {
+				printf("varskel: mkdir /private: %s\n", strerror(errno));
+				return;
+			}
+		}
+		if (mkdir("/private/var", 0755) != 0 && errno != EEXIST) {
+			printf("varskel: mkdir /private/var: %s\n", strerror(errno));
+			return;
+		}
+		printf("varskel: made the mount point /private/var\n");
+	}
+	if (mount("ramfs", "/private/var", 0, NULL) == 0) {
+		printf("varskel: mounted a memory filesystem on /private/var\n");
+	} else {
+		printf("varskel: mount /private/var: %s\n", strerror(errno));
+	}
+}
+
 int
 main(int argc, char ** argv)
 {
 	int quiet = argc > 1 && strcmp(argv[1], "-q") == 0;
 	const char * path = "/redwood/etc/var.skel";
 	int dirs = 0, files = 0, links = 0, bad = 0;
+
+	data_volume();
+
 	int in = open(path, O_RDONLY, 0);
 	if (in < 0) {
 		printf("varskel: %s: cannot open\n", path);
