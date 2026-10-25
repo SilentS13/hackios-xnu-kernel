@@ -24,9 +24,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential git curl xz-utils libssl-dev flex bison m4 \
-            autoconf automake python3 perl clang lld llvm
+            autoconf automake python3 python-is-python3 perl clang lld llvm zlib1g-dev libelf-dev bc cpio
           clang --version
           ld.lld --version
+          python --version
 
       - name: theos and its SDK
         run: |
@@ -40,7 +41,12 @@ jobs:
       - name: xnu sources and dependencies
         run: |
           xnu/apply.sh
-          xnu-deps/setup.sh
+          xnu-deps/setup.sh || {
+            echo '======== exporthdrs.log ========'
+            cat xnu-deps/exporthdrs.log 2>/dev/null || echo '(no exporthdrs.log)'
+            echo '======== end ========'
+            exit 1
+          }
 
       - name: build
         run: |
