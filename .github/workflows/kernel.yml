@@ -51,6 +51,12 @@ jobs:
             -framework CoreFoundation -framework IOKit -lobjc \
             -O2 -o out/libredwood.dylib tools/inject.c
           ls -l out/libredwood.dylib
+          clang -target arm64-apple-ios16.5 -isysroot "$THEOS/sdks/iPhoneOS16.5.sdk" \
+            --ld-path="$THEOS/toolchain/linux/iphone/bin/ld" -dynamiclib \
+            -install_name /redwood/lib/libredwood-sb.dylib \
+            -framework CoreFoundation -framework IOKit -lobjc \
+            -O2 -o out/libredwood-sb.dylib tools/inject_sb.c
+          ls -l out/libredwood-sb.dylib
 
       - name: xnu sources and dependencies
         run: |
@@ -82,4 +88,5 @@ jobs:
             out/show
             out/varskel
             out/libredwood.dylib
+            out/libredwood-sb.dylib
           if-no-files-found: error

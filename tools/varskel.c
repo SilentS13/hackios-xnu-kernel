@@ -1,4 +1,4 @@
-﻿/*
+/*
  * varskel -- put the data volume in order, from user land.
  *
  *   varskel [-q]
@@ -104,6 +104,15 @@ data_volume(void)
 		}
 		printf("varskel: made the mount point /private/var\n");
 	}
+	/* already a mount of its own (init mounted it): leave it alone, its contents are the seeded ones */
+	{
+		struct stat root_st, var_st;
+
+		if (stat("/", &root_st) == 0 && stat("/private/var", &var_st) == 0 && root_st.st_dev != var_st.st_dev) {
+			printf("varskel: /private/var is already mounted\n");
+			return;
+		}
+	}
 	if (mount("ramfs", "/private/var", 0, NULL) == 0) {
 		printf("varskel: mounted a memory filesystem on /private/var\n");
 	} else {
@@ -187,7 +196,9 @@ main(int argc, char ** argv)
 				links++;
 			}
 		} else if (count == 6 && f[0][0] == 'f') {
-			if (copy_file(f[5], f[4], (mode_t) number(f[1], 8), (uid_t) number(f[2], 10),
+			char source[512];
+			snprintf(source, sizeof(source), "/redwood%s", f[5]);
+			if (copy_file(source, f[4], (mode_t) number(f[1], 8), (uid_t) number(f[2], 10),
 			    (gid_t) number(f[3], 10)) == 0) {
 				files++;
 			} else {
