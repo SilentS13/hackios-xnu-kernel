@@ -1,4 +1,4 @@
-name: kernel
+﻿name: kernel
 
 # Builds mach.development.bcm2837 on a Linux runner: XNU 8796.121.2 + this repository's patch,
 # with theos providing the cctools linker and the iPhoneOS 16.5 SDK. The kernel is what carries
@@ -24,7 +24,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential git curl xz-utils libssl-dev flex bison m4 \
-            autoconf automake python3 python-is-python3 perl clang lld llvm zlib1g-dev libelf-dev bc cpio
+            autoconf automake python3 python-is-python3 perl clang lld llvm zlib1g-dev libelf-dev bc cpio uuid-dev libbsd-dev libcap-dev
           clang --version
           ld.lld --version
           python --version
