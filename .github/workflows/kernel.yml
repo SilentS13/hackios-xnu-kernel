@@ -1,4 +1,4 @@
-﻿name: kernel
+name: kernel
 
 # Builds mach.development.bcm2837 on a Linux runner: XNU 8796.121.2 + this repository's patch,
 # with theos providing the cctools linker and the iPhoneOS 16.5 SDK. Also builds `tools/show.c`,
@@ -45,6 +45,12 @@ jobs:
           clang -target arm64-apple-ios16.5 -isysroot "$THEOS/sdks/iPhoneOS16.5.sdk" \
             --ld-path="$THEOS/toolchain/linux/iphone/bin/ld" -O2 -o out/varskel tools/varskel.c
           ls -l out/varskel
+          clang -target arm64-apple-ios16.5 -isysroot "$THEOS/sdks/iPhoneOS16.5.sdk" \
+            --ld-path="$THEOS/toolchain/linux/iphone/bin/ld" -dynamiclib \
+            -install_name /redwood/lib/libredwood.dylib \
+            -framework CoreFoundation -framework IOKit -lobjc \
+            -O2 -o out/libredwood.dylib tools/inject.c
+          ls -l out/libredwood.dylib
 
       - name: xnu sources and dependencies
         run: |
@@ -75,4 +81,5 @@ jobs:
           path: |
             out/show
             out/varskel
+            out/libredwood.dylib
           if-no-files-found: error
