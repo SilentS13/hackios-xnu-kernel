@@ -22,6 +22,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mount.h>
+#include <sys/mount.h>
+#include <sys/param.h>
+#include <sys/mount.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -72,6 +75,22 @@ data_volume(void)
 {
 	struct stat st;
 
+	/*
+	 * The root of this boot is a RAM disk (rd=md0) that XNU mounts read-only, and the image does
+	 * not carry /private/var: without a mount point the ramfs mount below cannot work, so try to
+	 * remount / writable first. It is memory, so nothing on the phone's flash is at stake.
+	 */
+	{
+		struct statfs sfs;
+
+		if (statfs("/", &sfs) == 0 && (sfs.f_flags & MNT_RDONLY) != 0) {
+			if (mount(sfs.f_fstypename, "/", MNT_UPDATE, NULL) == 0) {
+				printf("varskel: remounted / read-write (%s)\n", sfs.f_fstypename);
+			} else {
+				printf("varskel: remount / read-write: %s\n", strerror(errno));
+			}
+		}
+	}
 	if (stat("/private/var", &st) != 0) {
 		if (stat("/private", &st) != 0) {
 			if (mkdir("/private", 0755) != 0 && errno != EEXIST) {
