@@ -1,4 +1,4 @@
-# A whitelist: the working tree also holds gigabytes of downloads, build output, logs, third-party
+﻿# A whitelist: the working tree also holds gigabytes of downloads, build output, logs, third-party
 # clones, files of iOS and the hackios-xnu-userland checkout (common/setup.sh), none of which belongs
 # in this repository. Nothing is tracked unless it is named here.
 /*
@@ -19,6 +19,7 @@
 !/uefi/
 !/prebuilt/
 !/wifi/
+!/.github/
 
 __pycache__/
 *~

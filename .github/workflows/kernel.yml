@@ -1,0 +1,56 @@
+name: kernel
+
+# Builds mach.development.bcm2837 on a Linux runner: XNU 8796.121.2 + this repository's patch,
+# with theos providing the cctools linker and the iPhoneOS 16.5 SDK. The kernel is what carries
+# the display-node fix (canvas-width/canvas-height on the node IOMobileFramebuffer.framework
+# counts, and one log line per opener of the display).
+on:
+  workflow_dispatch:
+  push:
+    branches: [vili-kernel]
+
+jobs:
+  kernel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      THEOS: /home/runner/theos
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git curl xz-utils libssl-dev flex bison m4 \
+            autoconf automake python3 perl clang lld llvm
+          clang --version
+          ld.lld --version
+
+      - name: theos and its SDK
+        run: |
+          bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)" || true
+          git clone --depth 1 https://github.com/theos/sdks.git /tmp/theos-sdks
+          mkdir -p "$THEOS/sdks"
+          cp -a /tmp/theos-sdks/iPhoneOS16.5.sdk "$THEOS/sdks/"
+          ls "$THEOS/toolchain/linux/iphone/bin" | head
+          ls "$THEOS/sdks"
+
+      - name: xnu sources and dependencies
+        run: |
+          xnu/apply.sh
+          xnu-deps/setup.sh
+
+      - name: build
+        run: |
+          ./xnu-build.sh -j"$(nproc)" -k || true
+          K=xnu-src/xnu-8796.121.2/BUILD/obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837
+          ls -l "$K"
+          test -s "$K"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mach.development.bcm2837
+          path: xnu-src/xnu-8796.121.2/BUILD/obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837
+          if-no-files-found: error

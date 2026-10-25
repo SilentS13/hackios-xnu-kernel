@@ -478,6 +478,13 @@ IOMobileFramebuffer::start(IOService * provider)
 	setProperty(kIOUserClientClassKey, "IOMobileFramebufferUserClient");
 	/* for who draws with the GPU (userland/src/eagl.c): a frame need not be waited for before it is handed over */
 	setProperty("RedwoodWaitsForGPU", kOSBooleanTrue);
+	/*
+	 * The canvas size on the service as well as on the display node: the framework's
+	 * __ioMobileFramebufferAlloc asks for both, the node's copy through getEDTProperty and
+	 * these directly, and a display without them is not one CoreAnimation will draw into.
+	 */
+	setProperty("canvas-width", &fWidth, sizeof(fWidth));
+	setProperty("canvas-height", &fHeight, sizeof(fHeight));
 	publishModes();
 	setName("disp0");
 	registerService();
@@ -1157,10 +1164,15 @@ IOMobileFramebufferUserClient::initWithTask(task_t owningTask, void * securityID
 bool
 IOMobileFramebufferUserClient::start(IOService * provider)
 {
+	char procname[32] = "?";
+
 	fOwner = OSDynamicCast(IOMobileFramebuffer, provider);
 	if (fOwner == NULL || !IOUserClient::start(provider)) {
 		return false;
 	}
+	/* one line per opener, so a boot says by itself whether CoreAnimation ever asked for the display */
+	proc_selfname(procname, sizeof(procname));
+	IOLog("MiniIOMobileFramebuffer: the display was opened by %s[%d]\n", procname, proc_selfpid());
 	fLock = IOLockAlloc();
 	fVSyncCall = thread_call_allocate(&IOMobileFramebufferUserClient::vsyncFired, this);
 	return fLock != NULL && fVSyncCall != NULL;
@@ -1450,8 +1462,10 @@ publishDisplayNode(void)
 		return;
 	}
 	node = OSTypeAlloc(IORegistryEntry);
-	props = OSDictionary::withCapacity(4);
+	props = OSDictionary::withCapacity(6);
 	if (node != NULL && props != NULL) {
+		uint32_t canvasWidth = kFBDefaultWidth, canvasHeight = kFBDefaultHeight;
+
 		data = OSData::withBytes("display-subsystem", sizeof("display-subsystem"));
 		props->setObject("device_type", data);
 		OSSafeReleaseNULL(data);
@@ -1461,9 +1475,23 @@ publishDisplayNode(void)
 		data = OSData::withBytes("disp0", sizeof("disp0"));
 		props->setObject("name", data);
 		OSSafeReleaseNULL(data);
+		/*
+		 * The canvas the display is drawn into, in pixels. IOMobileFramebuffer.framework reads
+		 * these off the node it counted (getEDTProperty: "canvas-width"/"canvas-height"), and
+		 * without them there is no display to open: this node is the one the framework looks at,
+		 * so the device tree's copy (which would be a second display) is not where they belong.
+		 */
+		data = OSData::withBytes(&canvasWidth, sizeof(canvasWidth));
+		props->setObject("canvas-width", data);
+		OSSafeReleaseNULL(data);
+		data = OSData::withBytes(&canvasHeight, sizeof(canvasHeight));
+		props->setObject("canvas-height", data);
+		OSSafeReleaseNULL(data);
 		if (node->init(props)) {
 			node->setName("disp0");
 			node->attachToParent(armio, gIODTPlane);
+			IOLog("MiniIOMobileFramebuffer: display node disp0 (%ux%u) attached under /arm-io\n",
+			    canvasWidth, canvasHeight);
 		}
 	}
 	OSSafeReleaseNULL(props);
