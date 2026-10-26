@@ -1073,7 +1073,9 @@ IOMobileFramebuffer::show(const uint8_t * swap, MiniIOSurface ** surfaces)
 			if (!fGraphics) {
 				/* the first picture: the kernel's text console must stop drawing over it */
 				fGraphics = true;
-				PE_initialize_console(NULL, kPEGraphicsMode);
+				PE_initialize_console(NULL, kPEDisableScreen);
+				extern "C" int disableConsoleOutput;
+				disableConsoleOutput = 1;
 				for (uint32_t y = 0; y < fPanelHeight; y++) {
 					bzero(fBase + (size_t) y * fRowBytes, (size_t) fPanelWidth * 4);
 				}
