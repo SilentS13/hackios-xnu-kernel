@@ -1148,6 +1148,11 @@ redwood_springboard_init(void)
 		});
 		return;
 	}
+	if (say_fd < 0) {
+		if ((say_fd = open("/dev/console", O_WRONLY | O_NOCTTY)) < 0) {
+			say_fd = 2;
+		}
+	}
 	/*
 	 * The tweaks of the package manager's prefix, if one is installed: ElleKit's loader
 	 * (/var/jb/usr/lib/TweakLoader.dylib) reads /var/jb/usr/lib/TweakInject and opens the tweaks
