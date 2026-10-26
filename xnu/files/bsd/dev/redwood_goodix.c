@@ -1296,9 +1296,307 @@ focaltech_poll(void)
 	focaltech_report(report);
 }
 
+/* Xiaomi 11T Pro (vili) STMicroelectronics FingerTip Touch (FTS) */
+#define PIN_MOSI_VILI           48
+#define PIN_MISO_VILI           49
+#define PIN_CLK_VILI            50
+#define PIN_CS_VILI             51
+#define PIN_RESET_VILI          22
+#define PIN_INT_VILI            23
+
+#define FTS_CMD_FIFO_READ       0x87
+#define FTS_CMD_SCAN_MODE       0xA0
+#define FTS_CMD_HW_REG_R        0xFB
+#define FTS_CMD_HW_REG_W        0xFA
+#define FTS_ADDR_DCHIP_ID       0x20000000UL
+
+#define ST_EVT_ID_NOEVENT       0x00
+#define ST_EVT_ID_READY         0x03
+#define ST_EVT_ID_ENTER         0x13
+#define ST_EVT_ID_MOTION        0x23
+#define ST_EVT_ID_LEAVE         0x33
+#define ST_EVT_ID_STATUS        0x43
+#define ST_EVT_ID_USER          0x53
+
+#define ST_MAX_TOUCHES          10
+#define ST_MAX_X                10800
+#define ST_MAX_Y                24000
+
 /* Which touch chip is on this board. */
-enum touch_chip { TOUCH_GOODIX, TOUCH_FOCALTECH };
+enum touch_chip { TOUCH_GOODIX, TOUCH_FOCALTECH, TOUCH_STMICRO };
 static enum touch_chip touch_chip;
+static unsigned active_int_pin = PIN_INT;
+
+static unsigned st_mosi = PIN_MOSI_VILI;
+static unsigned st_miso = PIN_MISO_VILI;
+
+static struct {
+	bool down, seen;
+	uint32_t x, y;
+} st_contact[ST_MAX_TOUCHES];
+
+static void
+st_bitbang_init(unsigned mosi_pin, unsigned miso_pin)
+{
+	st_mosi = mosi_pin;
+	st_miso = miso_pin;
+	gpio_output(PIN_CS_VILI, true, PULL_UP, 6);
+	gpio_output(PIN_CLK_VILI, false, PULL_NONE, 6);
+	gpio_output(st_mosi, false, PULL_NONE, 6);
+	gpio_configure(st_miso, 0, PULL_UP, 2, false);
+	gpio_output(PIN_RESET_VILI, true, PULL_UP, 6);
+	gpio_configure(PIN_INT_VILI, 0, PULL_UP, 2, false);
+}
+
+static bool
+st_spi_transfer(const uint8_t *tx, uint8_t *rx, uint32_t length)
+{
+	gpio_set(PIN_CS_VILI, false);
+	sleep_us(10);
+	for (uint32_t i = 0; i < length; i++) {
+		uint8_t out = tx ? tx[i] : 0;
+		uint8_t in = 0;
+		for (int bit = 7; bit >= 0; bit--) {
+			gpio_set(st_mosi, (out >> bit) & 1);
+			sleep_us(1);
+			gpio_set(PIN_CLK_VILI, true);
+			sleep_us(1);
+			in = (uint8_t)((in << 1) | gpio_get(st_miso));
+			gpio_set(PIN_CLK_VILI, false);
+		}
+		if (rx) {
+			rx[i] = in;
+		}
+	}
+	sleep_us(10);
+	gpio_set(PIN_CS_VILI, true);
+	sleep_us(10);
+	return true;
+}
+
+static void
+st_reset(void)
+{
+	gpio_set(PIN_RESET_VILI, false);
+	sleep_ms(15);
+	gpio_set(PIN_RESET_VILI, true);
+	sleep_ms(25);
+}
+
+static void
+st_power_on(void)
+{
+	uint32_t ldo2 = rpmh_address("ldoc2");
+	if (ldo2 != 0 && (ldo2 >> 16 & 0xf) == 4) {
+		uint32_t addr2[3] = { ldo2 + VRM_VOLTAGE, ldo2 + VRM_ENABLE, ldo2 + VRM_MODE };
+		uint32_t data2[3] = { 1800, 1, VRM_MODE_LDO_HPM };
+		if (rpmh_write(addr2, data2, 3)) {
+			printf("st_fts: RPMh ldoc2 (1.8V) enabled\n");
+		}
+	}
+	uint32_t ldo7 = rpmh_address("ldoc7");
+	if (ldo7 != 0 && (ldo7 >> 16 & 0xf) == 4) {
+		uint32_t addr7[3] = { ldo7 + VRM_VOLTAGE, ldo7 + VRM_ENABLE, ldo7 + VRM_MODE };
+		uint32_t data7[3] = { 3300, 1, VRM_MODE_LDO_HPM };
+		if (rpmh_write(addr7, data7, 3)) {
+			printf("st_fts: RPMh ldoc7 (3.3V) enabled\n");
+		}
+	}
+	sleep_ms(10);
+}
+
+static bool
+st_probe(bool verbose)
+{
+	uint8_t tx_id[8] = { FTS_CMD_HW_REG_R, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	uint8_t rx_id[8] = { 0 };
+
+	/* Try reading Chip ID register 0x20000000 */
+	st_spi_transfer(tx_id, rx_id, sizeof(tx_id));
+	if (verbose) {
+		printf("st_fts: probe chip_id (MOSI=%u MISO=%u) rx: %02x %02x %02x %02x %02x %02x %02x %02x\n",
+		    st_mosi, st_miso,
+		    rx_id[0], rx_id[1], rx_id[2], rx_id[3], rx_id[4], rx_id[5], rx_id[6], rx_id[7]);
+	}
+
+	for (int i = 0; i < 7; i++) {
+		if (rx_id[i] == 0x36 && (rx_id[i+1] == 0x40 || rx_id[i+1] == 0x48 || rx_id[i+1] == 0x50 || rx_id[i+1] == 0x39)) {
+			printf("st_fts: STMicroelectronics FingerTip Touch detected! Chip ID: 0x%02x 0x%02x (offset %d)\n",
+			    rx_id[i], rx_id[i+1], i);
+			return true;
+		}
+	}
+
+	/* Also test FIFO read 0x87 */
+	uint8_t tx_fifo[10] = { FTS_CMD_FIFO_READ, 0 };
+	uint8_t rx_fifo[10] = { 0 };
+	st_spi_transfer(tx_fifo, rx_fifo, sizeof(tx_fifo));
+	if (verbose) {
+		printf("st_fts: probe fifo (MOSI=%u MISO=%u) rx: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+		    st_mosi, st_miso,
+		    rx_fifo[0], rx_fifo[1], rx_fifo[2], rx_fifo[3], rx_fifo[4], rx_fifo[5], rx_fifo[6], rx_fifo[7], rx_fifo[8], rx_fifo[9]);
+	}
+
+	for (int i = 1; i <= 2; i++) {
+		uint8_t id = rx_fifo[i];
+		if ((id & 0x0F) == 0x03 && id != 0xFF) {
+			printf("st_fts: STMicroelectronics FTS event response 0x%02x at offset %d\n", id, i);
+			return true;
+		}
+	}
+
+	/* Also test fallback FIFO read 0x86 */
+	uint8_t tx_fifo_86[10] = { 0x86, 0 };
+	uint8_t rx_fifo_86[10] = { 0 };
+	st_spi_transfer(tx_fifo_86, rx_fifo_86, sizeof(tx_fifo_86));
+	if (verbose) {
+		printf("st_fts: probe fifo 0x86 rx: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+		    rx_fifo_86[0], rx_fifo_86[1], rx_fifo_86[2], rx_fifo_86[3], rx_fifo_86[4], rx_fifo_86[5], rx_fifo_86[6], rx_fifo_86[7], rx_fifo_86[8], rx_fifo_86[9]);
+	}
+	for (int i = 1; i <= 2; i++) {
+		uint8_t id = rx_fifo_86[i];
+		if ((id & 0x0F) == 0x03 && id != 0xFF) {
+			printf("st_fts: STMicroelectronics FTS 0x86 event response 0x%02x at offset %d\n", id, i);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static bool
+st_bring_up(void)
+{
+	st_power_on();
+
+	for (int attempt = 0; attempt < 2; attempt++) {
+		unsigned mosi = (attempt == 0) ? PIN_MOSI_VILI : PIN_MISO_VILI;
+		unsigned miso = (attempt == 0) ? PIN_MISO_VILI : PIN_MOSI_VILI;
+
+		st_bitbang_init(mosi, miso);
+		st_reset();
+
+		if (st_probe(true)) {
+			printf("st_fts: operational on pins MOSI=gpio%u MISO=gpio%u CLK=gpio50 CS=gpio51 INT=gpio23 RESET=gpio22\n",
+			    mosi, miso);
+			active_int_pin = PIN_INT_VILI;
+			touch_chip = TOUCH_STMICRO;
+
+			/* Set scan mode to active multi-touch */
+			uint8_t cmd_scan[3] = { FTS_CMD_SCAN_MODE, 0x00, 0x01 };
+			st_spi_transfer(cmd_scan, NULL, 3);
+			sleep_ms(10);
+
+			/* Drain any startup events */
+			for (int d = 0; d < 16; d++) {
+				uint8_t tx[10] = { FTS_CMD_FIFO_READ, 0 };
+				uint8_t rx[10] = { 0 };
+				st_spi_transfer(tx, rx, 10);
+				uint8_t id = rx[1];
+				if ((rx[2] & 0x0F) == 0x03) id = rx[2];
+				if (id == 0x00 || id == 0xFF) break;
+			}
+			return true;
+		}
+	}
+	return false;
+}
+
+static void
+st_poll(void)
+{
+	uint8_t tx[10] = { FTS_CMD_FIFO_READ, 0 };
+	uint8_t rx[10] = { 0 };
+	static unsigned shown = 0;
+	int count = 0;
+
+	seen.polls++;
+
+	while (count < 32) {
+		memset(rx, 0, sizeof(rx));
+		if (!st_spi_transfer(tx, rx, 10)) {
+			seen.bad++;
+			break;
+		}
+
+		uint8_t *evt = NULL;
+		if ((rx[1] & 0x0F) == 0x03 && rx[1] != 0xFF) {
+			evt = &rx[1];
+		} else if ((rx[2] & 0x0F) == 0x03 && rx[2] != 0xFF) {
+			evt = &rx[2];
+		} else if (rx[1] == 0x00 && rx[2] == 0x00) {
+			break; /* FIFO empty */
+		} else {
+			break;
+		}
+
+		uint8_t evt_id = evt[0];
+		if (evt_id == ST_EVT_ID_NOEVENT) {
+			break;
+		}
+
+		seen.reports++;
+		count++;
+
+		if (evt_id == ST_EVT_ID_ENTER || evt_id == ST_EVT_ID_MOTION) {
+			uint8_t touchId = (evt[1] >> 4) & 0x0F;
+			uint32_t raw_x = (((uint32_t)evt[3]) << 8) | evt[2];
+			uint32_t raw_y = (((uint32_t)evt[5]) << 8) | evt[4];
+
+			if (raw_x > ST_MAX_X) raw_x = ST_MAX_X;
+			if (raw_y > ST_MAX_Y) raw_y = ST_MAX_Y;
+
+			uint32_t norm_x = (uint32_t)((uint64_t)raw_x * 65535 / ST_MAX_X);
+			uint32_t norm_y = (uint32_t)((uint64_t)raw_y * 65535 / ST_MAX_Y);
+
+			if (flip & 1) norm_x = 65535 - norm_x;
+			if (flip & 2) norm_y = 65535 - norm_y;
+
+			seen.touches++;
+			seen.last_x = norm_x;
+			seen.last_y = norm_y;
+
+			if (touchId < ST_MAX_TOUCHES) {
+				st_contact[touchId].seen = true;
+				if (!st_contact[touchId].down || evt_id == ST_EVT_ID_ENTER) {
+					st_contact[touchId].down = true;
+					redwood_touch_post(REDWOOD_TOUCH_DOWN, touchId, norm_x, norm_y);
+				} else if (st_contact[touchId].x != norm_x || st_contact[touchId].y != norm_y) {
+					redwood_touch_post(REDWOOD_TOUCH_MOVE, touchId, norm_x, norm_y);
+				}
+				st_contact[touchId].x = norm_x;
+				st_contact[touchId].y = norm_y;
+
+				if (shown < 30) {
+					shown++;
+					printf("st_fts: finger %u %s at raw (%u, %u) -> norm (%u, %u)\n",
+					    touchId, evt_id == ST_EVT_ID_ENTER ? "DOWN" : "MOVE",
+					    raw_x, raw_y, norm_x, norm_y);
+				}
+			}
+		} else if (evt_id == ST_EVT_ID_LEAVE) {
+			uint8_t touchId = (evt[1] >> 4) & 0x0F;
+			if (touchId < ST_MAX_TOUCHES) {
+				st_contact[touchId].seen = false;
+				if (st_contact[touchId].down) {
+					st_contact[touchId].down = false;
+					redwood_touch_post(REDWOOD_TOUCH_UP, touchId, st_contact[touchId].x, st_contact[touchId].y);
+					if (shown < 30) {
+						shown++;
+						printf("st_fts: finger %u UP at norm (%u, %u)\n",
+						    touchId, st_contact[touchId].x, st_contact[touchId].y);
+					}
+				}
+			}
+		}
+
+		/* Check events remaining in FIFO */
+		uint8_t remaining = evt[7] & 0x1F;
+		if (remaining == 0) {
+			break;
+		}
+	}
+}
 
 static enum touch_chip
 touch_chip_detect(void)
@@ -1324,7 +1622,9 @@ chip_probe(bool verbose)
 static void
 chip_poll(void)
 {
-	if (touch_chip == TOUCH_FOCALTECH) {
+	if (touch_chip == TOUCH_STMICRO) {
+		st_poll();
+	} else if (touch_chip == TOUCH_FOCALTECH) {
 		focaltech_poll();
 	} else {
 		goodix_poll();
@@ -1368,12 +1668,20 @@ use_engine_pins(void)
 static const char *
 chip_name(void)
 {
+	if (touch_chip == TOUCH_STMICRO) {
+		return "st_fts";
+	}
 	return touch_chip == TOUCH_FOCALTECH ? "focaltech" : "goodix";
 }
 
 static bool
 bring_up(void)
 {
+	/* First try STMicroelectronics FingerTip (Xiaomi 11T Pro / vili) */
+	if (st_bring_up()) {
+		return true;
+	}
+
 	const char *problem = "its clocks cannot be turned on";
 
 	show_state("as found");
@@ -1473,7 +1781,7 @@ goodix_thread(__unused void *parameter, __unused wait_result_t result)
 		uint64_t looked = micros_now(), read_at;
 
 		/* the interrupt line is low while a report waits; look anyway every 80 ms in case it is missed */
-		if (!gpio_get(PIN_INT)) {
+		if (!gpio_get(active_int_pin)) {
 			idle = 0;
 			chip_poll();
 			read_at = micros_now();
@@ -1493,7 +1801,7 @@ goodix_thread(__unused void *parameter, __unused wait_result_t result)
 			printf("%s: so far %u reports in %u looks (%u bad), %u finger positions, the last at %u, %u; "
 			    "interrupt line %s; a report takes %llu us to read; the line looked at every %u us, reports %s a second\n",
 			    chip_name(), seen.reports, seen.polls, seen.bad, seen.touches, seen.last_x, seen.last_y,
-			    gpio_get(PIN_INT) ? "high" : "low", reads ? reading / reads : 0, poll_us, report_rate);
+			    gpio_get(active_int_pin) ? "high" : "low", reads ? reading / reads : 0, poll_us, report_rate);
 		}
 		sleep_us(poll_us);
 	}
@@ -1502,10 +1810,11 @@ goodix_thread(__unused void *parameter, __unused wait_result_t result)
 void
 redwood_goodix_init(void)
 {
-	uint32_t enabled = 0;
+	uint32_t enabled = 1;
 	thread_t thread;
 
-	if (!PE_parse_boot_argn("touchscreen", &enabled, sizeof(enabled)) || !enabled) {
+	PE_parse_boot_argn("touchscreen", &enabled, sizeof(enabled));
+	if (!enabled) {
 		return;
 	}
 	PE_parse_boot_argn("touch_flip", &flip, sizeof(flip));
