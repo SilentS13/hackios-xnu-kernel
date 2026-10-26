@@ -182,16 +182,33 @@ hook_method(char kind, const char *class_name, const char *selector, IMP replace
 	return method_setImplementation(method, replacement);
 }
 
-/* ---- screen bounding path (avoid crash on missing complex notch/corner asset) ---------------------- */
+/* ---- screen bounding path (force rectangular screen geometry, avoid complex notch/corner crashes) -- */
+
+static id
+my_boundingPathUtilitiesForScreen(id self, SEL sel, id screen)
+{
+	say("redwood: +[_UIScreenBoundingPathUtilities boundingPathUtilitiesForScreen:] -> forcing Rectangular\n");
+	Class rect_cls = objc_getClass("_UIScreenRectangularBoundingPathUtilities");
+	if (rect_cls) {
+		id util = ((id (*)(Class, SEL))objc_msgSend)(rect_cls, sel_registerName("alloc"));
+		if (util) {
+			id res = ((id (*)(id, SEL, id))objc_msgSend)(util, sel_registerName("initWithScreen:"), screen);
+			say("redwood: RectangularBoundingPathUtilities initialized: %p\n", res);
+			return res;
+		}
+	}
+	say("redwood: _UIScreenRectangularBoundingPathUtilities not found!\n");
+	return nil;
+}
 
 static id (*original_loadBitmapForScreen)(id self, SEL sel, id screen, long long type);
 
 static id
 my_loadBitmapForScreen(id self, SEL sel, id screen, long long type)
 {
-	say("redwood: _loadBitmapForScreen:type:%lld -> loading type 0\n", type);
+	say("redwood: _loadBitmapForScreen:type:%lld (fallback)\n", type);
 	if (original_loadBitmapForScreen) {
-		return original_loadBitmapForScreen(self, sel, screen, 0);
+		return original_loadBitmapForScreen(self, sel, screen, type == 1 ? 0 : type);
 	}
 	return nil;
 }
@@ -1160,7 +1177,8 @@ redwood_springboard_init(void)
 	setvbuf(stdout, NULL, _IONBF, 0);
 	slide = (uintptr_t)_dyld_get_shared_cache_range(&length) - CACHE_BASE;
 
-	/* Hook screen bounding path to avoid crash on missing -room:type:1 asset by loading type 0 */
+	/* Force rectangular screen bounding path utility to completely bypass complex notch/cutout asset lookups */
+	hook_method('+', "_UIScreenBoundingPathUtilities", "boundingPathUtilitiesForScreen:", (IMP)my_boundingPathUtilitiesForScreen);
 	original_loadBitmapForScreen = (id (*)(id, SEL, id, long long))hook_method('-',
 	    "_UIScreenComplexBoundingPathUtilities", "_loadBitmapForScreen:type:", (IMP)my_loadBitmapForScreen);
 
