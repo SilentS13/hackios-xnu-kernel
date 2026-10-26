@@ -721,6 +721,11 @@ step_clocks(void)
 #define GPUCC_DEBUG_CB          0x26
 #define GPUCC_DEBUG_HUB_AON     0x27
 
+/* the two raw counts of the last measure(), for the log: they say whether the counter ran at all */
+static uint32_t measure_brief, measure_full;
+/* whether the counter can be believed on this SoC; set by measure_clocks(), read by cx_ready() */
+static bool counter_believable;
+
 /* Let the counter run for so many ticks of its time base; what it counted of the clock on its input. */
 static uint32_t
 count_clock(uint32_t ticks)
@@ -763,6 +768,8 @@ measure(uint32_t select)
 	/* a counter whose input stands still keeps its last count: the two counts differ only if the clock runs */
 	brief = count_clock(MEASURE_BRIEF);
 	full = brief == MEASURE_FAILED ? MEASURE_FAILED : count_clock(MEASURE_FULL);
+	measure_brief = brief;
+	measure_full = full;
 	put(&gcc, "measure control", GCC_MEASURE_CTL, control);
 	put(&gcc, "crystal/4", GCC_XO_DIV4_CBCR, base);
 	put(&gcc, "debug input", GCC_DEBUG_CBCR, cbcr);
@@ -795,7 +802,9 @@ measure_quietly(uint32_t select)
 
 /*
  * Measure the clocks step 5 has turned on. The crystal's comes first and aloud: its rate is known,
- * so it shows whether the counter can be believed; one that is off (the 3D core's) comes last.
+ * so it shows whether the counter can be believed. On this phone it cannot be - it finishes at once
+ * with a count of zero for a crystal that plainly runs (its procedure is yupik's) - so nothing here
+ * stops the start: it is printed for study, and the GMU's own crystal counter proves it at step 6.
  */
 static bool
 measure_clocks(void)
@@ -813,14 +822,14 @@ measure_clocks(void)
 	announce("measure the GPU block's clocks with the SoC's frequency counter (debug registers at gcc 0x162000.., "
 	    "gpucc 0x3d910fc, 0x3d91100, 0x3d91568)");
 	hz = measure(GPUCC_DEBUG_CXO);
-	if (hz == MEASURE_FAILED) {
-		printf("adreno: %u: the counter did not finish: it cannot be used as it is set up here\n", step);
-		return false;
-	}
-	printf("adreno: %u: measured: cxo runs at %u Hz (the crystal: 19200000)\n", step, hz);
-	if (hz < 18600000 || hz > 19800000) {
-		printf("adreno: %u: the counter does not show the crystal's rate: nothing it says can be used\n", step);
-		return false;
+	printf("adreno: %u: the counter counted %#x for a millisecond and %#x for 27, on the crystal's own output\n", step,
+	    measure_brief, measure_full);
+	counter_believable = hz != MEASURE_FAILED && hz >= 18600000 && hz <= 19800000;
+	if (!counter_believable) {
+		printf("adreno: %u: a crystal that runs reports %u: the counter is no use on this SoC (its procedure is "
+		    "yupik's, and details of it differ on this one). It gates nothing; what follows is for study\n", step, hz);
+	} else {
+		printf("adreno: %u: measured: cxo runs at %u Hz (the crystal: 19200000)\n", step, hz);
 	}
 	for (unsigned i = 0; i < sizeof(clocks) / sizeof(clocks[0]); i++) {
 		hz = measure_quietly(clocks[i].select);
@@ -835,6 +844,12 @@ measure_clocks(void)
 	}
 	if (ahb_hz != MEASURE_FAILED && ahb_hz >= 1000000) {
 		printf("adreno: %u: THE REGISTER BUS OF THE GPU BLOCK HAS ITS CLOCK, whatever its control register says\n", step);
+		return true;
+	}
+	if (!counter_believable) {
+		/* the CBCR write went in; on this SoC the bit does not read back either way (Linux waits 10 us, never checks) */
+		printf("adreno: %u: going on: the block's registers answered with every clock still off, so a dead bus "
+		    "would not have answered. The GMU's own crystal counter at step 6 is the test that counts\n", step);
 		return true;
 	}
 	/* for study: what else is there in the clock controller that could be its switch */
@@ -870,15 +885,16 @@ cx_ready(void)
 		return false;
 	}
 	ahb_hz = measure_quietly(GPUCC_DEBUG_AHB);
-	if (ahb_hz == MEASURE_FAILED) {
-		printf("adreno: %u: the frequency counter did not finish (step 5 shows whether it works)\n", step);
-	} else {
-		printf("adreno: %u: the GPU block's register bus clock (ahb) measures %u Hz\n", step, ahb_hz);
-	}
 	if (ahb_hz == MEASURE_FAILED || ahb_hz < 1000000) {
+		if (!counter_believable) {
+			printf("adreno: %u: the counter cannot see the register bus's clock, nor the crystal: going on without "
+			    "that witness (the CBCR's bit is written; Linux never checks its read-back)\n", step);
+			return true;
+		}
 		printf("adreno: %u: without that clock a register of the GPU block would not answer: not touching it\n", step);
 		return false;
 	}
+	printf("adreno: %u: the GPU block's register bus clock (ahb) measures %u Hz\n", step, ahb_hz);
 	return true;
 }
 
