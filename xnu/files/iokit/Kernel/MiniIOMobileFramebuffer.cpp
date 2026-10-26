@@ -34,6 +34,7 @@
 extern "C" {
 #include <console/video_console.h>
 extern struct vc_info vinfo;            /* the boot framebuffer, as the text console knows it */
+extern int disableConsoleOutput;
 }
 
 #include <IOKit/IOBufferMemoryDescriptor.h>
@@ -1074,8 +1075,8 @@ IOMobileFramebuffer::show(const uint8_t * swap, MiniIOSurface ** surfaces)
 				/* the first picture: the kernel's text console must stop drawing over it */
 				fGraphics = true;
 				PE_initialize_console(NULL, kPEDisableScreen);
-				extern "C" int disableConsoleOutput;
 				disableConsoleOutput = 1;
+				vinfo.v_baseaddr = 0;
 				for (uint32_t y = 0; y < fPanelHeight; y++) {
 					bzero(fBase + (size_t) y * fRowBytes, (size_t) fPanelWidth * 4);
 				}
