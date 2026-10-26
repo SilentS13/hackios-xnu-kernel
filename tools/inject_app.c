@@ -9,6 +9,7 @@
  * which `ipsw dyld a2s <cache> <address>` turns back into names.
  */
 #include <dispatch/dispatch.h>
+#include <dlfcn.h>
 #include <spawn.h>
 #include <sys/stat.h>
 #include <objc/message.h>
@@ -59,12 +60,6 @@ killed(int number, siginfo_t *info, void *context)
 	raise(number);
 }
 
-/*
- * Two things an application does on its way to a download, said out loud. Sileo queues a package and
- * nothing happens: no connection is made and no error is shown, so the question is how far it gets --
- * does it ask UIKit for a background task (a round trip to another daemon, which can wait for ever if
- * that daemon does not answer), and does it ever start a URL session task, for what address.
- */
 static unsigned long (*begin_task)(id, SEL, id);
 static void (*resume_task)(id, SEL);
 
@@ -105,16 +100,6 @@ watched_resume_task(id self, SEL cmd)
 	resume_task(self, cmd);
 }
 
-/*
- * One setting of Sileo's, set for it at every start: "Show Packages From Canister" (ShowProvisional,
- * on by default). Canister is the search service Sileo asks about packages, and where its servers
- * cannot be reached the asking never stops -- 3810 session tasks in two minutes in one run here,
- * and the download of a package never gets its turn among them. With the setting off Sileo keeps to
- * the repositories themselves, which work. The prefix lives in memory and is new at every boot, so
- * there is nowhere to keep this but here. It is done on the main queue, not here in the library's
- * own initializer: at that point Foundation is loaded but has not run its own initializers yet, and
- * asking it for the defaults then kills the application before it says a word.
- */
 static void
 keep_to_the_repositories(void)
 {
@@ -134,10 +119,6 @@ keep_to_the_repositories(void)
 	}
 }
 
-/*
- * apt-get install, not its simulation (-s...): the one that ends in "Unable to fetch some archives"
- * when Sileo runs it and installs the package when a terminal runs the same command.
- */
 static int
 apt_install(char *const argv[])
 {
@@ -155,13 +136,6 @@ apt_install(char *const argv[])
 	return install;
 }
 
-/*
- * What apt says goes to Sileo, which shows a line of it at most. Run the same apt-get, with the same
- * descriptors, credential and environment, under a shell that first says on the console who it runs
- * as, what lies in apt's archives and what Sileo's index says of the package, and afterwards how apt
- * ended and what the archives hold then. This is how "Unable to fetch some archives" was found: the
- * archives were empty, Sileo's /bin/mv having never run.
- */
 static int
 spawn_apt_said(pid_t *pid, const posix_spawn_file_actions_t *actions, const posix_spawnattr_t *attr,
     char *const argv[], char *const envp[])
@@ -172,7 +146,7 @@ spawn_apt_said(pid_t *pid, const posix_spawn_file_actions_t *actions, const posi
 	    "$J/bin/ls -ln $J/var/cache/apt/archives $J/var/lib/apt/sileolists >&7 2>&1\n"
 	    "for a in \"$@\"; do case $a in -*|install) ;; *) p=${a%%=*}\n"
 	    "  echo \"redwood: $p in sileolists:\" >&7\n"
-	    "  $J/usr/bin/grep -h -A30 \"^Package: $p\\$\" $J/var/lib/apt/sileolists/*Packages 2>&1 | $J/usr/bin/head -40 >&7 ;; esac; done\n"
+	    "  $J/usr/bin/grep -h -A30 \"^Package: $p$\" $J/var/lib/apt/sileolists/*Packages 2>&1 | $J/usr/bin/head -40 >&7 ;; esac; done\n"
 	    "$J/usr/bin/apt-get \"$@\"\n"
 	    "s=$?; echo \"redwood: apt-get exits $s; its archives after:\" >&7\n"
 	    "$J/bin/ls -ln $J/var/cache/apt/archives >&7 2>&1; exit $s\n";
@@ -196,11 +170,6 @@ spawn_apt_said(pid_t *pid, const posix_spawn_file_actions_t *actions, const posi
 	return posix_spawn(pid, "/var/jb/bin/sh", actions, attr, wrapped, envp);
 }
 
-/*
- * Every program the application starts, with its arguments. Sileo does everything to the system by
- * spawning its set-user-ID helper, which execs apt or dpkg; the arguments are the whole question
- * when apt's answer to Sileo differs from apt's answer on the command line.
- */
 static int
 watched_spawn(pid_t *pid, const char *path, const posix_spawn_file_actions_t *actions,
     const posix_spawnattr_t *attr, char *const argv[], char *const envp[])
@@ -212,12 +181,6 @@ watched_spawn(pid_t *pid, const char *path, const posix_spawn_file_actions_t *ac
 	for (int i = 0; argv != NULL && argv[i] != NULL && n < (int)sizeof(line) - 40; i++) {
 		n += snprintf(line + n, sizeof(line) - (size_t)n, " %s", argv[i]);
 	}
-	/*
-	 * The size of what it is about to move, while the file is still there: apt refuses the
-	 * package Sileo puts in its archives ("Unable to fetch some archives") and takes the very
-	 * same package when apt itself fetched it, so the first thing to know is whether the file
-	 * is whole.
-	 */
 	if (argv != NULL && argv[0] != NULL && strcmp(argv[0], "mv") == 0 && argv[1] != NULL) {
 		struct stat st;
 
@@ -242,11 +205,6 @@ watched_spawn(pid_t *pid, const char *path, const posix_spawn_file_actions_t *ac
 	return n;
 }
 
-/*
- * A file the application moves or copies itself (NSFileManager, under Swift's FileManager), when it
- * fails: from where, to where, and what the error says. Sileo moves each download into place this
- * way, and says only "The operation couldn't be completed. No such file or directory".
- */
 static const char *
 text_of(id object)
 {
@@ -332,8 +290,6 @@ watch(const char *name, const char *selector, IMP ours, void *theirs)
 	}
 }
 
-__attribute__((constructor))
-
 /*
  * NSURL Volume capacity fixes:
  * Prevents Swift runtime SIGTRAP crash when Settings (Preferences / PodcastsUI)
@@ -412,6 +368,7 @@ app_uncaught_exception(id exception)
 	say(line, (size_t)(k > 0 ? k : 0));
 }
 
+__attribute__((constructor))
 static void
 redwood_app_init(void)
 {
@@ -427,10 +384,6 @@ redwood_app_init(void)
 	}
 	who = name;
 	slide = (uintptr_t)_dyld_get_shared_cache_range(&length) - CACHE_BASE;
-	/*
-	 * An application's standard error goes nowhere here, and that is where the Swift runtime says
-	 * what it is about to die of ("Fatal error: ..."), so it is pointed at the console.
-	 */
 	console = open("/dev/console", O_WRONLY);
 	if (console >= 0) {
 		dup2(console, 2);
@@ -445,15 +398,11 @@ redwood_app_init(void)
 		dispatch_async(dispatch_get_main_queue(), ^{ keep_to_the_repositories(); });
 	}
 	watch("UIApplication", "beginBackgroundTaskWithExpirationHandler:", (IMP)watched_begin_task, &begin_task);
-	/*
-	 * NSURLSessionTask alone: its subclasses inherit the very same method, and watching it twice
-	 * would leave ours as the "original" of itself -- a call that never returns.
-	 */
 	watch("NSURLSessionTask", "resume", (IMP)watched_resume_task, &resume_task);
 	watch("NSFileManager", "moveItemAtURL:toURL:error:", (IMP)watched_move_url, &move_url);
 	watch("NSFileManager", "copyItemAtURL:toURL:error:", (IMP)watched_copy_url, &copy_url);
 	watch("NSFileManager", "moveItemAtPath:toPath:error:", (IMP)watched_move_path, &move_path);
-		watch("NSFileManager", "copyItemAtPath:toPath:error:", (IMP)watched_copy_path, &copy_path);
+	watch("NSFileManager", "copyItemAtPath:toPath:error:", (IMP)watched_copy_path, &copy_path);
 	watch("NSURL", "volumeTotalCapacity", (IMP)watched_volume_total_capacity, &orig_volume_total_capacity);
 	watch("NSURL", "getResourceValue:forKey:error:", (IMP)watched_get_resource_value, &orig_get_resource_value);
 	watch("NSURL", "resourceValuesForKeys:error:", (IMP)watched_resource_values_for_keys, &orig_resource_values_for_keys);
