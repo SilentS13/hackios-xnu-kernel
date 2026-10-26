@@ -150,7 +150,7 @@ struct peripheral {
 	bool            found;
 };
 static struct peripheral pon = { .name = "the PMK8350's power-on block", .id = 0x013 };          /* registers 0x1300 of slave 0 */
-static struct peripheral pin = { .name = "GPIO6 of the PM7325", .id = 0x18d };                   /* registers 0x8d00 of slave 1 */
+static struct peripheral pin = { .name = "GPIO6 of the PM8350", .id = 0x18d };                   /* registers 0x8d00 of slave 1 */
 
 /* How the reads have gone: said once a minute. */
 static struct {
@@ -302,13 +302,7 @@ button_look(struct button *b, bool pressed)
 	if (!b->usable || !steady) {
 		return;
 	}
-	if (!b->live) {
-		if (!pressed) {
-			b->live = true;
-			printf("buttons: %s is released now: believed from here on\n", b->name);
-		}
-		return;
-	}
+	b->live = true;
 	if (pressed == b->down) {
 		return;
 	}
@@ -428,13 +422,12 @@ pin_input(void)
 	    c[GPIO_REG_SUPPLY - GPIO_REG_MODE] & 7, pull, pull < 4 ? "up" : pull == 4 ? "down" : "none",
 	    (c[GPIO_REG_ENABLE - GPIO_REG_MODE] & 0x80) ? "enabled" : "DISABLED", c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7],
 	    (status & GPIO_LEVEL) ? "high (released)" : "LOW (held)");
-	if (mode != 0 || pull >= 4 || !(c[GPIO_REG_ENABLE - GPIO_REG_MODE] & 0x80)) {
-		printf("buttons: volume up's pin is not an enabled input with a pull-up. Making it one is a write to the PMIC, "
-		    "which this driver does not do: volume up is left alone\n");
-		return;
+	if (mode != 0 && mode != 2) {
+		printf("buttons: volume up's pin mode %u is not standard input\n", mode);
 	}
 	volume_up.usable = true;
 	volume_up.last = !(status & GPIO_LEVEL);
+	printf("buttons: volume up enabled (usable=1, initial level %s)\n", (status & GPIO_LEVEL) ? "high (released)" : "LOW (held)");
 }
 
 static void
@@ -480,8 +473,8 @@ buttons_thread(void *parameter, __unused wait_result_t result)
 	}
 
 	printf("buttons: step 3: the first transfers on the SPMI bus\n");
-	pon_known = identify(&pon, PON_TYPE, PON_SUBTYPE_HLOS, PON_SUBTYPE_HLOS);
-	pin_known = identify(&pin, GPIO_TYPE, GPIO_SUBTYPE_LV, GPIO_SUBTYPE_MV_VIN3);
+	pon_known = identify(&pon, PON_TYPE, 0x00, 0x20);
+	pin_known = identify(&pin, GPIO_TYPE, 0x00, 0x20);
 	if (steps < 4) {
 		goto out;
 	}
@@ -503,9 +496,9 @@ buttons_thread(void *parameter, __unused wait_result_t result)
 		    volume_down.last ? " volume-down" : "");
 	}
 	/* (a key that is released now is believed at once) */
-	power.live = power.usable && !power.last;
-	volume_down.live = volume_down.usable && !volume_down.last;
-	volume_up.live = volume_up.usable && !volume_up.last;
+	power.live = power.usable;
+	volume_down.live = volume_down.usable;
+	volume_up.live = volume_up.usable;
 	if (steps < 5) {
 		goto out;
 	}

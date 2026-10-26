@@ -528,6 +528,17 @@ lock_long_press(id self, SEL selector, id recognizer)
 		dropping = !lock_button_held();
 		if (dropping) {
 			say("redwood: SpringBoard: a long press of the side button, which was released long ago: dropped\n");
+		} else {
+			Class pdClass = objc_getClass("SBPowerDownController");
+			if (pdClass != NULL) {
+				id (*msg)(id, SEL, ...) = (id (*)(id, SEL, ...))objc_msgSend;
+				id pd = msg((id)pdClass, sel_registerName("sharedInstance"));
+				if (pd != NULL) {
+					say("redwood: SpringBoard: long press side button -> orderInAutomatic (slide to power off)\n");
+					msg(pd, sel_registerName("orderInAutomatic:"), YES);
+					return;
+				}
+			}
 		}
 	}
 	if (dropping) {
