@@ -39,6 +39,56 @@ say(const char *text, size_t length)
 		console = open("/dev/console", O_WRONLY);
 	}
 	(void)write(console >= 0 ? console : 2, text, length);
+	int logfd = open("/private/var/tmp/app_crash.log", O_WRONLY | O_CREAT | O_APPEND, 0666);
+	if (logfd >= 0) {
+		(void)write(logfd, text, length);
+		close(logfd);
+	}
+}
+
+/* Intercept container lookups in apps */
+__attribute__((visibility("default")))
+char *
+container_system_path_for_identifier(const char *identifier, int *error)
+{
+	if (error != NULL) {
+		*error = 0;
+	}
+	return strdup("/private/var/containers/Data/System/D90C94C4-F94E-4FCF-8A28-A93BE3846D8E");
+}
+
+__attribute__((visibility("default")))
+char *
+container_create_or_lookup_path_for_current_user(uint64_t class_type, const char *identifier, uint32_t flags, int *error)
+{
+	if (error != NULL) {
+		*error = 0;
+	}
+	return strdup("/private/var/containers/Data/System/D90C94C4-F94E-4FCF-8A28-A93BE3846D8E");
+}
+
+/* Screen bounding path bypass for UIKit apps (prevents notch asset lookup crash) */
+static id
+my_app_boundingPathUtilitiesForScreen(id self, SEL sel, id screen)
+{
+	Class rect_cls = objc_getClass("_UIScreenRectangularBoundingPathUtilities");
+	if (rect_cls) {
+		id util = ((id (*)(Class, SEL))objc_msgSend)(rect_cls, sel_registerName("alloc"));
+		if (util) {
+			return ((id (*)(id, SEL, id))objc_msgSend)(util, sel_registerName("initWithScreen:"), screen);
+		}
+	}
+	return nil;
+}
+
+static id (*orig_app_loadBitmapForScreen)(id self, SEL sel, id screen, long long type);
+static id
+my_app_loadBitmapForScreen(id self, SEL sel, id screen, long long type)
+{
+	if (orig_app_loadBitmapForScreen) {
+		return orig_app_loadBitmapForScreen(self, sel, screen, type == 1 ? 0 : type);
+	}
+	return nil;
 }
 
 static void
@@ -406,6 +456,19 @@ redwood_app_init(void)
 	watch("NSURL", "volumeTotalCapacity", (IMP)watched_volume_total_capacity, &orig_volume_total_capacity);
 	watch("NSURL", "getResourceValue:forKey:error:", (IMP)watched_get_resource_value, &orig_get_resource_value);
 	watch("NSURL", "resourceValuesForKeys:error:", (IMP)watched_resource_values_for_keys, &orig_resource_values_for_keys);
+	{
+		Class bpu_cls = objc_getClass("_UIScreenBoundingPathUtilities");
+		if (bpu_cls != NULL) {
+			Method m = class_getClassMethod(bpu_cls, sel_registerName("boundingPathUtilitiesForScreen:"));
+			if (m) {
+				method_setImplementation(m, (IMP)my_app_boundingPathUtilitiesForScreen);
+			}
+			Method m2 = class_getInstanceMethod(bpu_cls, sel_registerName("_loadBitmapForScreen:type:"));
+			if (m2) {
+				orig_app_loadBitmapForScreen = (id (*)(id, SEL, id, long long))method_setImplementation(m2, (IMP)my_app_loadBitmapForScreen);
+			}
+		}
+	}
 	{
 		typedef void (*handler_t)(id);
 		void (*set_handler)(handler_t) = (void (*)(handler_t))dlsym(RTLD_DEFAULT, "NSSetUncaughtExceptionHandler");

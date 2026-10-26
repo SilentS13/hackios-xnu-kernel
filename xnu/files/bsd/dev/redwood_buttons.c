@@ -533,18 +533,13 @@ out:
 void
 redwood_buttons_init(void)
 {
-	uint32_t enabled = 0, steps = 5;
+	uint32_t enabled = 1, steps = 5;
 	thread_t thread;
 
 	/*
-	 * On with the touch screen (the phone, somebody at it) unless buttons=0 says otherwise: a hand
-	 * has pressed all three keys and each press and release was read as it was made.
+	 * Enabled by default unless buttons=0 says otherwise
 	 */
-	if (!PE_parse_boot_argn("buttons", &enabled, sizeof(enabled))) {
-		uint32_t touch_screen = 0;
-
-		enabled = PE_parse_boot_argn("touchscreen", &touch_screen, sizeof(touch_screen)) && touch_screen != 0;
-	}
+	PE_parse_boot_argn("buttons", &enabled, sizeof(enabled));
 	if (!enabled) {
 		return;
 	}
