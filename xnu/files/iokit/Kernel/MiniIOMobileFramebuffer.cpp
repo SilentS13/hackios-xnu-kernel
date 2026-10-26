@@ -1074,6 +1074,9 @@ IOMobileFramebuffer::show(const uint8_t * swap, MiniIOSurface ** surfaces)
 				/* the first picture: the kernel's text console must stop drawing over it */
 				fGraphics = true;
 				PE_initialize_console(NULL, kPEGraphicsMode);
+				for (uint32_t y = 0; y < fPanelHeight; y++) {
+					bzero(fBase + (size_t) y * fRowBytes, (size_t) fPanelWidth * 4);
+				}
 			}
 			drawLayer(s, src, dst);
 			if (layer == 0) {
