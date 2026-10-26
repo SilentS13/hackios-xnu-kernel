@@ -302,7 +302,13 @@ button_look(struct button *b, bool pressed)
 	if (!b->usable || !steady) {
 		return;
 	}
-	b->live = true;
+	if (!b->live) {
+		if (!pressed) {
+			b->live = true;
+			printf("buttons: %s is released now: believed from here on\n", b->name);
+		}
+		return;
+	}
 	if (pressed == b->down) {
 		return;
 	}
@@ -496,9 +502,9 @@ buttons_thread(void *parameter, __unused wait_result_t result)
 		    volume_down.last ? " volume-down" : "");
 	}
 	/* (a key that is released now is believed at once) */
-	power.live = power.usable;
-	volume_down.live = volume_down.usable;
-	volume_up.live = volume_up.usable;
+	power.live = power.usable && !power.last;
+	volume_down.live = volume_down.usable && !volume_down.last;
+	volume_up.live = volume_up.usable && !volume_up.last;
 	if (steps < 5) {
 		goto out;
 	}
