@@ -1875,6 +1875,8 @@ step_gmu_firmware(void)
 #define GMU_DCACHE_CONFIG       GMU_WORD(0x4c01)
 #define GMU_SYS_BUS_CONFIG      GMU_WORD(0x4c0f)
 #define GMU_PWR_COL_INTER_FRAME_CTRL GMU_WORD(0x50c0)
+#define GMU_PWR_COL_INTER_FRAME_HYST GMU_WORD(0x50c1)   /* how long the core may idle before the GMU collapses it */
+#define GMU_PWR_COL_APM_QUIESCE GMU_WORD(0x50c2)        /* ... and what must be quiet before it may */
 #define GMU_RPMH_CTRL           GMU_WORD(0x50e8)
 #define GMU_RPMH_CTRL_ALL       0xf11           /* the RPMh interface, and every vote the firmware may cast */
 #define GMU_CX_FAL_INTF         GMU_WORD(0x50f0)
@@ -1979,6 +1981,16 @@ step_gmu_start(void)
 	put(&gmu, "icache_config", GMU_ICACHE_CONFIG, 1);
 	put(&gmu, "dcache_config", GMU_DCACHE_CONFIG, 1);
 	put(&gmu, "pwr_col_inter_frame_ctrl", GMU_PWR_COL_INTER_FRAME_CTRL, 0x9c40400);
+	/*
+	 * Linux writes three: the control, how long the core may idle before the GMU takes its power
+	 * away, and what must be quiet before it may (a6xx_gmu.c, a6xx_gmu_rpmh_init: "Set up the
+	 * power collapse internals"). Only the first was written here; with the other two left at
+	 * zero the GMU may collapse GX the moment the core stops fetching -- a core mid-command
+	 * buffer included -- which is what a wedge with no fault, no interrupt, and a ring still
+	 * holding work looks like.
+	 */
+	put(&gmu, "pwr_col_inter_frame_hyst", GMU_PWR_COL_INTER_FRAME_HYST, 0xf0fff);
+	put(&gmu, "pwr_col_apm_quiesce", GMU_PWR_COL_APM_QUIESCE, 0x44);
 	set(&gmu, "rpmh_ctrl", GMU_RPMH_CTRL, GMU_RPMH_CTRL_ALL);
 	put(&gmu, "gmu2host_intr_clr", GMU_GMU2HOST_INTR_CLR, 0xffffffff);
 
@@ -3218,6 +3230,7 @@ static uint32_t gpu_timed_by[7];        /* ... how many of them under 0.1, 0.25,
 static uint32_t gpu_exact = 1;          /* boot-arg gpu_exact=0: the core does not wait to be idle before it notes the time */
 static uint32_t gpu_recover;            /* boot-arg gpu_recover=1: a core that has stopped answering is reset and given work again */
 static uint32_t gpu_recoveries;         /* ... and how many times that has been done in this run */
+static uint32_t gpu_nopc;               /* boot-arg gpu_nopc=1: the GMU is told never to take the core's power away */
 uint32_t gpu_log;                       /* boot-arg gpu_log=1: a line for every submission and the time the core spent on it */
 extern void redwood_tl(const char *format, ...) __printflike(1, 2);
 static struct {
@@ -3666,6 +3679,17 @@ redwood_gpu_report(const char *why)
 	printf("adreno: gpu:   in the first command buffer at %#llx, %u words to go; in the second at %#llx, %u to go\n",
 	    (uint64_t)rd(gpu.base + CP_IB1_BASE + 4) << 32 | rd(gpu.base + CP_IB1_BASE), rd(gpu.base + CP_IB1_REM_SIZE),
 	    (uint64_t)rd(gpu.base + CP_IB2_BASE + 4) << 32 | rd(gpu.base + CP_IB2_BASE), rd(gpu.base + CP_IB2_REM_SIZE));
+	/*
+	 * Who stopped it: bit 6 of sptprac set is the GMU having taken the core's power away (bit 7:
+	 * its clock); firmware, HFI and the GMU's word for us set is the GMU alive and only the core
+	 * stopped; sptprac clear with the GMU alive is a core that is powered and will not go on.
+	 */
+	printf("adreno: gpu:   the GMU: power state %#x; sptprac %#x (bit 6: the core has no power, bit 7: no clock); "
+	    "busy %#x, fence %#x; firmware %#x, HFI %#x, its word for us %#x, its interrupts %#x\n",
+	    rd(gmu.base + GMU_RPMH_POWER_STATE), rd(gmu.base + GMU_SPTPRAC_PWR_CLK_STATUS),
+	    rd(gmu.base + GMU_AO_GPU_CX_BUSY_STATUS), rd(gmu.base + GMU_AHB_FENCE_STATUS),
+	    rd(gmu.base + GMU_CM3_FW_INIT_RESULT), rd(gmu.base + GMU_HFI_CTRL_STATUS),
+	    rd(gmu.base + GMU_GMU2HOST_INTR_INFO), rd(gmu.base + GMU_AO_HOST_INTERRUPT_STATUS));
 	step = 0;
 	if (space_faulted(&core_space)) {
 		wr(smmu.base + context + SMMU_CB_FSR, SMMU_FSR_ALL);    /* so that the next one shows */
@@ -3779,11 +3803,15 @@ redwood_gpu_recover(void)
 	if (!step_core_start() || !step_core_commands()) {
 		printf("adreno: gpu: THE 3D CORE DOES NOT TAKE COMMANDS AGAIN after the reset: it is given up for this run, as it "
 		    "would have been without gpu_recover=1\n");
-		wr(gmu.base + GMU_PWR_COL_KEEPALIVE, 0);
+		if (!gpu_nopc) {
+			wr(gmu.base + GMU_PWR_COL_KEEPALIVE, 0);
+		}
 		quiet = true;
 		return false;
 	}
-	wr(gmu.base + GMU_PWR_COL_KEEPALIVE, 0);
+	if (!gpu_nopc) {
+		wr(gmu.base + GMU_PWR_COL_KEEPALIVE, 0);
+	}
 	quiet = true;                           /* (cx_ready() measures a clock, and measure_quietly() ends by clearing this) */
 
 	/*
@@ -4100,6 +4128,12 @@ redwood_adreno_init(void)
 			PE_parse_boot_argn("gpu_exact", &gpu_exact, sizeof(gpu_exact));
 			PE_parse_boot_argn("gpu_log", &gpu_log, sizeof(gpu_log));
 			PE_parse_boot_argn("gpu_recover", &gpu_recover, sizeof(gpu_recover));
+			PE_parse_boot_argn("gpu_nopc", &gpu_nopc, sizeof(gpu_nopc));
+			if (gpu_nopc) {
+				wr(gmu.base + GMU_PWR_COL_KEEPALIVE, 1);
+				printf("adreno: the GMU is told to keep the 3D core's power whatever it makes of its idle: "
+				    "%#x\n", rd(gmu.base + GMU_PWR_COL_KEEPALIVE));
+			}
 			/* before any client exists: gpu_address_span() must not change under a live buffer */
 			PE_parse_boot_argn("gpu_va", &gpu_va, sizeof(gpu_va));
 			gpu_kept = true;
