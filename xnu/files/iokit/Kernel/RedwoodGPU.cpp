@@ -63,9 +63,11 @@ void redwood_gpu_to_memory(void * start, uint64_t size);
 uint32_t redwood_gpu_submit(const uint64_t * addresses, const uint32_t * words, uint32_t count);
 extern uint32_t gpu_log;
 bool redwood_gpu_done(uint32_t fence);
+uint32_t redwood_gpu_progress(void);
 uint32_t redwood_gpu_last(void);
 void redwood_gpu_worked(uint64_t * microseconds, uint32_t * submissions, uint32_t by[7]);
-void redwood_gpu_report(const char * why);
+void redwood_gpu_report(const char * why, uint32_t stalled_ms);
+bool redwood_gpu_ib_words(uint64_t address, uint32_t * words, uint32_t count, uint32_t * size);
 bool redwood_gpu_recover(void);
 void redwood_gpu_stop(void);
 
@@ -201,6 +203,7 @@ struct redwood_worked {
 #define GPU_SUBMIT_CMDS         128
 #define GPU_SUBMIT_BOS          8192
 #define GPU_PATIENCE_MS         5000            /* for a buffer or a submission that somebody waits for without a limit */
+#define GPU_STALL_MS            1500            /* a submission finishing nothing in this long: the core has stopped */
 #define GPU_ASK_AGAIN_US        200             /* while waiting for the core: how long between two looks at how far it is */
 #define GPU_PUSH_AGAIN_MS       4               /* a surface is pushed out of the cache again for a submission this long after the last */
 
@@ -218,13 +221,101 @@ static struct {
 	uint64_t making;                        /* ... and the time it took to make the others */
 } gGPUStat;
 
-/* Wait for the 3D core to be done with submission `fence`; with the lock held, which is let go of while waiting. */
+static uint64_t gGPUNothingSince;               /* when the core last finished a submission */
+static uint32_t gGPULastProgress;               /* ... and the word of its that said so */
+
+/*
+ * The last few submissions' command buffers, with where each one is in the kernel's own memory.
+ * A core that stops does so inside the buffer it was given; the report (bsd/dev/redwood_adreno.c,
+ * redwood_gpu_report) can read the command processor's registers and so know the address in the
+ * core's space, but not what is there -- that is the other side's memory. These records are how
+ * the two are put together, and they are why the report can print the command the core is
+ * stopped in rather than only where it was.
+ */
+struct gpu_ib {
+	uint64_t                address;                /* the buffer's address in the core's space */
+	const uint32_t *        words;                  /* ... and where it is in the kernel's */
+	uint32_t                count;                  /* how many words of it were given */
+};
+#define GPU_IB_KEEP             256             /* several frames' worth: a frame is a handful of buffers */
+static struct gpu_ib gGPUIB[GPU_IB_KEEP];
+static uint32_t gGPUIBAt;                       /* where the next record goes */
+
+/* The words of a command buffer this side gave the core, from `address` on; *size: the whole buffer's. */
+bool
+redwood_gpu_ib_words(uint64_t address, uint32_t * words, uint32_t count, uint32_t * size)
+{
+	for (uint32_t i = 0; i < GPU_IB_KEEP; i++) {
+		struct gpu_ib * ib = &gGPUIB[(gGPUIBAt + GPU_IB_KEEP - 1 - i) % GPU_IB_KEEP];
+		uint64_t at, bytes;
+
+		if (ib->words == NULL || address < ib->address) {
+			continue;
+		}
+		at = address - ib->address;
+		bytes = (uint64_t) ib->count << 2;
+		if (at + ((uint64_t) count << 2) > bytes) {
+			continue;                       /* (not this buffer: it may be one the core has not started) */
+		}
+		for (uint32_t w = 0; w < count; w++) {
+			words[w] = ib->words[(at >> 2) + w];
+		}
+		*size = ib->count;
+		return true;
+	}
+	return false;
+}
+
+/*
+ * Whether the core is getting anywhere, kept between waits rather than within one: a caller that
+ * asks again every millisecond is as much a witness of a stopped core as one that waits for five
+ * seconds, and the watchdog has to see both the same way.
+ */
+static void
+gpuProgressWatch(void)
+{
+	uint32_t now = redwood_gpu_progress();
+
+	if (now != gGPULastProgress || gGPUNothingSince == 0) {
+		gGPULastProgress = now;
+		gGPUNothingSince = mach_absolute_time();
+	}
+}
+
+/* How long the core has finished nothing, in milliseconds. */
+static uint32_t
+gpuSilence(void)
+{
+	uint64_t silence, ms;
+
+	silence = mach_absolute_time() - gGPUNothingSince;
+	absolutetime_to_nanoseconds(silence, &silence);
+	ms = silence / NSEC_PER_MSEC;
+	return ms > ~0u ? ~0u : (uint32_t)ms;
+}
+
+/*
+ * How long the core may finish nothing before it is called stopped (boot-arg gpu_stall_ms). Above
+ * the longest submission a frame takes here -- the pace line of libredwood-gl puts the worst of a
+ * quiet ten seconds at 50 ms, and the longest the core has been timed on is 1.1 s, which is under
+ * this -- and well below the five seconds a caller may ask to wait, which is what a stopped core
+ * used to cost the screen.
+ */
+static TUNABLE(uint32_t, gStallMs, "gpu_stall_ms", GPU_STALL_MS);
+
+/* Wait for the 3D core to be done with submission `fence`; with the lock held, which is let go of
+ * while waiting. A core that finishes no submission at all for gStallMs is not waited for
+ * any longer than that, whatever time the caller asked for: it has stopped, and the sooner it is
+ * reported and reset the less of the screen is lost.
+ */
 static bool
 gpuWait(uint32_t fence, uint64_t milliseconds)
 {
 	uint64_t began = mach_absolute_time(), patience;
+	bool stopped = false;
 
 	nanoseconds_to_absolutetime(milliseconds * NSEC_PER_MSEC, &patience);
+	gpuProgressWatch();
 	for (bool waited = false;; waited = true) {
 		if (redwood_gpu_done(fence)) {
 			if (waited) {
@@ -233,23 +324,29 @@ gpuWait(uint32_t fence, uint64_t milliseconds)
 			}
 			return true;
 		}
-		if (mach_absolute_time() - began >= patience || gGPUReported) {
-			break;                  /* (a GPU that has stopped answering is not waited for again) */
+		/*
+		 * Nothing finished for gStallMs, whether this wait or another saw it: the core has
+		 * stopped. That is the end of the wait, whatever time the caller asked for -- and it is
+		 * what keeps a stopped core from costing the screen five seconds instead of one frame.
+		 */
+		gpuProgressWatch();
+		stopped = gpuSilence() >= gStallMs;
+		if (stopped || mach_absolute_time() - began >= patience || gGPUReported) {
+			break;
 		}
 		IOLockUnlock(gGPULock);
 		delay_for_interval(GPU_ASK_AGAIN_US, NSEC_PER_USEC);
 		IOLockLock(gGPULock);
 	}
 	/*
-	 * A wait of a second or more that came to nothing: the core has stopped answering. What it
-	 * and its SMMU context say is put down, and then, with boot-arg gpu_recover=1, the core is
-	 * reset and started again, which gives up the submission that hung and leaves later ones
-	 * the core's own. Without that -- or if it does not work -- nothing is waited for again in
-	 * this run: a GPU that may yet write memory of ours is given nothing more. Either way this
-	 * wait has failed, and says so: the submission did not finish.
+	 * The core has stopped answering. What it and its SMMU context say is put down, and then, with
+	 * boot-arg gpu_recover=1, the core is reset and started again, which gives up the submission
+	 * that hung and leaves later ones the core's own. Without that -- or if it does not work --
+	 * nothing is waited for again in this run: a GPU that may yet write memory of ours is given
+	 * nothing more. Either way this wait has failed, and says so: the submission did not finish.
 	 */
-	if (milliseconds >= 1000 && !gGPUReported) {
-		redwood_gpu_report("no answer");
+	if (stopped && !gGPUReported) {
+		redwood_gpu_report("no answer", gpuSilence());
 		gGPUReported = !redwood_gpu_recover();
 	}
 	return false;
@@ -934,6 +1031,8 @@ RedwoodGPUUserClient::submit(struct msm_gem_submit * request)
 	uint64_t addresses[GPU_SUBMIT_CMDS];
 	uint32_t words[GPU_SUBMIT_CMDS], count = 0;
 	uint64_t began, nanos, again;
+	uint32_t record_from = ~0u;             /* where the command-buffer records begin (~0: none were added) */
+	bool took = false;
 	IOReturn ret = kIOReturnBadArgument;
 
 	if (request->nr_cmds == 0 || request->nr_cmds > GPU_SUBMIT_CMDS || request->nr_bos == 0 || request->nr_bos > GPU_SUBMIT_BOS) {
@@ -952,6 +1051,7 @@ RedwoodGPUUserClient::submit(struct msm_gem_submit * request)
 		goto out;
 	}
 	IOLockLock(gGPULock);
+	record_from = gGPUIBAt;
 	/*
 	 * The GPU reads memory and writes memory. What this processor's cache holds of an IOSurface
 	 * (somebody has written it, or has read it, as the display's driver does, and the GPU is to
@@ -1003,8 +1103,18 @@ RedwoodGPUUserClient::submit(struct msm_gem_submit * request)
 		}
 		addresses[count] = b->address + cmds[i].submit_offset;
 		words[count++] = cmds[i].size / 4;
+		/*
+		 * Where this buffer is in the kernel's memory, kept in case the core stops inside it:
+		 * the report has the address the command processor stopped at, and this is how it is
+		 * read (redwood_gpu_ib_words above). Rolled back below if the submission is not taken.
+		 */
+		gGPUIB[gGPUIBAt].address = addresses[count - 1];
+		gGPUIB[gGPUIBAt].words = b->kernel != NULL ? (const uint32_t *) (b->kernel + cmds[i].submit_offset) : NULL;
+		gGPUIB[gGPUIBAt].count = words[count - 1];
+		gGPUIBAt = (gGPUIBAt + 1) % GPU_IB_KEEP;
 	}
 	request->fence = redwood_gpu_submit(addresses, words, count);
+	took = request->fence != 0;
 	/*
 	 * The ring is full and the core is not reading it: it has stopped. With gpu_recover=1 it is
 	 * reset and given this submission again -- after a reset the ring is empty, so there is
@@ -1012,10 +1122,12 @@ RedwoodGPUUserClient::submit(struct msm_gem_submit * request)
 	 * for a program that submits without waiting.)
 	 */
 	if (request->fence == 0 && !gGPUReported) {
-		redwood_gpu_report("the ring is full");
+		gpuProgressWatch();
+		redwood_gpu_report("the ring is full", gpuSilence());
 		gGPUReported = !redwood_gpu_recover();
 		if (!gGPUReported) {
 			request->fence = redwood_gpu_submit(addresses, words, count);
+			took = request->fence != 0;
 		}
 	}
 	if (gpu_log && request->fence != 0) {
@@ -1109,6 +1221,9 @@ RedwoodGPUUserClient::submit(struct msm_gem_submit * request)
 	IOLockUnlock(gGPULock);
 	ret = request->fence != 0 ? kIOReturnSuccess : kIOReturnTimeout;
 out:
+	if (!took && record_from != ~0u) {
+		gGPUIBAt = record_from;                 /* the buffers were never the core's: nothing to look up */
+	}
 	if (bos != NULL) {
 		IODelete(bos, struct msm_gem_submit_bo, request->nr_bos);
 	}

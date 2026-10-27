@@ -3147,6 +3147,25 @@ gpu_block_stop(void)
 		get(&gpucc, "cx_hw_ctrl", GPUCC_CX_HW_CTRL);
 		cx_off = !cx_is_on();
 	}
+	/*
+	 * The run's own account of the one thing that decides whether this port is usable, in a
+	 * line, so that reading a run takes one look and not forty photographs: a run with none of
+	 * these is a run in which the screen never stopped. It is the last line of the run, which is
+	 * the first page the loader shows, so it is also the one a photograph should be of.
+	 */
+	if (gpu_was_kept) {
+		if (gpu_stalls == 0) {
+			printf("adreno: gpu: THE RUN HAD NO STALL: the screen never stopped\n");
+		} else {
+			printf("adreno: gpu: THE RUN HAD %u STALL%s, the longest %u ms (%u recover%s); the first: submission %u, "
+			    "status %#x, GMU power %#x, sptprac %#x, gx_gdscr %#x, %u words left in its command buffer, stopped on "
+			    "%08x %08x %08x %08x\n",
+			    gpu_stalls, gpu_stalls == 1 ? "" : "S", gpu_longest_stall, gpu_recoveries,
+			    gpu_recoveries == 1 ? "y" : "ies", gpu_first_fence, gpu_first_status, gpu_first_power,
+			    gpu_first_sptprac, gpu_first_gx, gpu_first_rem, gpu_first_words[0], gpu_first_words[1],
+			    gpu_first_words[2], gpu_first_words[3]);
+		}
+	}
 }
 
 /*
@@ -3222,6 +3241,7 @@ redwood_adreno_quiesce(void)
 #define GPU_RECOVERIES          64                      /* at most in one run: a program that hangs every submission fills no log with this */
 
 static bool gpu_kept;
+static bool gpu_was_kept;               /* whether the GPU was the system's at any point in this run */
 static uint32_t gpu_fence;              /* the number of the last submission */
 static uint32_t gpu_timed;              /* ... of the last whose times have been added up */
 static uint64_t gpu_ticks;              /* how long the core has worked on the submissions added up */
@@ -3231,6 +3251,11 @@ static uint32_t gpu_exact = 1;          /* boot-arg gpu_exact=0: the core does n
 static uint32_t gpu_recover;            /* boot-arg gpu_recover=1: a core that has stopped answering is reset and given work again */
 static uint32_t gpu_recoveries;         /* ... and how many times that has been done in this run */
 static uint32_t gpu_nopc;               /* boot-arg gpu_nopc=1: the GMU is told never to take the core's power away */
+static uint32_t gpu_stalls;             /* how many times in this run a submission stopped coming back */
+static uint32_t gpu_longest_stall;      /* ... and how long the longest of its waits had gone on, in ms */
+/* The first stall's own words, kept for the one line the run ends with (the block is off by then). */
+static uint32_t gpu_first_fence, gpu_first_status, gpu_first_power, gpu_first_sptprac, gpu_first_gx, gpu_first_rem;
+static uint32_t gpu_first_words[4];     /* ... and the four command words it was stopped on */
 uint32_t gpu_log;                       /* boot-arg gpu_log=1: a line for every submission and the time the core spent on it */
 extern void redwood_tl(const char *format, ...) __printflike(1, 2);
 static struct {
@@ -3549,6 +3574,21 @@ redwood_gpu_done(uint32_t fence)
 	return (int32_t)(*word - fence) >= 0;
 }
 
+/*
+ * The same word as it is, not as a question about a fence: a waiter that is watching whether the
+ * core is getting anywhere compares two of these, and a word that has not changed is a core that
+ * has not finished a submission in between -- which is what a core that has stopped looks like,
+ * however long the wait it was asked for.
+ */
+uint32_t
+redwood_gpu_progress(void)
+{
+	volatile uint32_t *word = (volatile uint32_t *)(core_scratch.memory + GPU_FENCE_AT);
+
+	to_memory((vm_offset_t)word, 4);
+	return *word;
+}
+
 uint32_t
 redwood_gpu_last(void)
 {
@@ -3667,18 +3707,69 @@ redwood_gpu_submit(const uint64_t *addresses, const uint32_t *words, uint32_t co
 
 /* A submission does not come back: what the 3D core and its SMMU context say. */
 void
-redwood_gpu_report(const char *why)
+redwood_gpu_report(const char *why, uint32_t stalled_ms)
 {
 	uint32_t context = smmu_context(&core_space);
+	uint64_t ib1, ib2;
+	uint32_t size = 0, stopped_at = 0, near[8];
 
+	gpu_stalls++;
+	if (stalled_ms > gpu_longest_stall) {
+		gpu_longest_stall = stalled_ms;
+	}
+	ib1 = (uint64_t)rd(gpu.base + CP_IB1_BASE + 4) << 32 | rd(gpu.base + CP_IB1_BASE);
+	ib2 = (uint64_t)rd(gpu.base + CP_IB2_BASE + 4) << 32 | rd(gpu.base + CP_IB2_BASE);
+	if (gpu_stalls == 1) {
+		gpu_first_fence = gpu_fence;
+		gpu_first_status = rd(gpu.base + RBBM_STATUS);
+		gpu_first_power = rd(gmu.base + GMU_RPMH_POWER_STATE);
+		gpu_first_sptprac = rd(gmu.base + GMU_SPTPRAC_PWR_CLK_STATUS);
+		gpu_first_gx = rd(gpucc.base + GPUCC_GX_GDSCR);
+		gpu_first_rem = rd(gpu.base + CP_IB1_REM_SIZE);
+	}
 	printf("adreno: gpu: %s: submission %u is the last, the core has done %u; ring: read up to %u, written up to %u; status "
 	    "%#x, interrupts %#x; command processor: fault %#x, interrupts %#x, protection %#x\n", why, gpu_fence,
 	    *(volatile uint32_t *)(core_scratch.memory + GPU_FENCE_AT), rd(gpu.base + CP_RB_RPTR), ring_at,
 	    rd(gpu.base + RBBM_STATUS), rd(gpu.base + RBBM_INT_0_STATUS), rd(gpu.base + CP_HW_FAULT),
 	    rd(gpu.base + CP_INTERRUPT_STATUS), rd(gpu.base + CP_PROTECT_STATUS));
-	printf("adreno: gpu:   in the first command buffer at %#llx, %u words to go; in the second at %#llx, %u to go\n",
-	    (uint64_t)rd(gpu.base + CP_IB1_BASE + 4) << 32 | rd(gpu.base + CP_IB1_BASE), rd(gpu.base + CP_IB1_REM_SIZE),
-	    (uint64_t)rd(gpu.base + CP_IB2_BASE + 4) << 32 | rd(gpu.base + CP_IB2_BASE), rd(gpu.base + CP_IB2_REM_SIZE));
+	printf("adreno: gpu:   it was given nothing for %u ms; in the first command buffer at %#llx, %u words to go; in the second "
+	    "at %#llx, %u to go\n", stalled_ms, ib1, rd(gpu.base + CP_IB1_REM_SIZE), ib2, rd(gpu.base + CP_IB2_REM_SIZE));
+	/*
+	 * The command it is stopped in, as this kernel gave it. The command processor's own words say
+	 * where in the buffer it is, and the buffer is a place in this kernel's memory too -- the
+	 * records kept by submit() (iokit/Kernel/RedwoodGPU.cpp: redwood_gpu_ib_words) are what join
+	 * the two. The words there are the point of this: a packet that waits -- on the pipeline
+	 * (CP_WAIT_FOR_IDLE), on a write to a place in memory (CP_WAIT_REG_MEM), on a register
+	 * (CP_WAIT_REG_EQ) -- says so in its own six leading bits, and a draw whose pipeline never
+	 * empties reads as the draw it is and not as a wait.
+	 */
+	if (redwood_gpu_ib_words(ib1, near, 8, &size) && size >= 8) {
+		uint32_t from = 0;
+
+		stopped_at = size > rd(gpu.base + CP_IB1_REM_SIZE) ? size - rd(gpu.base + CP_IB1_REM_SIZE) : 0;
+		if (stopped_at >= 2) {
+			from = stopped_at - 2;          /* (and the two words before: a packet whose header was taken) */
+		}
+		if (from + 8 > size) {
+			from = size - 8;
+		}
+		redwood_gpu_ib_words(ib1 + (uint64_t)from * 4, near, 8, &size);
+		printf("adreno: gpu:   the core stopped at word %u of %u in it; the words from word %u: %08x %08x %08x "
+		    "%08x %08x %08x %08x %08x\n", stopped_at, size, from, near[0], near[1], near[2], near[3], near[4], near[5],
+		    near[6], near[7]);
+		if (gpu_stalls == 1) {
+			uint32_t at = stopped_at - from;
+
+			if (at > 4) {
+				at = 4;                 /* (a stop in the last words of a buffer leaves only those in the window) */
+			}
+			for (uint32_t i = 0; i < 4; i++) {
+				gpu_first_words[i] = near[at + i];
+			}
+		}
+	} else {
+		printf("adreno: gpu:   the buffer at %#llx is not one this kernel has a record of: its words cannot be read\n", ib1);
+	}
 	/*
 	 * Who stopped it: bit 6 of sptprac set is the GMU having taken the core's power away (bit 7:
 	 * its clock); firmware, HFI and the GMU's word for us set is the GMU alive and only the core
@@ -3690,6 +3781,13 @@ redwood_gpu_report(const char *why)
 	    rd(gmu.base + GMU_AO_GPU_CX_BUSY_STATUS), rd(gmu.base + GMU_AHB_FENCE_STATUS),
 	    rd(gmu.base + GMU_CM3_FW_INIT_RESULT), rd(gmu.base + GMU_HFI_CTRL_STATUS),
 	    rd(gmu.base + GMU_GMU2HOST_INTR_INFO), rd(gmu.base + GMU_AO_HOST_INTERRUPT_STATUS));
+	/*
+	 * And the two power switches themselves, from the clock controller: whether the half the core
+	 * is in is on at all, and whether the GMU's own half is. A core switched off reads as busy
+	 * here as one spinning on a word it will never see.
+	 */
+	printf("adreno: gpu:   the clock controller: gx_gdscr %#x (the 3D core's switch), cx_gdscr %#x (the GMU's)\n",
+	    rd(gpucc.base + GPUCC_GX_GDSCR), rd(gpucc.base + GPUCC_CX_GDSCR));
 	step = 0;
 	if (space_faulted(&core_space)) {
 		wr(smmu.base + context + SMMU_CB_FSR, SMMU_FSR_ALL);    /* so that the next one shows */
@@ -4136,7 +4234,7 @@ redwood_adreno_init(void)
 			}
 			/* before any client exists: gpu_address_span() must not change under a live buffer */
 			PE_parse_boot_argn("gpu_va", &gpu_va, sizeof(gpu_va));
-			gpu_kept = true;
+			gpu_kept = gpu_was_kept = true;
 			quiet = true;
 			printf("adreno: THE GPU STAYS ON for the system to draw with: the service RedwoodGPU\n");
 			if (gpu_va != 0) {
