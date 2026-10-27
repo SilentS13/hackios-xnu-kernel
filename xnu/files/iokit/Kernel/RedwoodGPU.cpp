@@ -236,15 +236,27 @@ struct gpu_ib {
 	uint64_t                address;                /* the buffer's address in the core's space */
 	const uint32_t *        words;                  /* ... and where it is in the kernel's */
 	uint32_t                count;                  /* how many words of it were given */
+	uint32_t                fence;                  /* the submission that gave it (0: not given) */
 };
-#define GPU_IB_KEEP             256             /* several frames' worth: a frame is a handful of buffers */
+#define GPU_IB_KEEP             1024            /* a frame is a handful of buffers, and the core may be a while behind */
 static struct gpu_ib gGPUIB[GPU_IB_KEEP];
 static uint32_t gGPUIBAt;                       /* where the next record goes */
 
-/* The words of a command buffer this side gave the core, from `address` on; *size: the whole buffer's. */
+/*
+ * The words of a command buffer this side gave the core, from `address` on; *size: the whole buffer's.
+ *
+ * An address is the core's for as long as the core is not done with the buffer, and after that the
+ * next buffer of the same size may have it: so the newest record at an address is not always the
+ * stream the core is in. The one it is in is the *oldest* record there that the core has not
+ * finished with -- a core that has stopped is by definition inside such a submission -- and with
+ * none unfinished the newest record is the answer, since the question is about a run that has not
+ * finished.
+ */
 bool
 redwood_gpu_ib_words(uint64_t address, uint32_t * words, uint32_t count, uint32_t * size)
 {
+	struct gpu_ib * newest = NULL, * unfinished = NULL;
+
 	for (uint32_t i = 0; i < GPU_IB_KEEP; i++) {
 		struct gpu_ib * ib = &gGPUIB[(gGPUIBAt + GPU_IB_KEEP - 1 - i) % GPU_IB_KEEP];
 		uint64_t at, bytes;
@@ -257,13 +269,26 @@ redwood_gpu_ib_words(uint64_t address, uint32_t * words, uint32_t count, uint32_
 		if (at + ((uint64_t) count << 2) > bytes) {
 			continue;                       /* (not this buffer: it may be one the core has not started) */
 		}
-		for (uint32_t w = 0; w < count; w++) {
-			words[w] = ib->words[(at >> 2) + w];
+		if (newest == NULL) {
+			newest = ib;                    /* (the search goes newest first) */
 		}
-		*size = ib->count;
-		return true;
+		if (!redwood_gpu_done(ib->fence) &&
+		    (unfinished == NULL || (int32_t) (ib->fence - unfinished->fence) < 0)) {
+			unfinished = ib;
+		}
 	}
-	return false;
+	struct gpu_ib * ib = unfinished != NULL ? unfinished : newest;
+
+	if (ib == NULL) {
+		return false;
+	}
+	uint64_t at = address - ib->address;
+
+	for (uint32_t w = 0; w < count; w++) {
+		words[w] = ib->words[(at >> 2) + w];
+	}
+	*size = ib->count;
+	return true;
 }
 
 /*
@@ -1130,8 +1155,17 @@ RedwoodGPUUserClient::submit(struct msm_gem_submit * request)
 			took = request->fence != 0;
 		}
 	}
-	if (gpu_log && request->fence != 0) {
-		/* "tl: Q FENCE at US: N buffers, B of 4 MB or more, W words of commands": what was given (tl: q: what it took) */
+	/*
+	 * Which submission gave the buffers recorded above: the report asks for the stream the core is
+	 * in, and that is the oldest one it has not finished with. (Stamped here because the number is
+	 * the one redwood_gpu_submit() has just handed out.)
+	 */
+	if (request->fence != 0 && record_from != ~0u) {
+		for (uint32_t i = record_from; i != gGPUIBAt; i = (i + 1) % GPU_IB_KEEP) {
+			gGPUIB[i].fence = request->fence;
+		}
+	}
+	if (gpu_log && request->fence != 0) {		/* "tl: Q FENCE at US: N buffers, B of 4 MB or more, W words of commands": what was given (tl: q: what it took) */
 		uint32_t big = 0, all_words = 0;
 		uint64_t ns;
 

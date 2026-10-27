@@ -3712,6 +3712,24 @@ redwood_gpu_submit(const uint64_t *addresses, const uint32_t *words, uint32_t co
 	return gpu_fence;
 }
 
+/*
+ * Eight words of a command buffer, from word `at`, as a line of the log. A command's header says
+ * how many words follow it -- bits 15..0 the count, bits 23..16 the command's number, each with its
+ * parity bit -- so words read like this are the commands themselves, and the line after the one the
+ * core stopped in is the one it had not reached.
+ */
+static void
+gpu_ib_row(uint64_t ib, uint32_t at, uint32_t size)
+{
+	uint32_t w[8], whole = size;
+
+	if (at + 8 > size || !redwood_gpu_ib_words(ib + (uint64_t) at * 4, w, 8, &whole)) {
+		return;
+	}
+	printf("adreno: gpu:     %u: %08x %08x %08x %08x %08x %08x %08x %08x\n", at, w[0], w[1], w[2], w[3], w[4],
+	    w[5], w[6], w[7]);
+}
+
 /* A submission does not come back: what the 3D core and its SMMU context say. */
 void
 redwood_gpu_report(const char *why, uint32_t stalled_ms)
@@ -3765,21 +3783,30 @@ redwood_gpu_report(const char *why, uint32_t stalled_ms)
 		if (stopped_at >= 2) {
 			from = stopped_at - 2;          /* (and the two words before: a packet whose header was taken) */
 		}
-		if (from + 8 > size) {
-			from = size - 8;
-		}
-		redwood_gpu_ib_words(ib1 + (uint64_t)from * 4, near, 8, &size);
-		printf("adreno: gpu:   the core stopped at word %u of %u in it; the words from word %u: %08x %08x %08x "
-		    "%08x %08x %08x %08x %08x\n", stopped_at, size, from, near[0], near[1], near[2], near[3], near[4], near[5],
-		    near[6], near[7]);
-		if (gpu_stalls == 1) {
-			uint32_t at = stopped_at - from;
+		printf("adreno: gpu:   the core stopped at word %u of %u in it (0x92a says %u, 0x92b says %u); from word %u:\n",
+		    stopped_at, size, ibreg[2], ibreg[3], from);
+		/*
+		 * The commands around where it got to, and the end of the buffer: a frame's own last
+		 * commands are how a stop is told from a command the buffer was only ever going to reach.
+		 */
+		{
+			uint32_t at = stopped_at > 26 ? stopped_at - 26 : 0;
 
-			if (at > 4) {
-				at = 4;                 /* (a stop in the last words of a buffer leaves only those in the window) */
+			for (uint32_t row = 0; row < 5; row++) {
+				gpu_ib_row(ib1, at + 8 * row, size);
 			}
+			at = size > 24 ? size - 24 : 0;
+			for (uint32_t row = 0; row < 3; row++) {
+				gpu_ib_row(ib1, at + 8 * row, size);
+			}
+		}
+		if (gpu_stalls == 1) {
+			uint32_t at = stopped_at + 4 <= size ? stopped_at : size - 4;
+			uint32_t whole = size;
+
+			redwood_gpu_ib_words(ib1 + (uint64_t) at * 4, near, 4, &whole);
 			for (uint32_t i = 0; i < 4; i++) {
-				gpu_first_words[i] = near[at + i];
+				gpu_first_words[i] = near[i];
 			}
 			gpu_first_rem = rem;
 			gpu_first_size = size;
