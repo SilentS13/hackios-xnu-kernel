@@ -3082,6 +3082,44 @@ static uint32_t gpu_longest_stall;      /* ... and how long the longest of its w
 static uint32_t gpu_first_fence, gpu_first_status, gpu_first_power, gpu_first_sptprac, gpu_first_gx, gpu_first_rem;
 static uint32_t gpu_first_size;         /* ... of how many words that buffer was */
 static uint32_t gpu_first_words[4];     /* ... and the four command words it was stopped on */
+/*
+ * Every stall's stop point, counted. The last line of a run answers one question about one stop;
+ * the run itself has twenty or thirty, and if each one's stop is kept the same photograph answers
+ * all of them. Grouped by the four command words the core stopped on: stops that share them are
+ * one kind of stop, and a run whose stops are all of one kind is a far narrower bug than one whose
+ * are of many. The four words before each are the last commands that ran -- the work the stop is
+ * waiting on.
+ */
+#define GPU_STOP_KINDS 3
+static struct {
+	uint32_t at[4];                 /* the four command words the core stopped on */
+	uint32_t after[4];              /* ... and the four before them */
+	uint32_t at_word, last_word;    /* ... and where in the buffer those were */
+	uint32_t count;
+} gpu_stops[GPU_STOP_KINDS];
+static uint32_t gpu_stop_kinds;
+static uint32_t gpu_stops_uncounted;    /* stops past the kinds this keeps */
+
+static void
+gpu_stop_count(const uint32_t *at, const uint32_t *after, uint32_t at_word)
+{
+	for (uint32_t i = 0; i < gpu_stop_kinds; i++) {
+		if (!memcmp(gpu_stops[i].at, at, sizeof(gpu_stops[i].at))) {
+			gpu_stops[i].count++;
+			gpu_stops[i].last_word = at_word;
+			return;
+		}
+	}
+	if (gpu_stop_kinds == GPU_STOP_KINDS) {
+		gpu_stops_uncounted++;
+		return;
+	}
+	memcpy(gpu_stops[gpu_stop_kinds].at, at, sizeof(gpu_stops[gpu_stop_kinds].at));
+	memcpy(gpu_stops[gpu_stop_kinds].after, after, sizeof(gpu_stops[gpu_stop_kinds].after));
+	gpu_stops[gpu_stop_kinds].at_word = gpu_stops[gpu_stop_kinds].last_word = at_word;
+	gpu_stops[gpu_stop_kinds].count = 1;
+	gpu_stop_kinds++;
+}
 
 static void
 gpu_block_stop(void)
@@ -3177,6 +3215,19 @@ gpu_block_stop(void)
 	 * the first page the loader shows, so it is also the one a photograph should be of.
 	 */
 	if (gpu_was_kept) {
+		/*
+		 * The run's stops, by kind, before the one line it ends with: a run that stopped the same
+		 * way every time is one bug, and the four words after each stop are the work it stopped on.
+		 */
+		for (uint32_t i = 0; i < gpu_stop_kinds; i++) {
+			printf("adreno: gpu:   %u of the %u stops: on %08x %08x at words %u to %u, after %08x %08x %08x %08x\n",
+			    gpu_stops[i].count, gpu_stalls, gpu_stops[i].at[0], gpu_stops[i].at[1], gpu_stops[i].at_word,
+			    gpu_stops[i].last_word, gpu_stops[i].after[0], gpu_stops[i].after[1], gpu_stops[i].after[2],
+			    gpu_stops[i].after[3]);
+		}
+		if (gpu_stops_uncounted != 0) {
+			printf("adreno: gpu:   %u of the %u stops: on other words again\n", gpu_stops_uncounted, gpu_stalls);
+		}
 		if (gpu_stalls == 0) {
 			printf("adreno: gpu: THE RUN HAD NO STALL: the screen never stopped\n");
 		} else {
@@ -3800,16 +3851,23 @@ redwood_gpu_report(const char *why, uint32_t stalled_ms)
 				gpu_ib_row(ib1, at + 8 * row, size);
 			}
 		}
-		if (gpu_stalls == 1) {
+		{
 			uint32_t at = stopped_at + 4 <= size ? stopped_at : size - 4;
+			uint32_t after[4] = { 0, 0, 0, 0 };
 			uint32_t whole = size;
 
 			redwood_gpu_ib_words(ib1 + (uint64_t) at * 4, near, 4, &whole);
-			for (uint32_t i = 0; i < 4; i++) {
-				gpu_first_words[i] = near[i];
+			if (stopped_at >= 4) {
+				redwood_gpu_ib_words(ib1 + (uint64_t) (stopped_at - 4) * 4, after, 4, &whole);
 			}
-			gpu_first_rem = rem;
-			gpu_first_size = size;
+			gpu_stop_count(near, after, stopped_at);
+			if (gpu_stalls == 1) {
+				for (uint32_t i = 0; i < 4; i++) {
+					gpu_first_words[i] = near[i];
+				}
+				gpu_first_rem = rem;
+				gpu_first_size = size;
+			}
 		}
 	} else {
 		printf("adreno: gpu:   the buffer at %#llx is not one this kernel has a record of: its words cannot be read\n", ib1);
