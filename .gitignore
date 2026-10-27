@@ -20,6 +20,7 @@
 !/prebuilt/
 !/wifi/
 !/.github/
+!/.ci/
 
 __pycache__/
 *~

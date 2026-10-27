@@ -3,6 +3,18 @@ name: kernel
 # Builds mach.development.bcm2837 on a Linux runner: XNU 8796.121.2 + this repository's patch,
 # with theos providing the cctools linker and the iPhoneOS 16.5 SDK. Also builds `tools/show.c`,
 # the small "print a file" program a port without a shell needs to read a spindump report back.
+#
+# The `mesa` job is the other half of the graphics stack: libOSMesa.8.dylib, the OpenGL ES library
+# that userland/src/eagl.c puts behind CoreAnimation (and, with AIR=1, the Metal compiler library).
+# It is a job of its own because it shares nothing with the kernel but the cross compiler, and it
+# is the one build here that no Windows machine can do (meson, ninja, bison, flex).
+#
+# Its inputs are a copy of hackios-xnu-userland's tools/mesa + tools/mk-mesa.sh under .ci/mesa/tools:
+# that repository is not public, so a runner cannot check it out, and the copy cannot live at
+# tools/mesa because in a real workspace that is where the userland checkout puts its own file.
+# **Refresh the copy whenever tools/mesa changes** -- build.sh compares the hash Mesa writes beside
+# the library (out/built-from) with the patches it has, and a stale copy here would ship a library
+# that disagrees with the driver.
 on:
   workflow_dispatch:
   push:
@@ -97,3 +109,87 @@ jobs:
             out/libredwood-sb.dylib
             out/libredwood-app.dylib
           if-no-files-found: error
+
+  mesa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      THEOS: /home/runner/theos
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git curl xz-utils patch flex bison python3 \
+            python3-venv python-is-python3 clang lld llvm zlib1g-dev
+          clang --version
+
+      - name: theos and its SDK
+        run: |
+          bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)" || true
+          git clone --depth 1 https://github.com/theos/sdks.git /tmp/theos-sdks
+          mkdir -p "$THEOS/sdks"
+          cp -a /tmp/theos-sdks/iPhoneOS16.5.sdk "$THEOS/sdks/"
+          ls "$THEOS/toolchain/linux/iphone/bin" | head -30
+
+      - name: meson, ninja, and what mk-mesa.sh expects beside xnu-clang
+        run: |
+          # Mesa wants a newer meson than ubuntu-24.04 carries, and ninja comes with it
+          python3 -m venv "$HOME/tools"
+          "$HOME/tools/bin/pip" -q install --upgrade pip
+          "$HOME/tools/bin/pip" -q install meson ninja
+          echo "$HOME/tools/bin" >> "$GITHUB_PATH"
+          # xnu-deps/setup.sh would make these links (and build mig, tcsh and the SDK, none of which
+          # Mesa wants); xnu-clang is in the repository and links with ld64 through them
+          CCTOOLS=$THEOS/toolchain/linux/iphone/bin
+          mkdir -p xnu-deps/host/bin
+          ln -sf "$CCTOOLS/ld" xnu-deps/host/bin/ld64
+          ln -sf "$CCTOOLS/nm" xnu-deps/host/bin/nm
+          ln -sf "$CCTOOLS/install_name_tool" xnu-deps/host/bin/install_name_tool
+          # the cross file names the archiver unversioned
+          LLVMV=$(ls -d /usr/lib/llvm-*/bin | sort -V | tail -1)
+          for t in ar ranlib strip; do ln -sf "$LLVMV/llvm-$t" "xnu-deps/host/bin/llvm-$t"; done
+          meson --version
+          ninja --version
+          xnu-deps/host/bin/llvm-ar --version | head -1
+
+      - name: mesa
+        run: |
+          cp -a .ci/mesa/tools/. tools/
+          tools/mk-mesa.sh
+          M=xnu-deps/build/mesa/out
+          ls -l "$M"
+          test -s "$M/libOSMesa.8.dylib"
+          echo "$(wc -l < "$M/exported-gl.txt") gl* functions exported"
+
+      - name: mesa AIR (the compiler library the Metal driver links against, docs/air.md)
+        # not fatal: the OpenGL ES library above is what the wallpaper and the frame rate need
+        continue-on-error: true
+        env:
+          AIR: 1
+        run: |
+          tools/mk-mesa.sh
+          M=xnu-deps/build/mesa/out
+          ls -l "$M/air_run" "$M/libredwoodair.dylib"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mesa
+          path: |
+            xnu-deps/build/mesa/out/libOSMesa.8.dylib
+            xnu-deps/build/mesa/out/exported-gl.txt
+            xnu-deps/build/mesa/out/gl.xml
+            xnu-deps/build/mesa/out/built-from
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: air
+          path: |
+            xnu-deps/build/mesa/out/air_run
+            xnu-deps/build/mesa/out/libredwoodair.dylib
+            xnu-deps/build/mesa/out/built-from-air
+          if-no-files-found: ignore
