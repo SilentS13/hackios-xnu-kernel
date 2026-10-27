@@ -169,7 +169,7 @@ jobs:
       - name: mesa
         run: |
           cp -a .ci/mesa/tools/. tools/
-          tools/mk-mesa.sh
+          bash tools/mk-mesa.sh
           M=xnu-deps/build/mesa/out
           ls -l "$M"
           test -s "$M/libOSMesa.8.dylib"
@@ -181,7 +181,7 @@ jobs:
         env:
           AIR: 1
         run: |
-          tools/mk-mesa.sh
+          bash tools/mk-mesa.sh
           M=xnu-deps/build/mesa/out
           ls -l "$M/air_run" "$M/libredwoodair.dylib"
 
