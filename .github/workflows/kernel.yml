@@ -158,6 +158,9 @@ jobs:
           ln -sf "$CCTOOLS/ld" xnu-deps/host/bin/ld64
           ln -sf "$CCTOOLS/nm" xnu-deps/host/bin/nm
           ln -sf "$CCTOOLS/install_name_tool" xnu-deps/host/bin/install_name_tool
+          # Mesa's project() declares c++, and the cross file asks for xnu-clang++, which is
+          # xnu-clang by another name (it decides which driver by the name it is called by)
+          ln -sf xnu-clang xnu-deps/host/bin/xnu-clang++
           # the cross file names the archiver unversioned
           LLVMV=$(ls -d /usr/lib/llvm-*/bin | sort -V | tail -1)
           for t in ar ranlib strip; do ln -sf "$LLVMV/llvm-$t" "xnu-deps/host/bin/llvm-$t"; done
