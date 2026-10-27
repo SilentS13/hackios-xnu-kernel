@@ -3080,6 +3080,7 @@ static uint32_t gpu_stalls;             /* how many times in this run a submissi
 static uint32_t gpu_longest_stall;      /* ... and how long the longest of its waits had gone on, in ms */
 /* The first stall's own words, kept for the one line the run ends with (the block is off by then). */
 static uint32_t gpu_first_fence, gpu_first_status, gpu_first_power, gpu_first_sptprac, gpu_first_gx, gpu_first_rem;
+static uint32_t gpu_first_size;         /* ... of how many words that buffer was */
 static uint32_t gpu_first_words[4];     /* ... and the four command words it was stopped on */
 
 static void
@@ -3180,11 +3181,11 @@ gpu_block_stop(void)
 			printf("adreno: gpu: THE RUN HAD NO STALL: the screen never stopped\n");
 		} else {
 			printf("adreno: gpu: THE RUN HAD %u STALL%s, the longest %u ms (%u recover%s); the first: submission %u, "
-			    "status %#x, GMU power %#x, sptprac %#x, gx_gdscr %#x, %u words left in its command buffer, stopped on "
+			    "status %#x, GMU power %#x, sptprac %#x, gx_gdscr %#x, %u of %u words left in its command buffer, stopped on "
 			    "%08x %08x %08x %08x\n",
 			    gpu_stalls, gpu_stalls == 1 ? "" : "S", gpu_longest_stall, gpu_recoveries,
 			    gpu_recoveries == 1 ? "y" : "ies", gpu_first_fence, gpu_first_status, gpu_first_power,
-			    gpu_first_sptprac, gpu_first_gx, gpu_first_rem, gpu_first_words[0], gpu_first_words[1],
+			    gpu_first_sptprac, gpu_first_gx, gpu_first_rem, gpu_first_size, gpu_first_words[0], gpu_first_words[1],
 			    gpu_first_words[2], gpu_first_words[3]);
 		}
 	}
@@ -3249,7 +3250,7 @@ redwood_adreno_quiesce(void)
 #define CP_REG_TO_MEM           0x3e
 #define CP_SCRATCH_REG2         0x0885
 #define CP_IB1_BASE             GPU_WORD(0x0928)
-#define CP_IB1_REM_SIZE         GPU_WORD(0x092a)
+#define CP_IB1_REM_SIZE         GPU_WORD(0x092a)        /* (or the buffer's length: both are printed and told apart) */
 #define CP_IB2_BASE             GPU_WORD(0x092b)
 #define CP_IB2_REM_SIZE         GPU_WORD(0x092d)
 #define CP_INDIRECT_BUFFER      0x3f
@@ -3716,7 +3717,8 @@ void
 redwood_gpu_report(const char *why, uint32_t stalled_ms)
 {
 	uint32_t context = smmu_context(&core_space);
-	uint64_t ib1, ib2;
+	uint64_t ib1;
+	uint32_t ibreg[8];
 	uint32_t size = 0, stopped_at = 0, near[8];
 
 	gpu_stalls++;
@@ -3724,7 +3726,9 @@ redwood_gpu_report(const char *why, uint32_t stalled_ms)
 		gpu_longest_stall = stalled_ms;
 	}
 	ib1 = (uint64_t)rd(gpu.base + CP_IB1_BASE + 4) << 32 | rd(gpu.base + CP_IB1_BASE);
-	ib2 = (uint64_t)rd(gpu.base + CP_IB2_BASE + 4) << 32 | rd(gpu.base + CP_IB2_BASE);
+	for (uint32_t i = 0; i < 8; i++) {
+		ibreg[i] = rd(gpu.base + CP_IB1_BASE + 4 * i);
+	}
 	if (gpu_stalls == 1) {
 		gpu_first_fence = gpu_fence;
 		gpu_first_status = rd(gpu.base + RBBM_STATUS);
@@ -3738,21 +3742,26 @@ redwood_gpu_report(const char *why, uint32_t stalled_ms)
 	    *(volatile uint32_t *)(core_scratch.memory + GPU_FENCE_AT), rd(gpu.base + CP_RB_RPTR), ring_at,
 	    rd(gpu.base + RBBM_STATUS), rd(gpu.base + RBBM_INT_0_STATUS), rd(gpu.base + CP_HW_FAULT),
 	    rd(gpu.base + CP_INTERRUPT_STATUS), rd(gpu.base + CP_PROTECT_STATUS));
-	printf("adreno: gpu:   it was given nothing for %u ms; in the first command buffer at %#llx, %u words to go; in the second "
-	    "at %#llx, %u to go\n", stalled_ms, ib1, rd(gpu.base + CP_IB1_REM_SIZE), ib2, rd(gpu.base + CP_IB2_REM_SIZE));
+	printf("adreno: gpu:   it was given nothing for %u ms; the first command buffer is at %#llx; the command-buffer registers "
+	    "0x928 to 0x92f: %08x %08x %08x %08x %08x %08x %08x %08x\n", stalled_ms, ib1, ibreg[0], ibreg[1], ibreg[2],
+	    ibreg[3], ibreg[4], ibreg[5], ibreg[6], ibreg[7]);
 	/*
 	 * The command it is stopped in, as this kernel gave it. The command processor's own words say
 	 * where in the buffer it is, and the buffer is a place in this kernel's memory too -- the
 	 * records kept by submit() (iokit/Kernel/RedwoodGPU.cpp: redwood_gpu_ib_words) are what join
 	 * the two. The words there are the point of this: a packet that waits -- on the pipeline
 	 * (CP_WAIT_FOR_IDLE), on a write to a place in memory (CP_WAIT_REG_MEM), on a register
-	 * (CP_WAIT_REG_EQ) -- says so in its own six leading bits, and a draw whose pipeline never
+	 * (CP_WAIT_REG_EQ) -- says so in its own leading bits, and a draw whose pipeline never
 	 * empties reads as the draw it is and not as a wait.
+	 *
+	 * Which of the two registers after the address is the buffer's length and which is what is
+	 * left of it is settled here rather than assumed: the length this kernel gave the buffer is
+	 * known (the record's), and the register that equals it is the length.
 	 */
 	if (redwood_gpu_ib_words(ib1, near, 8, &size) && size >= 8) {
-		uint32_t from = 0;
+		uint32_t from = 0, rem = ibreg[3] <= size && ibreg[2] == size ? ibreg[3] : ibreg[2];
 
-		stopped_at = size > rd(gpu.base + CP_IB1_REM_SIZE) ? size - rd(gpu.base + CP_IB1_REM_SIZE) : 0;
+		stopped_at = rem <= size ? size - rem : 0;
 		if (stopped_at >= 2) {
 			from = stopped_at - 2;          /* (and the two words before: a packet whose header was taken) */
 		}
@@ -3772,6 +3781,8 @@ redwood_gpu_report(const char *why, uint32_t stalled_ms)
 			for (uint32_t i = 0; i < 4; i++) {
 				gpu_first_words[i] = near[at + i];
 			}
+			gpu_first_rem = rem;
+			gpu_first_size = size;
 		}
 	} else {
 		printf("adreno: gpu:   the buffer at %#llx is not one this kernel has a record of: its words cannot be read\n", ib1);
