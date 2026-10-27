@@ -3060,6 +3060,28 @@ core_bus_halt(bool for_good)
 
 static bool core_stuck;                 /* the 3D core has not finished what it was given, and is not waited for */
 
+/*
+ * What the kept GPU's submissions are, for the report and the end-of-run line (gpu_block_stop
+ * and redwood_gpu_report below use these, and the service's section further down defines the
+ * rest of them).
+ */
+static bool gpu_kept;
+static bool gpu_was_kept;               /* whether the GPU was the system's at any point in this run */
+static uint32_t gpu_fence;              /* the number of the last submission */
+static uint32_t gpu_timed;              /* ... of the last whose times have been added up */
+static uint64_t gpu_ticks;              /* how long the core has worked on the submissions added up */
+static uint32_t gpu_timed_count;
+static uint32_t gpu_timed_by[7];        /* ... how many of them under 0.1, 0.25, 0.5, 1, 2, 4 ms, and longer */
+static uint32_t gpu_exact = 1;          /* boot-arg gpu_exact=0: the core does not wait to be idle before it notes the time */
+static uint32_t gpu_recover;            /* boot-arg gpu_recover=1: a core that has stopped answering is reset and given work again */
+static uint32_t gpu_recoveries;         /* ... and how many times that has been done in this run */
+static uint32_t gpu_nopc;               /* boot-arg gpu_nopc=1: the GMU is told never to take the core's power away */
+static uint32_t gpu_stalls;             /* how many times in this run a submission stopped coming back */
+static uint32_t gpu_longest_stall;      /* ... and how long the longest of its waits had gone on, in ms */
+/* The first stall's own words, kept for the one line the run ends with (the block is off by then). */
+static uint32_t gpu_first_fence, gpu_first_status, gpu_first_power, gpu_first_sptprac, gpu_first_gx, gpu_first_rem;
+static uint32_t gpu_first_words[4];     /* ... and the four command words it was stopped on */
+
 static void
 gpu_block_stop(void)
 {
@@ -3240,22 +3262,6 @@ redwood_adreno_quiesce(void)
 #define GMU_AHB_FENCE_STATUS_CLR GMU_WORD(0x9314)       /* the bits of ahb_fence_status written here are forgotten */
 #define GPU_RECOVERIES          64                      /* at most in one run: a program that hangs every submission fills no log with this */
 
-static bool gpu_kept;
-static bool gpu_was_kept;               /* whether the GPU was the system's at any point in this run */
-static uint32_t gpu_fence;              /* the number of the last submission */
-static uint32_t gpu_timed;              /* ... of the last whose times have been added up */
-static uint64_t gpu_ticks;              /* how long the core has worked on the submissions added up */
-static uint32_t gpu_timed_count;
-static uint32_t gpu_timed_by[7];        /* ... how many of them under 0.1, 0.25, 0.5, 1, 2, 4 ms, and longer */
-static uint32_t gpu_exact = 1;          /* boot-arg gpu_exact=0: the core does not wait to be idle before it notes the time */
-static uint32_t gpu_recover;            /* boot-arg gpu_recover=1: a core that has stopped answering is reset and given work again */
-static uint32_t gpu_recoveries;         /* ... and how many times that has been done in this run */
-static uint32_t gpu_nopc;               /* boot-arg gpu_nopc=1: the GMU is told never to take the core's power away */
-static uint32_t gpu_stalls;             /* how many times in this run a submission stopped coming back */
-static uint32_t gpu_longest_stall;      /* ... and how long the longest of its waits had gone on, in ms */
-/* The first stall's own words, kept for the one line the run ends with (the block is off by then). */
-static uint32_t gpu_first_fence, gpu_first_status, gpu_first_power, gpu_first_sptprac, gpu_first_gx, gpu_first_rem;
-static uint32_t gpu_first_words[4];     /* ... and the four command words it was stopped on */
 uint32_t gpu_log;                       /* boot-arg gpu_log=1: a line for every submission and the time the core spent on it */
 extern void redwood_tl(const char *format, ...) __printflike(1, 2);
 static struct {
