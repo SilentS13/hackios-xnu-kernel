@@ -17,11 +17,20 @@ name: kernel
 # that disagrees with the driver.
 on:
   workflow_dispatch:
+    inputs:
+      job:
+        description: 'mesa: only the OpenGL ES library, no kernel'
+        type: choice
+        options: [both, mesa]
+        default: both
   push:
     branches: [vili-kernel]
 
 jobs:
   kernel:
+    # `gh workflow run kernel.yml -f job=mesa` is how the Mesa job is worked on without waiting
+    # for, and paying for, a kernel build that would be identical.
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.job != 'mesa'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
@@ -152,8 +161,9 @@ jobs:
           # the cross file names the archiver unversioned
           LLVMV=$(ls -d /usr/lib/llvm-*/bin | sort -V | tail -1)
           for t in ar ranlib strip; do ln -sf "$LLVMV/llvm-$t" "xnu-deps/host/bin/llvm-$t"; done
-          meson --version
-          ninja --version
+          # $GITHUB_PATH reaches the steps after this one, not this one
+          "$HOME/tools/bin/meson" --version
+          "$HOME/tools/bin/ninja" --version
           xnu-deps/host/bin/llvm-ar --version | head -1
 
       - name: mesa
