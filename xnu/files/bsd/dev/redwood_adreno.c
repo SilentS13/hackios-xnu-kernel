@@ -3078,6 +3078,7 @@ static uint32_t gpu_recoveries;         /* ... and how many times that has been 
 static uint32_t gpu_nopc;               /* boot-arg gpu_nopc=1: the GMU is told never to take the core's power away */
 static uint32_t gpu_stalls;             /* how many times in this run a submission stopped coming back */
 static uint32_t gpu_longest_stall;      /* ... and how long the longest of its waits had gone on, in ms */
+static uint32_t gpu_last_stall_fence;   /* ... and the submission the last of them was on */
 /* The first stall's own words, kept for the one line the run ends with (the block is off by then). */
 static uint32_t gpu_first_fence, gpu_first_status, gpu_first_power, gpu_first_sptprac, gpu_first_gx, gpu_first_rem;
 static uint32_t gpu_first_size;         /* ... of how many words that buffer was */
@@ -3231,6 +3232,9 @@ gpu_block_stop(void)
 		if (gpu_stalls == 0) {
 			printf("adreno: gpu: THE RUN HAD NO STALL: the screen never stopped\n");
 		} else {
+			printf("adreno: gpu: the run gave %u submissions; the last stop was in submission %u%s\n", gpu_fence,
+			    gpu_last_stall_fence,
+			    gpu_last_stall_fence == gpu_fence ? ", the last one it was ever given" : ", and work came after it");
 			printf("adreno: gpu: THE RUN HAD %u STALL%s, the longest %u ms (%u recover%s); the first: submission %u, "
 			    "status %#x, GMU power %#x, sptprac %#x, gx_gdscr %#x, %u of %u words left in its command buffer, stopped on "
 			    "%08x %08x %08x %08x\n",
@@ -3836,6 +3840,7 @@ redwood_gpu_report(const char *why, uint32_t stalled_ms)
 	uint32_t size = 0, stopped_at = 0, near[8];
 
 	gpu_stalls++;
+	gpu_last_stall_fence = gpu_fence;
 	if (stalled_ms > gpu_longest_stall) {
 		gpu_longest_stall = stalled_ms;
 	}
