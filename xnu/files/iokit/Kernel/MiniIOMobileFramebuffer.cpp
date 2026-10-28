@@ -1124,6 +1124,11 @@ IOMobileFramebuffer::show(const uint8_t * swap, MiniIOSurface ** surfaces)
 		    fStatFrames * NSEC_PER_SEC / nanos, drawing / fStatFrames / NSEC_PER_USEC,
 		    waiting / fStatFrames / NSEC_PER_USEC, fStatOnBeat, fStatOnBeat ? beat / fStatOnBeat / NSEC_PER_USEC : 0,
 		    fStatHeld, fStatLost, fStatSwapsLate);
+		/* the same figures on the screen's own log, beside the client's pace line: one look says which half is slow */
+		redwood_tl("lb: fb %u frames (%llu a second), %llu us drawing, %llu waiting for the GPU, %llu on the beat; "
+		    "%u held, %u lost, %u late\n", fStatFrames, fStatFrames * NSEC_PER_SEC / nanos,
+		    drawing / fStatFrames / NSEC_PER_USEC, waiting / fStatFrames / NSEC_PER_USEC,
+		    fStatOnBeat ? beat / fStatOnBeat / NSEC_PER_USEC : 0, fStatHeld, fStatLost, fStatSwapsLate);
 		fStatSwapsLate = 0;
 		for (different = 0; different < 8 && fStatSurfaces[different] != 0; different++) {
 		}
