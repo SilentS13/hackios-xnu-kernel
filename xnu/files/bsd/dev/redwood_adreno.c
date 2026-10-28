@@ -69,8 +69,8 @@
  *   adreno_keep=1      with adreno=21: the GPU is not stopped again but kept for the system to draw
  *                      with, through the service RedwoodGPU (see "the GPU kept on" below); it is
  *                      given back when the run ends (adreno_dirty=1: left as a panic leaves it)
- *   adreno_speed=N     step 17 asks the GMU for the 3D core's Nth speed: 1 315 MHz, 2 450 MHz,
- *                      3 550 MHz (the default: the most this phone's GPU is rated for)
+ *   adreno_speed=N     step 17 asks the GMU for the 3D core's Nth speed of the table it is sent:
+ *                      1 315 MHz up to 10 840 MHz (the default: the fastest, 840 MHz)
  *   adreno_blind=1     step 20 starts the command processor with its microcode nowhere, and
  *   adreno_stream1=N   step 18 leaves the core's second stream out (0) or gives it an empty
  *                      context of its own (2): what the SMMU then records shows what the core
@@ -2301,18 +2301,24 @@ static uint32_t core_khz;               /* the 3D core's speed, as asked of the 
 
 /*
  * What the vendor's driver sends at this point (a6xx_hfi_start; Linux the same with fewer
- * levels): the table of speeds of the 3D core with the supply level each needs -- the phone's
- * three lowest (dt: qcom,gpu-pwrlevels: 315, 450, 550 MHz at "levels" 64, 128, 192) -- and of the
+ * levels): the table of speeds of the 3D core with the supply level each needs -- this phone's
+ * own (dt: qcom,gpu-pwrlevels: 315 MHz at RPMh's level 64 up to 840 MHz at 416) -- and of the
  * GMU itself; the table of bus bandwidth votes, of which Linux gets by with the one for "off"
  * (a6xx_hfi.c: adreno_7c3_build_bw_table); "start"; and the speed wanted now. Then the request
  * to keep the 3D core powered while we use it (a6xx_gmu_oob_set), and its registers can be read.
+ *
+ * The table used to hold three speeds, 315/450/550, and to ask for the highest of them: the GMU
+ * can only go as fast as the table it is given, so the core was held at 540 MHz (RPMh's level
+ * 192) where this silicon does 840. Its clock is what a frame's cost is measured in, so the table
+ * is the phone's whole one now and the fastest is asked for.
  */
 static bool
 step_core_power(void)
 {
 	static const struct {
 		uint32_t khz, level;
-	} speeds[] = { { 0, 0 }, { 315000, 64 }, { 450000, 128 }, { 550000, 192 } };
+	} speeds[] = { { 0, 0 }, { 315000, 64 }, { 379000, 80 }, { 443000, 128 }, { 491000, 144 }, { 540000, 192 },
+		{ 608000, 224 }, { 676000, 256 }, { 738000, 320 }, { 778000, 384 }, { 840000, 416 } };
 	static struct hfi_perf_table perf;
 	static struct hfi_bw_table bw;
 	uint32_t core_start[2] = { 0, 0 }, start[1] = { 0 }, vote[4] = { 0, 1, 3, HFI_NO_INDEX }, granted = 0, speed = 0;
@@ -2327,14 +2333,23 @@ step_core_power(void)
 		printf("adreno: %u: RPMh's list lacks one of the rails\n", step);
 		return false;
 	}
-	perf.gpu_levels = sizeof(speeds) / sizeof(speeds[0]);
-	for (unsigned i = 0; i < perf.gpu_levels; i++) {
-		perf.gpu[i].khz = speeds[i].khz;
-		perf.gpu[i].acd = 0xffffffff;           /* no adaptive clocking */
-		if (!rail_vote(speeds[i].level, gfx, gfx_levels, mx, mx_levels, &perf.gpu[i].vote)) {
-			printf("adreno: %u: RPMh has no level %u for the 3D core's rail\n", step, speeds[i].level);
-			return false;
+	perf.gpu_levels = 0;
+	for (unsigned i = 0; i < sizeof(speeds) / sizeof(speeds[0]); i++) {
+		uint32_t at;
+
+		if (!rail_vote(speeds[i].level, gfx, gfx_levels, mx, mx_levels, &at)) {
+			printf("adreno: %u: RPMh's list for the 3D core's rail does not reach level %u; %u kHz is left out\n",
+			    step, speeds[i].level, speeds[i].khz);
+			continue;
 		}
+		perf.gpu[perf.gpu_levels].khz = speeds[i].khz;
+		perf.gpu[perf.gpu_levels].acd = 0xffffffff;      /* no adaptive clocking */
+		perf.gpu[perf.gpu_levels].vote = at;
+		perf.gpu_levels++;
+	}
+	if (perf.gpu_levels < 2) {
+		printf("adreno: %u: RPMh's list for the 3D core's rail has no speed to ask for\n", step);
+		return false;
 	}
 	perf.gmu_levels = 2;
 	perf.gmu[1].khz = 200000;
@@ -2342,8 +2357,10 @@ step_core_power(void)
 	    !rail_vote(48, cx, cx_levels, mx, mx_levels, &perf.gmu[1].vote)) {  /* "minimum SVS", the vendor's choice */
 		return false;
 	}
-	printf("adreno: %u: votes: 3D core %#x %#x %#x %#x, GMU %#x %#x\n", step, perf.gpu[0].vote, perf.gpu[1].vote,
-	    perf.gpu[2].vote, perf.gpu[3].vote, perf.gmu[0].vote, perf.gmu[1].vote);
+	printf("adreno: %u: votes: 3D core %#x for the lowest of %u speeds up to %#x for %u kHz, GMU %#x %#x\n", step,
+	    perf.gpu[0].vote, perf.gpu_levels, perf.gpu[perf.gpu_levels - 1].vote, perf.gpu[perf.gpu_levels - 1].khz,
+	    perf.gmu[0].vote, perf.gmu[1].vote);
+	vote[2] = perf.gpu_levels - 1;                  /* the fastest the table has, unless adreno_speed says */
 
 	bw.levels = 1;
 	bw.ddr_commands = 3;
@@ -2366,8 +2383,8 @@ step_core_power(void)
 	if (PE_parse_boot_argn("adreno_speed", &speed, sizeof(speed)) && speed >= 1 && speed < perf.gpu_levels) {
 		vote[2] = speed;
 	}
-	core_khz = speeds[vote[2]].khz;
-	printf("adreno: %u: the speed wanted: %u MHz\n", step, core_khz / 1000);
+	core_khz = perf.gpu[vote[2]].khz;
+	printf("adreno: %u: the speed wanted: %u MHz (of %u speeds)\n", step, core_khz / 1000, perf.gpu_levels);
 	announce("send the GMU its tables (speeds and supply levels, bus votes), \"start\", and the speed wanted; "
 	    "from here on it casts votes in RPMh by itself");
 	if (!hfi_send("the table of speeds", HFI_PERF_TABLE, &perf.header, sizeof(perf) / 4) ||
