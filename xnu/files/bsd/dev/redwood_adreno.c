@@ -3291,7 +3291,20 @@ redwood_adreno_quiesce(void)
  * (redwood_gpu_recover() below, which says what is done and which source says so). Without it
  * such a submission is only reported, and the GPU stays stopped.
  */
-#define GPU_CHIP_ID             0x06030500ull   /* dt: qcom,chipid */
+/*
+ * What userspace is told this GPU is, through msm's GET_PARAM (redwood_gpu_parameter() below).
+ * Mesa's freedreno chooses its whole variant from three of those answers -- the chip ID, the size
+ * of GMEM, the highest bank bit: which registers exist and what is written to them, how UBWC's
+ * descriptors are laid out, how the bins are sized. They must be this phone's own, and this phone's
+ * device tree (qcom,kgsl-3d0@3d00000 in its own live DTB) says qcom,chipid 0x06060001, an Adreno
+ * 660, and qcom,highest-bank-bit 16. The numbers below used to be an a630's -- this driver's first
+ * port, sweet, is an Adreno 630 -- and 0x06060001 is what the port of this same SoC (lemonade)
+ * reports. An a660 has 1.5 MB of GMEM, not 512 KB. Boot-arg gpu_chip=630 answers with the old
+ * numbers instead, for a run that wants to compare the two.
+ */
+static uint64_t gpu_chip_id = 0x06060001ull;
+static uint32_t gpu_gmem_bytes = 1536 * 1024;
+static uint32_t gpu_bank_bit = 16;
 #define GPU_ADDRESSES_START     0x20000000ull   /* above everything the steps use; below 4 GB, as Linux keeps them */
 #define GPU_ADDRESSES_SIZE      0xe0000000ull
 #define GPU_FENCE_AT            0x40            /* in the scratch page */
@@ -3444,9 +3457,23 @@ redwood_gpu_ready(void)
 	return gpu_kept;
 }
 
+static void
+gpu_platform(void)
+{
+	uint32_t chip = 660;
+
+	if (PE_parse_boot_argn("gpu_chip", &chip, sizeof(chip)) && chip == 630) {
+		gpu_chip_id = 0x06030500ull;
+		gpu_gmem_bytes = 512 * 1024;
+		gpu_bank_bit = 14;
+	}
+	printf("adreno: the GPU is described to userspace as chip %#llx, %u KB of GMEM, bank bit %u\n",
+	    gpu_chip_id, gpu_gmem_bytes >> 10, gpu_bank_bit);
+}
+
 /* The answers to msm's GET_PARAM (Linux's adreno_get_param for this GPU; the numbers are msm_drm.h's). */
-bool
-redwood_gpu_parameter(uint32_t which, uint64_t *value)
+static bool
+gpu_parameter_value(uint32_t which, uint64_t *value)
 {
 	switch (which) {
 	case 0x01:                              /* GPU_ID: none, the chip ID says it */
@@ -3458,10 +3485,10 @@ redwood_gpu_parameter(uint32_t which, uint64_t *value)
 		*value = 0;
 		return true;
 	case 0x02:                              /* GMEM_SIZE */
-		*value = 512 * 1024;
+		*value = gpu_gmem_bytes;
 		return true;
 	case 0x03:                              /* CHIP_ID, with the speed bin above it */
-		*value = GPU_CHIP_ID | (uint64_t)speed_bin << 32;
+		*value = gpu_chip_id | (uint64_t)speed_bin << 32;
 		return true;
 	case 0x04:                              /* MAX_FREQ */
 		*value = core_khz * 1000ull;
@@ -3473,7 +3500,7 @@ redwood_gpu_parameter(uint32_t which, uint64_t *value)
 		*value = 1;
 		return true;
 	case 0x10:                              /* HIGHEST_BANK_BIT */
-		*value = 14;
+		*value = gpu_bank_bit;
 		return true;
 	case 0x12:                              /* UBWC_SWIZZLE */
 		*value = 6;
@@ -3496,6 +3523,24 @@ redwood_gpu_parameter(uint32_t which, uint64_t *value)
 	default:
 		return false;
 	}
+}
+
+/*
+ * The first few questions are written to the log: it is how a run says which of these numbers
+ * Mesa actually asked for, and so which of them the variant it runs is chosen by.
+ */
+bool
+redwood_gpu_parameter(uint32_t which, uint64_t *value)
+{
+	static uint32_t told;
+	bool known = gpu_parameter_value(which, value);
+
+	if (told < 16) {
+		told++;
+		printf("adreno: userspace asks what the GPU is, %#x: %s %#llx\n", which,
+		    known ? "answered" : "not answered", known ? *value : 0);
+	}
+	return known;
 }
 
 /*
@@ -4336,6 +4381,7 @@ redwood_adreno_init(void)
 			}
 			/* before any client exists: gpu_address_span() must not change under a live buffer */
 			PE_parse_boot_argn("gpu_va", &gpu_va, sizeof(gpu_va));
+			gpu_platform();
 			gpu_kept = gpu_was_kept = true;
 			quiet = true;
 			printf("adreno: THE GPU STAYS ON for the system to draw with: the service RedwoodGPU\n");
