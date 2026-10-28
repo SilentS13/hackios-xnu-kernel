@@ -3079,6 +3079,7 @@ static uint32_t gpu_nopc;               /* boot-arg gpu_nopc=1: the GMU is told 
 static uint32_t gpu_stalls;             /* how many times in this run a submission stopped coming back */
 static uint32_t gpu_longest_stall;      /* ... and how long the longest of its waits had gone on, in ms */
 static uint32_t gpu_last_stall_fence;   /* ... and the submission the last of them was on */
+static uint64_t gpu_kept_at;            /* when the GPU became the system's: what a rate is measured from */
 /* The first stall's own words, kept for the one line the run ends with (the block is off by then). */
 static uint32_t gpu_first_fence, gpu_first_status, gpu_first_power, gpu_first_sptprac, gpu_first_gx, gpu_first_rem;
 static uint32_t gpu_first_size;         /* ... of how many words that buffer was */
@@ -3216,6 +3217,20 @@ gpu_block_stop(void)
 	 * the first page the loader shows, so it is also the one a photograph should be of.
 	 */
 	if (gpu_was_kept) {
+		/*
+		 * How much work the run actually gave the GPU, over how long: the submit rate is the one
+		 * number that says whether a slow screen is the window server's or this driver's, and it
+		 * is a rate the same run can be compared with the next one by.
+		 */
+		uint64_t nanos = 0;
+
+		if (gpu_kept_at != 0) {
+			absolutetime_to_nanoseconds(mach_absolute_time() - gpu_kept_at, &nanos);
+		}
+		printf("adreno: gpu: the run gave %u submissions in %llu.%03llu s: %u a second %s\n", gpu_fence,
+		    nanos / 1000000000ull, nanos / 1000000ull % 1000,
+		    nanos != 0 ? (uint32_t)((uint64_t)gpu_fence * 1000000000ull / nanos) : 0,
+		    gpu_stalls == 0 ? "(no stall)" : "");
 		/*
 		 * The run's stops, by kind, before the one line it ends with: a run that stopped the same
 		 * way every time is one bug, and the four words after each stop are the work it stopped on.
@@ -4388,6 +4403,7 @@ redwood_adreno_init(void)
 			PE_parse_boot_argn("gpu_va", &gpu_va, sizeof(gpu_va));
 			gpu_platform();
 			gpu_kept = gpu_was_kept = true;
+			gpu_kept_at = mach_absolute_time();
 			quiet = true;
 			printf("adreno: THE GPU STAYS ON for the system to draw with: the service RedwoodGPU\n");
 			if (gpu_va != 0) {
