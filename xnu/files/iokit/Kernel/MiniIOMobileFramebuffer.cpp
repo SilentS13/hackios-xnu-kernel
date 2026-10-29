@@ -252,6 +252,8 @@ static const uint32_t kDPUSplashOff[] = { 0x00c00000u, 0x01800000u };    /* 12 M
 #define kDPUCtlTop      0x014u
 #define kDPUCtlFlush    0x018u
 #define kDPUCtlStart    0x01cu
+#define kDPUCtlLayerExt 0x040u                         /* CTL_LAYER_EXT: the stages past the eighth, bit 0 = VIG0 */
+#define kDPUCtlIntfActive 0x0f4u                       /* CTL_INTF_ACTIVE: a bit per interface this CTL scans out */
 #define kDPUPipeSrc0Addr   0x014u
 #define kDPUPipeStride     0x024u
 #define kFlipFrames     2                           /* one frame shown, one drawn into */
@@ -518,12 +520,17 @@ static uint32_t gDpuDump;                               /* seconds between dumps
  * The CTL that runs the pipe: its layer mixer's blend-stage word holds the pipe's stage in bits
  * 2:0 (dpu_hw_ctl_setup_blendstage(): SSPP_VIG0 is the first stage of CTL_LAYER_0). The flush
  * and the start of a flip go to this CTL alone -- they were being written to every CTL.
+ *
+ * The layer words read back zero on this controller, so they cannot be relied on: a pipe past the
+ * eighth stage shows in CTL_LAYER_EXT's bit 0, and a CTL that is scanning out an interface at all
+ * says so in CTL_INTF_ACTIVE (a bit per interface). Only one CTL is expected to have that set;
+ * if several do, the first is used and the log says which ones were seen.
  */
 static void
 flipFindCtl(void)
 {
 	static const uint32_t layers[] = { 0x00, 0x04, 0x08, 0x0c, 0x10, 0x24 };    /* CTL_LAYER_0 .. CTL_LAYER_5 */
-	unsigned i, j;
+	unsigned i, j, active = 0;
 
 	gCtlOff = 0;
 	for (i = 0; i < kDPUCtlCount && gCtlOff == 0; i++) {
@@ -540,39 +547,89 @@ flipFindCtl(void)
 			}
 		}
 	}
+	for (i = 0; i < kDPUCtlCount && gCtlOff == 0; i++) {
+		uint32_t base = kDPUCtlFirst + kDPUCtlStride * i;
+		uint32_t ext = gDPU[(base + kDPUCtlLayerExt) / 4];
+
+		if ((ext & 1) != 0) {
+			gCtlOff = base;
+			IOLog("MiniIOMobileFramebuffer: ctl%u holds the panel's pipe past the eighth stage (ext %#x)\n",
+			    i, ext);
+		}
+	}
+	for (i = 0; i < kDPUCtlCount; i++) {
+		uint32_t base = kDPUCtlFirst + kDPUCtlStride * i;
+		uint32_t intf = gDPU[(base + kDPUCtlIntfActive) / 4];
+
+		if (intf == 0) {
+			continue;
+		}
+		if (active++ == 0 && gCtlOff == 0) {
+			gCtlOff = base;
+			IOLog("MiniIOMobileFramebuffer: ctl%u scans out interface %#x: a flip goes to it\n", i, intf);
+		} else {
+			IOLog("MiniIOMobileFramebuffer: ctl%u also scans out interface %#x\n", i, intf);
+		}
+	}
 	if (gCtlOff == 0) {
 		IOLog("MiniIOMobileFramebuffer: no CTL's layer holds the pipe: nothing to flush\n");
 	}
 }
 
 /*
- * The controller's own state: the CTL's layers and its start, the pipe's registers, and the
- * interface's frame counter. Read-only; logged every dpu_dump seconds so that a panel that has
- * stopped moving still shows, frozen on itself, what the controller was doing.
+ * The controller's own state: every pipe that holds a buffer, the layer and flush registers of
+ * every CTL, and the interface's frame counter. Read-only; logged every dpu_dump seconds so that
+ * a panel that has stopped moving still shows, frozen on itself, what the controller was doing.
+ *
+ * The CTL's layer words read back zero on this controller (they are write-only here), so this
+ * says which CTLs have anything at all set rather than which one mixes the pipe.
  */
 static void
 dpuDump(const char * tag)
 {
-	uint32_t base = gPipeBase;
+	static const uint32_t blocks[] = {
+		0x05000, 0x07000, 0x09000, 0x0b000, 0x0d000, 0x0f000, 0x11000, 0x13000,      /* VIG0-3, RGB0-3 */
+		0x25000, 0x27000, 0x29000, 0x2b000,                                          /* DMA0-3 */
+	};
+	char line[220];
+	unsigned i, n;
 
-	if (gDPU == NULL || gCtlOff == 0 || base == 0) {
+	if (gDPU == NULL) {
 		return;
 	}
-	IOLog("MiniIOMobileFramebuffer: dpu %s: ctl%u layer %#x %#x %#x %#x %#x %#x ext %#x top %#x flush %#x start %#x\n",
-	    tag, (gCtlOff - kDPUCtlFirst) / kDPUCtlStride,
-	    gDPU[(gCtlOff + 0x00) / 4], gDPU[(gCtlOff + 0x04) / 4], gDPU[(gCtlOff + 0x08) / 4],
-	    gDPU[(gCtlOff + 0x0c) / 4], gDPU[(gCtlOff + 0x10) / 4], gDPU[(gCtlOff + 0x24) / 4],
-	    gDPU[(gCtlOff + 0x40) / 4], gDPU[(gCtlOff + kDPUCtlTop) / 4],
-	    gDPU[(gCtlOff + kDPUCtlFlush) / 4], gDPU[(gCtlOff + kDPUCtlStart) / 4]);
-	IOLog("MiniIOMobileFramebuffer: dpu %s: intf %#x pipe %#x lms %#x fetch %#x frame %u line %u; +0x00 %08x %08x %08x %08x %08x %08x\n",
-	    tag, gDPU[(gCtlOff + 0x0f4) / 4], gDPU[(gCtlOff + 0x12c) / 4], gDPU[(gCtlOff + 0x130) / 4],
-	    gDPU[(gCtlOff + 0x0fc) / 4], gIntfOff != 0 ? gDPU[(gIntfOff + kDPUIntfFrameCount) / 4] : 0,
-	    gIntfOff != 0 ? gDPU[(gIntfOff + kDPUIntfLineCount) / 4] : 0,
-	    gDPU[(base + 0x00) / 4], gDPU[(base + 0x04) / 4], gDPU[(base + 0x08) / 4], gDPU[(base + 0x0c) / 4],
-	    gDPU[(base + 0x10) / 4], gDPU[(base + 0x14) / 4]);
-	IOLog("MiniIOMobileFramebuffer: dpu %s: +0x18 %08x %08x %08x %08x %08x %08x\n", tag,
-	    gDPU[(base + 0x18) / 4], gDPU[(base + 0x1c) / 4], gDPU[(base + 0x20) / 4], gDPU[(base + 0x24) / 4],
-	    gDPU[(base + 0x28) / 4], gDPU[(base + 0x2c) / 4]);
+	n = snprintf(line, sizeof(line), "MiniIOMobileFramebuffer: dpu %s: frame %u line %u", tag,
+	    gIntfOff != 0 ? gDPU[(gIntfOff + kDPUIntfFrameCount) / 4] : 0,
+	    gIntfOff != 0 ? gDPU[(gIntfOff + kDPUIntfLineCount) / 4] : 0);
+	for (i = 0; i < sizeof(blocks) / sizeof(blocks[0]) && n < sizeof(line) - 26; i++) {
+		uint32_t addr = gDPU[(blocks[i] + kDPUPipeSrc0Addr) / 4];
+
+		if (addr != 0) {
+			n += snprintf(line + n, sizeof(line) - n, " +%#x=%#x/%u", blocks[i], addr,
+			    gDPU[(blocks[i] + kDPUPipeStride) / 4]);
+		}
+	}
+	IOLog("%s\n", line);
+	for (i = 0; i < kDPUCtlCount; i++) {
+		uint32_t b = kDPUCtlFirst + kDPUCtlStride * i;
+		uint32_t w[11];
+
+		w[0] = gDPU[(b + 0x00) / 4];
+		w[1] = gDPU[(b + 0x04) / 4];
+		w[2] = gDPU[(b + 0x08) / 4];
+		w[3] = gDPU[(b + 0x0c) / 4];
+		w[4] = gDPU[(b + 0x10) / 4];
+		w[5] = gDPU[(b + 0x24) / 4];
+		w[6] = gDPU[(b + 0x40) / 4];            /* CTL_LAYER_EXT: the stages past the first eight */
+		w[7] = gDPU[(b + 0x14) / 4];            /* CTL_TOP */
+		w[8] = gDPU[(b + 0x18) / 4];            /* CTL_FLUSH */
+		w[9] = gDPU[(b + 0x1c) / 4];            /* CTL_START */
+		w[10] = gDPU[(b + 0xf4) / 4];           /* CTL_INTF_ACTIVE */
+		if ((w[0] | w[1] | w[2] | w[3] | w[4] | w[5] | w[6] | w[7] | w[8] | w[9] | w[10]) == 0) {
+			continue;
+		}
+		IOLog("MiniIOMobileFramebuffer: dpu %s: ctl%u layer %#x %#x %#x %#x %#x %#x ext %#x top %#x flush %#x start %#x intf %#x\n",
+		    tag, i, w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], w[8], w[9], w[10]);
+	}
 }
 
 static void
