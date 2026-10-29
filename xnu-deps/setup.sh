@@ -16,7 +16,7 @@
 # What ends up where (all under xnu-deps/, none of it committed):
 #   AvailabilityVersions libdispatch libpthread     Apple open source, at the releases of iOS 16.5
 #   mm_bootstrap_cmds tcsh unifdef                  sources of mig, csh and unifdef
-#   MacOSX13.3.sdk                                  only Kernel.framework: the DriverKit headers
+#   MacOSX13.3.sdk / MacOSX26.1.sdk                 only Kernel.framework: the DriverKit headers
 #                                                   that Apple's closed "iig" would generate
 #   host/bin                                        mig, migcom, unifdef, tcsh, csh, unzbm, and links
 #                                                   to the cctools (next to our own wrappers)
@@ -29,7 +29,13 @@ cd "$XNUDEPS"
 JOBS=${JOBS:-$(nproc)}
 CCTOOLS=$THEOS/toolchain/linux/iphone/bin
 IOS_SDK=$THEOS/sdks/iPhoneOS16.5.sdk
-MACOS_SDK_URL=https://github.com/joseluisq/macosx-sdks/releases/download/13.3/MacOSX13.3.sdk.tar.xz
+# iig is closed source, so the DriverKit headers it would generate are taken, pre-generated, from a
+# macOS SDK of the same family (only Kernel.framework is unpacked). 8796's .iig files are the 13.3
+# set; 12377 adds IOExtensiblePaniclog.iig, which only 26.x has.
+MACOS_SDK_VERSION=13.3
+[ -f "$XNU_SRC/iokit/DriverKit/IOExtensiblePaniclog.iig" ] && MACOS_SDK_VERSION=26.1
+MACOS_SDK=$XNUDEPS/MacOSX$MACOS_SDK_VERSION.sdk
+MACOS_SDK_URL=https://github.com/joseluisq/macosx-sdks/releases/download/$MACOS_SDK_VERSION/MacOSX$MACOS_SDK_VERSION.sdk.tar.xz
 
 log() { echo "setup: $*"; }
 die() { echo "setup: $*" >&2; exit 1; }
@@ -81,10 +87,10 @@ stage1() {
 
 	# Apple's iig (the DriverKit interface generator) is closed. host/bin/iig hands out the headers it
 	# would generate, which the macOS SDK of the same XNU release ships ready-made.
-	if [ ! -d MacOSX13.3.sdk/System/Library/Frameworks/Kernel.framework/Headers/DriverKit ]; then
-		log "downloading the macOS 13.3 SDK for its DriverKit headers"
+	if [ ! -d "$MACOS_SDK/System/Library/Frameworks/Kernel.framework/Headers/DriverKit" ]; then
+		log "downloading the macOS $MACOS_SDK_VERSION SDK for its DriverKit headers"
 		curl -L --fail --retry 3 -s -o macos-sdk.tar.xz "$MACOS_SDK_URL" || die "download failed: $MACOS_SDK_URL"
-		tar -xJf macos-sdk.tar.xz --wildcards '*MacOSX13.3.sdk/System/Library/Frameworks/Kernel.framework*' ||
+		tar -xJf macos-sdk.tar.xz --wildcards "*MacOSX$MACOS_SDK_VERSION.sdk/System/Library/Frameworks/Kernel.framework*" ||
 			die "cannot unpack the macOS SDK"
 		rm -f macos-sdk.tar.xz
 	fi
