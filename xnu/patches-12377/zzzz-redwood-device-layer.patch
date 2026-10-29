@@ -1006,6 +1006,19 @@ index 192e99c..b384e42 100644
  options		FIFO		# fifo support			# <fifo>
  options		FDESC		# fdesc_fs support		# <fdesc>
  options		DEVFS		# devfs support			# <devfs>
+diff --git a/config/MASTER.arm64.bcm2837 b/config/MASTER.arm64.bcm2837
+index 5c66c91..eb27e11 100644
+--- a/config/MASTER.arm64.bcm2837
++++ b/config/MASTER.arm64.bcm2837
+@@ -33,7 +33,7 @@
+ #  BSD_RELEASE =    [ BSD_BASE no_printf_str no_kprintf_str secure_kernel config_imgsrc_access ]
+ #  BSD_DEV =        [ BSD_BASE config_netboot config_imgsrc_access pgo config_vnguard rosetta BSD_EXTRAS_DEV ]
+ #  BSD_DEBUG =      [ BSD_BASE config_netboot config_imgsrc_access pgo config_vnguard rosetta BSD_EXTRAS_DEBUG ]
+-#  FILESYS_BASE =   [ devfs fifo fs_compression config_protect config_mnt_rootsnap config_triggers config_fse routefs namedstreams config_dataless_files bindfs]
++#  FILESYS_BASE =   [ devfs fifo fs_compression config_protect config_mnt_rootsnap config_triggers config_fse routefs namedstreams config_dataless_files bindfs mockfs ramfs apfs]
+ #  FILESYS_RELEASE= [ FILESYS_BASE ]
+ #  FILESYS_DEV =    [ FILESYS_BASE fdesc config_union_mounts ]
+ #  FILESYS_DEBUG =  [ FILESYS_BASE fdesc config_union_mounts ]
 diff --git a/iokit/Kernel/IOPMrootDomain.cpp b/iokit/Kernel/IOPMrootDomain.cpp
 index 4b42199..b15ae4b 100644
 --- a/iokit/Kernel/IOPMrootDomain.cpp
