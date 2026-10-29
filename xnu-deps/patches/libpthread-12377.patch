@@ -1,0 +1,40 @@
+diff --git a/kern/kern_internal.h b/kern/kern_internal.h
+index 156ad74..bc93319 100644
+--- a/kern/kern_internal.h
++++ b/kern/kern_internal.h
+@@ -26,8 +26,8 @@
+  * @APPLE_OSREFERENCE_LICENSE_HEADER_END@
+  */
+ 
+-#ifndef _SYS_PTHREAD_INTERNAL_H_
+-#define _SYS_PTHREAD_INTERNAL_H_
++#ifndef _LIBPTHREAD_KERN_INTERNAL_H_
++#define _LIBPTHREAD_KERN_INTERNAL_H_
+ 
+ #include <TargetConditionals.h>
+ 
+@@ -154,8 +154,8 @@ typedef struct ksyn_waitq_element * ksyn_waitq_element_t;
+ #define PTH_DEFAULT_STACKSIZE 512*1024
+ #define MAX_PTHREAD_SIZE 64*1024
+ 
+-/* exported from the kernel but not present in any headers. */
+-extern thread_t port_name_to_thread(mach_port_name_t port_name);
++/* 12377 exports port_name_to_thread(port, options) from <kern/thread.h> (BSD_KERNEL_PRIVATE). */
++#include <kern/thread.h>
+ 
+ /* function declarations for pthread_kext.c */
+ void pthread_init(void);
+diff --git a/kern/kern_synch.c b/kern/kern_synch.c
+index 97343a3..8325ced 100644
+--- a/kern/kern_synch.c
++++ b/kern/kern_synch.c
+@@ -1067,7 +1067,8 @@ __psynch_cvsignal(user_addr_t cv, uint32_t cgen, uint32_t cugen,
+ 	}
+ 	
+ 	if (threadport != 0) {
+-		th = port_name_to_thread((mach_port_name_t)threadport);
++		th = port_name_to_thread((mach_port_name_t)threadport,
++		    PORT_INTRANS_THREAD_IN_CURRENT_TASK);
+ 		if (th == THREAD_NULL) {
+ 			return ESRCH;
+ 		}

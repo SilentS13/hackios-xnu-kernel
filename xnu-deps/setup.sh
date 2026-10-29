@@ -79,10 +79,13 @@ stage1() {
 	fetch libdispatch https://github.com/apple-oss-distributions/libdispatch.git \
 		a641558f447659d90ad002ef0ee6f0212273fbfc        # libdispatch-1415.100.11
 	# the pthread kext compiles against the tree's own private headers, so it moves with the tree:
-	# 12377's are the 539 line and reject the 514 sources
+	# 12377 needs the 519 sources, adjusted for the two kernel interfaces it changed
 	if [ -f "$XNU_SRC/osfmk/kern/upsi.h" ]; then
 		fetch libpthread https://github.com/apple-oss-distributions/libpthread.git \
-			1f4f5265b319111142f1bf3a27d4484ef5a98314    # libpthread-539.100.4
+			c0e60fb5ecfc54cf379c261d3f9572cc22ded891    # libpthread-519.120.4
+		git -C libpthread apply --reverse --check "$XNUDEPS/patches/libpthread-12377.patch" 2>/dev/null ||
+			git -C libpthread apply "$XNUDEPS/patches/libpthread-12377.patch" ||
+			die "cannot apply patches/libpthread-12377.patch"
 	else
 		fetch libpthread https://github.com/apple-oss-distributions/libpthread.git \
 			a6c70ca0e544347a0377babf748f831577ec24f9    # libpthread-514.100.2
