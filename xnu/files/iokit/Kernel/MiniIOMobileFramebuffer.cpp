@@ -269,6 +269,13 @@ static const uint32_t kFlipColours[] = { 0xffff0000u, 0xff00ff00u, 0xff0000ffu }
 
 static const uint32_t kDPUIntfOffsets[] = { 0x35000u, 0x6a000u, 0x6b000u, 0x6c000u, 0x6d000u };
 #define kDPUIntfCount   (sizeof(kDPUIntfOffsets) / sizeof(kDPUIntfOffsets[0]))
+/*
+ * Where the scan for the frame counter looks: the four interfaces the sm8350 catalog names
+ * (0x34000 + 0x1000 * n), not the 0x6a000 family another generation of the controller uses. That
+ * wider scan stopped the phone dead in boot, as the whole-window census had.
+ */
+static const uint32_t kDPUIntfScanBlocks[] = { 0x35000u, 0x36000u, 0x37000u, 0x38000u };
+#define kDPUIntfScanCount (sizeof(kDPUIntfScanBlocks) / sizeof(kDPUIntfScanBlocks[0]))
 
 extern "C" vm_offset_t ml_io_map(vm_offset_t phys_addr, vm_size_t size);
 extern "C" vm_offset_t ml_io_map_unmappable(vm_offset_t phys_addr, vm_size_t size, unsigned int flags);
@@ -302,7 +309,10 @@ static uint32_t gFlipLastAddr, gFlipReadback;           /* what was written to t
  *      address written only after a flush of the CTL has cleared (i.e. at a frame boundary)
  *   8  the same, always boundary-first, with the boundary projected at 1/fb_hz from the last flush
  *   9  the boundary-first flip handed to a clock thread, so the presenter waits for nothing
- *  10  the address written the instant the interface's own frame counter moves
+ *  10  the address written the instant the interface's own frame counter moves (the counter is
+ *      searched for in the four interface blocks; nothing moves, nothing is written)
+ *  11  the boundary projected from the last flush, the address written there, and the flush after
+ *      it not waited for
  */
 static uint32_t gFlipMode = 1;
 static uint32_t gFlipSync;                              /* flip=7: 1 while the boundary-first latch is in force */
@@ -792,11 +802,18 @@ static bool gVblankUsable = true;
 void
 IOMobileFramebuffer::flipScanIntf(void)
 {
-	for (unsigned b = 0; b < kDPUIntfCount; b++) {
-		uint32_t base = kDPUIntfOffsets[b];
+	for (unsigned b = 0; b < kDPUIntfScanCount; b++) {
+		uint32_t base = kDPUIntfScanBlocks[b];
 		uint32_t first[kDPUIntfScanWords], second[kDPUIntfScanWords];
+		uint32_t live;
 		unsigned w;
 
+		/* the four words this driver already reads every two seconds: a block of zeros is not in use */
+		live = gDPU[(base + kDPUIntfTimingEngineEn) / 4] | gDPU[(base + kDPUIntfVsyncPeriod) / 4] |
+		    gDPU[(base + kDPUIntfFrameCount) / 4] | gDPU[(base + kDPUIntfLineCount) / 4];
+		if (live == 0 || live == 0xffffffffu) {
+			continue;
+		}
 		for (w = 0; w < kDPUIntfScanWords; w++) {
 			first[w] = gDPU[(base + 4 * w) / 4];
 		}
@@ -1031,13 +1048,17 @@ IOMobileFramebuffer::flipTo(void)
 			}
 		}
 	}
-	if (gFlipMode == 10) {
+	if (gFlipMode == 10 || gFlipMode == 11) {
 		/*
-		 * The address goes in the instant the interface's own frame counter moves, so the panel is at
-		 * the top of a frame when the pipe is pointed: the change is a flip, not a seam. The flush is
-		 * written after it and not waited for: the flush's own wait was up to a whole panel frame.
+		 * 10 writes the address the instant the interface's own frame counter moves; 11 (and 10 when
+		 * no counter was found) waits for the boundary projected from the last flush. Either way the
+		 * flush is written after the address and not waited for: that wait was up to a panel frame.
 		 */
-		flipWaitVblank();
+		if (gFlipMode == 10 && gIntfOff != 0) {
+			flipWaitVblank();
+		} else {
+			flipWaitBoundary();
+		}
 		__asm__ volatile("dsb sy" ::: "memory");
 		fPipe[fPipeSrcOff / 4] = phys;
 		fPipe[fPipeStrideOff / 4] = stride;
@@ -1269,7 +1290,7 @@ IOMobileFramebuffer::start(IOService * provider)
 	{
 		uint32_t mode = 1;
 
-		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 10) {
+		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 11) {
 			gFlipMode = mode;
 		}
 		PE_parse_boot_argn("dpu_dump", &gDpuDump, sizeof(gDpuDump));
@@ -1348,14 +1369,16 @@ IOMobileFramebuffer::start(IOService * provider)
 	 */
 	gDPU = (volatile uint32_t *) ml_io_map(kDPUMdpPhys, kDPUMdpBytes);
 	if (gDPU != NULL) {
-		/* where the panel's frame counter is, before anything waits on one */
-		flipScanIntf();
+		/* where the panel's frame counter is, before anything waits on one: mode 10's experiment */
+		if (gFlipMode == 10) {
+			flipScanIntf();
+		}
 		/* frames are flipped into the panel rather than written into it, if a pipe of it will take them */
 		bool frames = false;
-		bool full = gFlipMode == 1 || (gFlipMode >= 5 && gFlipMode <= 10);
+		bool full = gFlipMode == 1 || (gFlipMode >= 5 && gFlipMode <= 11);
 
 		flipFind();
-		if (gFlipMode >= 5 && gFlipMode <= 10) {
+		if (gFlipMode >= 5 && gFlipMode <= 11) {
 			frames = flipAllocateSplash();
 		} else if (full || gFlipMode == 3) {
 			frames = flipAllocate();
