@@ -1063,6 +1063,10 @@ IOMobileFramebuffer::flipDeferredMain(void * self, wait_result_t result __unused
 		gDPU[(gCtlOff + kDPUCtlFlush) / 4] = me->fPipeFlush;
 		absolutetime_to_nanoseconds(mach_absolute_time() - seen, &ns);
 		gFlipLateUs = (uint32_t) (ns / 1000);
+		/* (the panel's flips, and the average of what the write cost after the boundary, where
+		 * the box already reports a flush's count and time) */
+		gFlushCount++;
+		gFlushUs += gFlipLateUs;
 		gFlipLastAddr = phys;
 		gFlipReadback = me->fPipe[me->fPipeSrcOff / 4];
 	}
