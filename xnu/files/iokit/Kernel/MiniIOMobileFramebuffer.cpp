@@ -30,6 +30,7 @@
 #include <pexpert/pexpert.h>
 #include <sys/systm.h>
 #include <sys/proc.h>
+#include <vm/memory_types.h>
 
 extern "C" {
 #include <console/video_console.h>
@@ -227,16 +228,28 @@ refreshHz(void)
 #define kDPUMdpPhys     0x0ae00000u
 #define kDPUMdpBytes    0x100000u
 #define kDPUFBPhys      0xea600000u                     /* cont_splash_region, what the panel scans */
-#define kDPUIntfTimingEngineEn  0x000
+#define kDPUIntfTimingEngineEn  0x06c
 #define kDPUIntfVsyncPeriod     0x00c
 #define kDPUIntfFrameCount      0x0ac
 #define kDPUIntfLineCount       0x0b0
+/* the pipes' blocks, and the CTL flush mask (bit 17) taken with each pipe's own bit */
+#define kDPUCtlFirst    0x2000u
+#define kDPUCtlStride   0x200u
+#define kDPUCtlCount    6
+#define kDPUCtlFlush    0x018u
+#define kDPUCtlFlushSelf    (1u << 17)
+#define kDPUPipeSrc0Addr   0x014u
+#define kDPUPipeStride     0x024u
+#define kFlipFrames     3                           /* one frame shown, one drawn, one spare */
 
 static const uint32_t kDPUIntfOffsets[] = { 0x35000u, 0x6a000u, 0x6b000u, 0x6c000u, 0x6d000u };
 #define kDPUIntfCount   (sizeof(kDPUIntfOffsets) / sizeof(kDPUIntfOffsets[0]))
 
 extern "C" vm_offset_t ml_io_map(vm_offset_t phys_addr, vm_size_t size);
+extern "C" vm_offset_t ml_io_map_unmappable(vm_offset_t phys_addr, vm_size_t size, unsigned int flags);
 static volatile uint32_t * gDPU;                        /* the controller's registers, or NULL */
+static uint32_t gFlipMask;                              /* the flush written for a flip, 0 while frames are copied */
+static uint32_t gFlipsShown;                            /* frames flipped into the panel */
 
 static void
 dpuNumber(IOService * service, const char * key, uint32_t value)
@@ -303,6 +316,8 @@ dpuMain(void * self, wait_result_t result __unused)
 			snprintf(key, sizeof(key), "dpu-c%u-millihertz", i);
 			dpuNumber(service, key, millihertz);
 		}
+		dpuNumber(service, "flip-mask", gFlipMask);
+		dpuNumber(service, "flip-frames", gFlipsShown);
 		lastTime = now;
 		IOSleep(2000);
 	}
@@ -347,6 +362,19 @@ class IOMobileFramebuffer : public IOService
 public:
 	IOLock *        fLock;
 	uint8_t *       fBase;                  /* the boot framebuffer: the panel */
+	/*
+	 * The panel's own scanout, flipped: a frame is drawn into one of these instead of into the memory
+	 * being scanned, and the display pipe is pointed at it (latched at its next vsync). Without this a
+	 * frame is written into the picture as the panel reads it: a seam across the screen (tearing).
+	 */
+	uint8_t *       fDraw;                  /* where drawRows() writes: fBase, or the frame after the one shown */
+	volatile uint32_t * fPipe;              /* the block that fetches the panel's picture (NULL: none found) */
+	uint32_t        fPipeSrcOff, fPipeStrideOff, fPipeFlush;
+	IOBufferMemoryDescriptor * fFlipBuffer[kFlipFrames];
+	uint8_t *       fFlipFrame[kFlipFrames];
+	uint64_t        fFlipPhys[kFlipFrames];
+	unsigned        fFlipNext;
+	uint32_t        fFlips;
 	uint32_t        fPanelWidth, fPanelHeight, fRowBytes;
 	uint32_t        fWidth, fHeight;        /* the display as user space sees it */
 	MiniIOSurface * fDefaultSurface;
@@ -414,6 +442,9 @@ public:
 	virtual bool start(IOService * provider) APPLE_KEXT_OVERRIDE;
 	void publishModes(void);
 	void publishRefresh(void);
+	void flipFind(void);
+	bool flipAllocate(void);
+	void flipTo(void);
 	MiniIOSurface * defaultSurface(void);
 	void present(const uint8_t * swap);
 	void show(const uint8_t * swap, MiniIOSurface ** surfaces);
@@ -434,6 +465,110 @@ public:
 };
 
 OSDefineMetaClassAndStructors(IOMobileFramebuffer, IOService);
+
+/*
+ * Which pipe scans the panel: the bootloader points one at the boot framebuffer, and its address
+ * register still holds it. The blocks are 0x2000 apart (VIG0-3, RGB0-3, DMA0-3) and the flush bit of
+ * a pipe in its CTL's mask is its number in the catalog.
+ */
+void
+IOMobileFramebuffer::flipFind(void)
+{
+	static const struct { uint32_t base; uint32_t pipe; } blocks[] = {
+		{ 0x05000, 1 }, { 0x07000, 2 }, { 0x09000, 3 }, { 0x0b000, 4 },          /* VIG0-3 */
+		{ 0x0d000, 5 }, { 0x0f000, 6 }, { 0x11000, 7 }, { 0x13000, 8 },          /* RGB0-3 */
+		{ 0x25000, 9 }, { 0x27000, 10 }, { 0x29000, 11 }, { 0x2b000, 12 },       /* DMA0-3 */
+	};
+	unsigned i, told = 0;
+
+	for (i = 0; i < sizeof(blocks) / sizeof(blocks[0]); i++) {
+		if (gDPU[(blocks[i].base + kDPUPipeSrc0Addr) / 4] != kDPUFBPhys) {
+			continue;
+		}
+		fPipe = gDPU;
+		fPipeSrcOff = blocks[i].base + kDPUPipeSrc0Addr;
+		fPipeStrideOff = blocks[i].base + kDPUPipeStride;
+		/* VIG0 is bit 0 of the flush on this controller (topaz writes 0x20001 for it), not bit 1
+		 * as the catalog numbers it: both are set, the one that is not the pipe is ignored */
+		fPipeFlush = kDPUCtlFlushSelf | 1u | (1u << blocks[i].pipe);
+		IOLog("MiniIOMobileFramebuffer: pipe %u scans the panel from %#x (its address register at +%#x)\n",
+		    blocks[i].pipe, kDPUFBPhys, fPipeSrcOff);
+		return;
+	}
+	/* not where the catalog puts them: say where the address is, to be read */
+	for (i = 0; i + 4 <= kDPUMdpBytes && told < 4; i += 4) {
+		if (gDPU[i / 4] == kDPUFBPhys) {
+			IOLog("MiniIOMobileFramebuffer: %#x is held at +%#x, not in a pipe\n", kDPUFBPhys, i);
+			told++;
+		}
+	}
+	if (told == 0) {
+		IOLog("MiniIOMobileFramebuffer: no pipe scans %#x: frames are written into the panel's memory\n", kDPUFBPhys);
+	}
+}
+
+bool
+IOMobileFramebuffer::flipAllocate(void)
+{
+	vm_size_t bytes = (vm_size_t) fRowBytes * fPanelHeight;
+	unsigned i;
+
+	bytes = (bytes + 4095) & ~(vm_size_t) 4095;
+
+	for (i = 0; i < kFlipFrames; i++) {
+		uint64_t phys = 0;
+		vm_offset_t va;
+
+		fFlipBuffer[i] = IOBufferMemoryDescriptor::inTaskWithPhysicalMask(kernel_task,
+		    kIODirectionInOut | kIOMemoryPhysicallyContiguous, bytes, 0x00000000fffff000ull);
+		if (fFlipBuffer[i] != NULL) {
+			phys = fFlipBuffer[i]->getPhysicalSegment(0, NULL, kIOMemoryMapperNone);
+		}
+		if (phys == 0 || phys + bytes > 0x100000000ull) {
+			IOLog("MiniIOMobileFramebuffer: no frame memory below 4 GiB for flip frame %u\n", i);
+			return false;
+		}
+		va = ml_io_map_unmappable((vm_offset_t) phys, bytes, VM_WIMG_WCOMB);
+		if (va == 0) {
+			IOLog("MiniIOMobileFramebuffer: flip frame %u at %#llx could not be mapped\n", i,
+			    (unsigned long long) phys);
+			return false;
+		}
+		fFlipPhys[i] = phys;
+		fFlipFrame[i] = (uint8_t *) (uintptr_t) va;
+		bzero(fFlipFrame[i], bytes);
+	}
+	fFlipNext = 0;
+	fFlips = 0;
+	gFlipMask = fPipeFlush;
+	gFlipsShown = 0;
+	fDraw = fFlipFrame[0];
+	IOLog("MiniIOMobileFramebuffer: %u frames to flip between at %#llx %#llx %#llx\n", kFlipFrames,
+	    (unsigned long long) fFlipPhys[0], (unsigned long long) fFlipPhys[1], (unsigned long long) fFlipPhys[2]);
+	return true;
+}
+
+/* Point the pipe at the frame just drawn; the registers latch at the pipe's next vsync. */
+void
+IOMobileFramebuffer::flipTo(void)
+{
+	unsigned i;
+
+	if (fPipe == NULL) {
+		return;
+	}
+	__asm__ volatile("dsb sy" ::: "memory");
+	fPipe[fPipeSrcOff / 4] = (uint32_t) fFlipPhys[fFlipNext];
+	fPipe[fPipeStrideOff / 4] = fRowBytes;
+	for (i = 0; i < kDPUCtlCount; i++) {
+		gDPU[(kDPUCtlFirst + kDPUCtlStride * i + kDPUCtlFlush) / 4] = fPipeFlush;
+	}
+	__asm__ volatile("dsb sy" ::: "memory");
+	fFlipNext = (fFlipNext + 1) % kFlipFrames;
+	fDraw = fFlipFrame[fFlipNext];
+	fFlips++;
+	gFlipsShown++;
+}
 
 static void
 setNumber(OSDictionary * dict, const char * key, uint64_t value)
@@ -573,6 +708,10 @@ IOMobileFramebuffer::start(IOService * provider)
 		thread_deallocate(thread);
 	}
 	fBase = (uint8_t *) vinfo.v_baseaddr;
+	fDraw = fBase;
+	fPipe = NULL;
+	fFlipNext = 0;
+	fFlips = 0;
 	fPanelWidth = vinfo.v_width;
 	fPanelHeight = vinfo.v_height;
 	fRowBytes = vinfo.v_rowbytes;
@@ -647,6 +786,12 @@ IOMobileFramebuffer::start(IOService * provider)
 	 */
 	gDPU = (volatile uint32_t *) ml_io_map(kDPUMdpPhys, kDPUMdpBytes);
 	if (gDPU != NULL) {
+		/* frames are flipped into the panel rather than written into it, if a pipe of it will take them */
+		flipFind();
+		if (fPipe == NULL || !flipAllocate()) {
+			fPipe = NULL;
+			fDraw = fBase;
+		}
 		if (kernel_thread_start(dpuMain, this, &thread) != KERN_SUCCESS) {
 			IOLog("MiniIOMobileFramebuffer: no thread to read the display controller with\n");
 		}
@@ -798,7 +943,7 @@ IOMobileFramebuffer::drawRows(const RowJob * job, int32_t y0, int32_t y1, uint32
 		if (y < 0 || (uint32_t) y >= fPanelHeight) {
 			continue;
 		}
-		to = (uint32_t *) (fBase + (size_t) y * fRowBytes);
+		to = (uint32_t *) (fDraw + (size_t) y * fRowBytes);
 		if (job->unscaled) {
 			/* not scaled at all */
 			memcpy(to + px0, pixels + (size_t) (sy + y - py0) * stride + (size_t) sx * 4, (size_t) sw * 4);
@@ -1153,6 +1298,9 @@ IOMobileFramebuffer::show(const uint8_t * swap, MiniIOSurface ** surfaces)
 		}
 	}
 	shown = began;
+	if (fPipe != NULL) {
+		fDraw = fFlipFrame[fFlipNext];      /* the frame after the one the panel is scanning */
+	}
 	/* its turn has come: the swap after it may be handed over */
 	IOLockLock(fSwapLock);
 	fSwapFirst = (fSwapFirst + 1) % SWAP_QUEUE;
@@ -1194,7 +1342,7 @@ IOMobileFramebuffer::show(const uint8_t * swap, MiniIOSurface ** surfaces)
 			/* the bottom layer taken away: nothing is shown, the screen is black */
 			if (layer == 0 && (set & 1) && fGraphics) {
 				for (uint32_t y = 0; y < fPanelHeight; y++) {
-					bzero(fBase + (size_t) y * fRowBytes, (size_t) fPanelWidth * 4);
+					bzero(fDraw + (size_t) y * fRowBytes, (size_t) fPanelWidth * 4);
 				}
 			}
 			continue;
@@ -1221,7 +1369,7 @@ IOMobileFramebuffer::show(const uint8_t * swap, MiniIOSurface ** surfaces)
 				disableConsoleOutput = 1;
 				vinfo.v_baseaddr = 0;
 				for (uint32_t y = 0; y < fPanelHeight; y++) {
-					bzero(fBase + (size_t) y * fRowBytes, (size_t) fPanelWidth * 4);
+					bzero(fDraw + (size_t) y * fRowBytes, (size_t) fPanelWidth * 4);
 				}
 			}
 			drawLayer(s, src, dst);
@@ -1231,6 +1379,7 @@ IOMobileFramebuffer::show(const uint8_t * swap, MiniIOSurface ** surfaces)
 		}
 	}
 	drawn = mach_absolute_time();
+	flipTo();                               /* (the frame is whole before the panel is pointed at it) */
 	if (recorded != NULL) {
 		record(recorded);
 	}
