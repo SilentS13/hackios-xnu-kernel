@@ -16,4 +16,5 @@ for a in "$@"; do
   esac
 done
 exec /usr/bin/$drv -include "$HB/../../hostinc/xnu_clang_compat.h" -target arm64-apple-ios${XNU_SDK_VERSION:-16.5} --ld-path="$HB/ld64" \
+  -isystem "$(/usr/bin/$drv -print-resource-dir)/include" \
   -w "${extra[@]}" "${args[@]}"
