@@ -1,8 +1,8 @@
 #!/bin/bash
 # Get Apple's XNU xnu-12377.121.6 (the iOS 26.5 kernel) and put UniXNU's patches/xnu-12377 series
 # on top of it: the BCM2837 machine config and source for the machine layer Apple only ships
-# closed. This is the iOS 26 track; the redwood device layer (redwood.patch + files/) is not
-# applied here yet -- it is what goes on after a bare 12377 kernel builds.
+# closed, then the redwood device layer (patches-12377/zzzz-redwood-device-layer.patch and the
+# whole files/ payload: the drivers and machine-layer sources it adds).
 # usage: xnu/apply.sh [DIR]              (default: xnu-src/xnu-12377.121.6 next to this directory)
 # env:   XNU_URL   where to fetch from (default: Apple's repository on GitHub)
 set -e
@@ -29,6 +29,9 @@ for patch in "$HERE/patches-12377"/*.patch; do
 	git apply --whitespace=nowarn "$patch" || { echo "apply.sh: $(basename "$patch") does not apply" >&2; false; }
 	n=$((n + 1))
 done
+# The device layer's new sources (drivers, machine-layer files) arrive as whole files, and so does
+# the CPU-counter source it replaces; the patch above carries only the edits to Apple's files.
+cp -a "$HERE/files/." "$DIR/"
 # .github/workflows/kernel.yml names the 8796 tree in its build and artifact paths, and the token
 # has no `workflow` scope to change it: give that name to this tree instead.
 ln -sfn "$(basename "$DIR")" "$HERE/../xnu-src/xnu-8796.121.2"
