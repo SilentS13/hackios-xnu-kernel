@@ -319,6 +319,7 @@ public:
 
 	virtual bool start(IOService * provider) APPLE_KEXT_OVERRIDE;
 	void publishModes(void);
+	void publishRefresh(void);
 	MiniIOSurface * defaultSurface(void);
 	void present(const uint8_t * swap);
 	void show(const uint8_t * swap, MiniIOSurface ** surfaces);
@@ -409,6 +410,41 @@ IOMobileFramebuffer::publishModes(void)
 	OSSafeReleaseNULL(horizontal);
 	OSSafeReleaseNULL(vertical);
 	OSSafeReleaseNULL(color);
+}
+
+/*
+ * The refresh range the render server paces its display timer by: a service property holding three
+ * intervals (32.32 seconds), each with the same figure in mach absolute time, plus the step between
+ * them. iOS fills the same six keys in setDisplayRefreshProperties -- through display vtable slot
+ * 301, then setProperty -- and the platform subclass calls it on each panel vblank, which is the
+ * part no iOS xnu on non-Apple hardware has. Without the property the render server falls back to
+ * its own 1/60 s heartbeat, which is the 16.667 ms the display link has been showing.
+ *
+ * The panel is fixed at fb_hz, so the fastest and the slowest interval are the same and the step is
+ * nothing: one rate, and no rate below it to decay to.
+ */
+void
+IOMobileFramebuffer::publishRefresh(void)
+{
+	OSDictionary * refresh = OSDictionary::withCapacity(6);
+	const uint32_t hz = refreshHz();
+	uint64_t period = (1ull << 32) / hz;                    /* 32.32 fixed-point seconds */
+	uint64_t ticks;
+
+	if (refresh == NULL) {
+		return;
+	}
+	setNumber(refresh, "displayMinRefreshInterval", period);
+	setNumber(refresh, "displayMaxRefreshInterval", period);
+	setNumber(refresh, "displayRefreshStep", 0);
+	nanoseconds_to_absolutetime(NSEC_PER_SEC / hz, &ticks);
+	setNumber(refresh, "displayMinRefreshIntervalMachTime", ticks);
+	setNumber(refresh, "displayMaxRefreshIntervalMachTime", ticks);
+	setNumber(refresh, "displayRefreshStepMachTime", 0);
+	setProperty("IOMFBDisplayRefresh", refresh);
+	refresh->release();
+	IOLog("MiniIOMobileFramebuffer: IOMFBDisplayRefresh published at %u Hz (%llu, %llu ticks)\n", hz,
+	    (unsigned long long) period, (unsigned long long) ticks);
 }
 
 bool
@@ -508,6 +544,7 @@ IOMobileFramebuffer::start(IOService * provider)
 	setProperty("canvas-width", &fWidth, sizeof(fWidth));
 	setProperty("canvas-height", &fHeight, sizeof(fHeight));
 	publishModes();
+	publishRefresh();
 	setName("disp0");
 	registerService();
 	{
@@ -1306,16 +1343,18 @@ IOMobileFramebufferUserClient::armVSync(void)
 
 /*
  * One refresh: tell the client, which gets three 64-bit numbers as six 32-bit halves --
- * the time of this refresh, the same again (the time it was presented), and a counter.
+ * the time of this refresh, the same again (the time it was presented), and the interval until
+ * the next one, the way the original display's refresh notification carries them.
  */
 void
 IOMobileFramebufferUserClient::vsync(void)
 {
 	OSAsyncReference64 ref;
 	io_user_reference_t args[6];
-	uint64_t now;
+	uint64_t interval, now;
 	bool send = false;
 
+	nanoseconds_to_absolutetime(NSEC_PER_SEC / refreshHz(), &interval);
 	IOLockLock(fLock);
 	now = fVSyncTime;
 	if (fClosed || fCallbacks[kFBNotifyVSync] == 0 || fPorts[kFBNotifyVSync] == NULL) {
@@ -1327,8 +1366,8 @@ IOMobileFramebufferUserClient::vsync(void)
 		args[1] = now >> 32;
 		args[2] = (uint32_t) now;
 		args[3] = now >> 32;
-		args[4] = (uint32_t) fVSyncCount;
-		args[5] = fVSyncCount >> 32;
+		args[4] = (uint32_t) interval;
+		args[5] = interval >> 32;
 		send = true;
 		armVSync();
 	}
