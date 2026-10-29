@@ -916,7 +916,7 @@ IOMobileFramebuffer::flipClockMain(void * self, wait_result_t result __unused)
 	for (;;) {
 		uint32_t seq, phys, stride;
 
-		flipWaitBoundary();
+		me->flipWaitBoundary();
 		seq = gFlipPendingSeq;
 		if (seq == gFlipPendingDone) {
 			continue;
