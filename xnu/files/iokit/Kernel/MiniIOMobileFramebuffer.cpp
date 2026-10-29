@@ -1047,7 +1047,7 @@ IOMobileFramebuffer::start(IOService * provider)
 	{
 		uint32_t mode = 1;
 
-		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 5) {
+		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 6) {
 			gFlipMode = mode;
 		}
 		PE_parse_boot_argn("dpu_dump", &gDpuDump, sizeof(gDpuDump));
