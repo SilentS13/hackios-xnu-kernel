@@ -322,6 +322,11 @@ static uint32_t gFlipSync;                              /* flip=7: 1 while the b
 static volatile uint32_t gFlipDrops;                    /* 12: frames handed over while one was still waiting */
 static uint32_t gFlipBoundaries;                        /* 12: boundaries the thread saw in the flush bit */
 static uint32_t gFlipLateUs;                            /* 12: from the bit clearing to the address being written */
+/* How long the flush bit stays set: a latch the CTL takes at the top of a frame holds it for most of
+ * a frame, one it takes where it stands clears it at once. That average is how a frame boundary is
+ * told from "the CTL was ready". */
+static uint32_t gFlipArms, gFlipArmUs, gFlipArmMax, gFlipArmMin = ~0u;
+static uint32_t gFlipHand[4], gFlipHandAt;              /* the last four addresses handed over, in order */
 static uint32_t gPipeOff;                               /* where the scanning pipe keeps its address, 0 if none */
 static uint32_t gPipeBase;                              /* the pipe's block, 0 if none */
 static uint32_t gCtlOff;                                /* the CTL whose layer holds the pipe, 0 if none */
@@ -398,6 +403,17 @@ dpuMain(void * self, wait_result_t result __unused)
 		dpuNumber(service, "flip-boundaries", gFlipBoundaries);
 		dpuNumber(service, "flip-drops", gFlipDrops);
 		dpuNumber(service, "flip-late-us", gFlipLateUs);
+		dpuNumber(service, "flip-arms", gFlipArms);
+		dpuNumber(service, "flip-arm-us", (uint32_t) (gFlipArms != 0 ? gFlipArmUs / gFlipArms : 0));
+		dpuNumber(service, "flip-arm-max", gFlipArmMax);
+		dpuNumber(service, "flip-arm-min", gFlipArms != 0 ? gFlipArmMin : 0);
+		dpuNumber(service, "flip-handat", gFlipHandAt);
+		for (unsigned i = 0; i < 4; i++) {
+			snprintf(key, sizeof(key), "flip-hand%u", i);
+			dpuNumber(service, key, gFlipHand[(gFlipHandAt + i) % 4]);
+		}
+		dpuNumber(service, "flip-ctl", gDPU != NULL && gCtlOff != 0 ?
+		    gDPU[(gCtlOff + kDPUCtlFlush) / 4] : 0);
 		dpuNumber(service, "flip-mode", gFlipMode);
 		dpuNumber(service, "dpu-pipe", gPipeOff);
 		dpuNumber(service, "dpu-stride", gPipeStride);
@@ -1027,6 +1043,7 @@ IOMobileFramebuffer::flipDeferredMain(void * self, wait_result_t result __unused
 
 	for (;;) {
 		uint32_t spin, seq, phys, stride;
+		uint64_t armed = 0;
 		uint64_t seen = 0;
 		uint64_t ns = 0;
 
@@ -1040,6 +1057,7 @@ IOMobileFramebuffer::flipDeferredMain(void * self, wait_result_t result __unused
 			continue;
 		}
 		gDPU[(gCtlOff + kDPUCtlFlush) / 4] = me->fPipeFlush;
+		armed = mach_absolute_time();
 		__asm__ volatile("dsb sy" ::: "memory");
 		for (spin = 0; spin < 1200; spin++) {                   /* at most 12 ms: a frame is 8.3 */
 			if ((gDPU[(gCtlOff + kDPUCtlFlush) / 4] & me->fPipeFlush) == 0) {
@@ -1051,6 +1069,21 @@ IOMobileFramebuffer::flipDeferredMain(void * self, wait_result_t result __unused
 		if (spin >= 1200) {
 			gBoundaryMisses++;
 			continue;
+		}
+		{
+			uint64_t armns = 0;
+			uint32_t armus;
+
+			absolutetime_to_nanoseconds(seen - armed, &armns);
+			armus = (uint32_t) (armns / 1000);
+			gFlipArms++;
+			gFlipArmUs += armus;
+			if (armus > gFlipArmMax) {
+				gFlipArmMax = armus;
+			}
+			if (armus < gFlipArmMin) {
+				gFlipArmMin = armus;
+			}
 		}
 		gFlipBoundaries++;
 		seq = gFlipPendingSeq;
@@ -1073,6 +1106,7 @@ IOMobileFramebuffer::flipDeferredMain(void * self, wait_result_t result __unused
 		gFlushUs += gFlipLateUs;
 		gFlipLastAddr = phys;
 		gFlipReadback = me->fPipe[me->fPipeSrcOff / 4];
+		gFlipHand[gFlipHandAt++ % 4] = phys;
 	}
 }
 
