@@ -606,12 +606,14 @@ dpuDump(const char * tag)
 		    gDPU[(b + kDPUCtlStart) / 4], gDPU[(b + kDPUCtlIntfActive) / 4]);
 	}
 	for (i = 0; i < 4; i++) {
-		uint32_t b = 0x35000u + 0x1000u * i;
+		uint32_t b = 0x6a000u + 0x1000u * i;
 
 		IOLog("MiniIOMobileFramebuffer: dpu %s: intf%u en %#x frame %u line %u vsync %u\n", tag, i,
 		    gDPU[(b + kDPUIntfTimingEngineEn) / 4] & 1, gDPU[(b + kDPUIntfFrameCount) / 4],
 		    gDPU[(b + kDPUIntfLineCount) / 4], gDPU[(b + kDPUIntfVsyncPeriod) / 4]);
 	}
+	IOLog("MiniIOMobileFramebuffer: dpu %s: ctl +%#x pipe +%#x intf +%#x flips %u\n", tag, gCtlOff,
+	    gPipeOff, gIntfOff, gFlipsShown);
 }
 
 static void
@@ -624,8 +626,7 @@ dpuDumpMain(void * self __unused, wait_result_t result __unused)
 		IOSleep(gDpuDump * 1000);
 		snprintf(tag, sizeof(tag), "%us", n * gDpuDump);
 		dpuDump(tag);
-	}
-	thread_terminate(current_thread());
+	}	thread_terminate(current_thread());
 }
 
 /*
@@ -1123,6 +1124,7 @@ IOMobileFramebuffer::start(IOService * provider)
 			if (kernel_thread_start(dpuDumpMain, NULL, &dump) == KERN_SUCCESS) {
 				thread_set_thread_name(dump, "the display controller's state");
 				thread_deallocate(dump);
+				IOLog("MiniIOMobileFramebuffer: the controller is read every %u s\n", gDpuDump);
 			}
 		}
 		if (kernel_thread_start(dpuMain, this, &thread) != KERN_SUCCESS) {
