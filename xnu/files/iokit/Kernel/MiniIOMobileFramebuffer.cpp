@@ -266,6 +266,7 @@ static uint32_t gFlipsShown;                            /* frames flipped into t
  *      and no flush at all
  *   5  the same, and the pipe's own flush bit alone (not the CTL's: that one broke the picture)
  *   6  the whole flip with the frames in the display's own reserved memory (the splash region)
+ *   7  the same, and the pipe's own flush bit after the write, to make it latch
  */
 static uint32_t gFlipMode = 1;
 static uint32_t gPipeOff;                               /* where the scanning pipe keeps its address, 0 if none */
@@ -672,7 +673,7 @@ IOMobileFramebuffer::flipTo(void)
 	 * pending layer is the bootloader's and was never written by us: flushing that again is what
 	 * put flip=2's console on the screen at the wrong stride.
 	 */
-	if (gFlipMode == 5) {
+	if (gFlipMode == 5 || gFlipMode == 7) {
 		flush = 1u << gPipeIdx;         /* the pipe's own bit alone */
 	} else if (gFlipMode == 1 || gFlipMode == 2) {
 		flush = fPipeFlush;             /* (the mask that broke the picture: kept for comparison) */
@@ -683,6 +684,10 @@ IOMobileFramebuffer::flipTo(void)
 		gDPU[(kDPUCtlFirst + kDPUCtlStride * i + kDPUCtlFlush) / 4] = flush;
 	}
 	__asm__ volatile("dsb sy" ::: "memory");
+	if (fFlips < 4) {
+		IOLog("MiniIOMobileFramebuffer: flip %u: +%#x = %#x, stride %u, flush %#x\n", fFlips, fPipeSrcOff,
+		    fPipe[fPipeSrcOff / 4], fPipe[fPipeStrideOff / 4], flush);
+	}
 	if (fFlipFrames) {
 		fFlipNext = (fFlipNext + 1) % kFlipFrames;
 		fDraw = fFlipFrame[fFlipNext];
@@ -838,7 +843,7 @@ IOMobileFramebuffer::start(IOService * provider)
 	{
 		uint32_t mode = 1;
 
-		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 6) {
+		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 7) {
 			gFlipMode = mode;
 		}
 	}
@@ -918,10 +923,10 @@ IOMobileFramebuffer::start(IOService * provider)
 	if (gDPU != NULL) {
 		/* frames are flipped into the panel rather than written into it, if a pipe of it will take them */
 		bool frames = false;
-		bool full = gFlipMode == 1 || gFlipMode == 4 || gFlipMode == 5 || gFlipMode == 6;
+		bool full = gFlipMode == 1 || gFlipMode == 4 || gFlipMode == 5 || gFlipMode == 6 || gFlipMode == 7;
 
 		flipFind();
-		if (gFlipMode == 6) {
+		if (gFlipMode == 6 || gFlipMode == 7) {
 			frames = flipAllocateSplash();
 		} else if (full || gFlipMode == 3) {
 			frames = flipAllocate();
