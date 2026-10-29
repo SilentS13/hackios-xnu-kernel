@@ -231,7 +231,9 @@ refreshHz(void)
 /* reserved-memory/splash_region is 0x2300000 bytes (the device tree says so): room for frames of
  * our own after the one the bootloader scans, inside the memory the display already reads */
 #define kDPUSplashBytes 0x02300000u
-static const uint32_t kDPUSplashOff[] = { 0x00c00000u, 0x01800000u };    /* 12 MB, 24 MB */
+/* the panel's own frame first, then two after it: three, so the frame being drawn into was flipped
+ * away from two swaps ago and cannot still be scanned when the copy starts */
+static const uint32_t kDPUSplashOff[] = { 0x00000000u, 0x00c00000u, 0x01800000u };   /* 0, 12 MB, 24 MB */
 #define kDPUIntfTimingEngineEn  0x06c
 #define kDPUIntfVsyncPeriod     0x00c
 #define kDPUIntfFrameCount      0x0ac
@@ -259,7 +261,7 @@ static const uint32_t kDPUSplashOff[] = { 0x00c00000u, 0x01800000u };    /* 12 M
 #define kDPUCtlIntfActive 0x0f4u                       /* CTL_INTF_ACTIVE: a bit per interface this CTL scans out */
 #define kDPUPipeSrc0Addr   0x014u
 #define kDPUPipeStride     0x024u
-#define kFlipFrames     2                           /* one frame shown, one drawn into */
+#define kFlipFrames     3                           /* one shown, one just flipped to, one drawn into */
 
 static const uint32_t kDPUIntfOffsets[] = { 0x35000u, 0x6a000u, 0x6b000u, 0x6c000u, 0x6d000u };
 #define kDPUIntfCount   (sizeof(kDPUIntfOffsets) / sizeof(kDPUIntfOffsets[0]))
@@ -269,6 +271,11 @@ extern "C" vm_offset_t ml_io_map_unmappable(vm_offset_t phys_addr, vm_size_t siz
 static volatile uint32_t * gDPU;                        /* the controller's registers, or NULL */
 static uint32_t gFlipMask;                              /* the flush written for a flip, 0 while frames are copied */
 static uint32_t gFlipsShown;                            /* frames flipped into the panel */
+/* Whether the latching is real: a flush the CTL did not consume, or a wait for the panel that never
+ * saw the counter move, is the difference between a flip at the frame boundary and a seam. */
+static uint32_t gFlushCount, gFlushPending;
+static uint64_t gFlushUs;
+static uint32_t gVblankMoves, gVblankMisses, gVblankNone;
 
 /*
  * boot-arg flip=N says which part of the flip to do, so that a phone that stops when a frame is
@@ -349,6 +356,12 @@ dpuMain(void * self, wait_result_t result __unused)
 		dpuNumber(service, "flip-mask", gFlipMask);
 		dpuNumber(service, "flip-frames", gFlipsShown);
 		dpuNumber(service, "fb-swaps", gFBSwapsShown);
+		dpuNumber(service, "flip-flush", gFlushCount);
+		dpuNumber(service, "flip-flush-pending", gFlushPending);
+		dpuNumber(service, "flip-flush-us", (uint32_t) (gFlushCount != 0 ? gFlushUs / gFlushCount : 0));
+		dpuNumber(service, "flip-vblank", gVblankMoves);
+		dpuNumber(service, "flip-vblank-misses", gVblankMisses);
+		dpuNumber(service, "flip-vblank-none", gVblankNone);
 		dpuNumber(service, "flip-mode", gFlipMode);
 		dpuNumber(service, "dpu-pipe", gPipeOff);
 		dpuNumber(service, "dpu-stride", gPipeStride);
@@ -725,15 +738,21 @@ IOMobileFramebuffer::flipAllocateSplash(void)
 		fFlipBuffer[i] = NULL;
 		fFlipPhys[i] = phys;
 		fFlipFrame[i] = (uint8_t *) (uintptr_t) va;
-		bzero(fFlipFrame[i], bytes);
+		if (i != 0) {
+			bzero(fFlipFrame[i], bytes);        /* (frame 0 is on the panel: not written here) */
+		}
 		IOLog("MiniIOMobileFramebuffer: frame %u of the flip at %#llx (in the splash region)\n", i,
 		    (unsigned long long) phys);
 	}
-	fFlipNext = 0;
+	/*
+	 * Frame 0 is the bootloader's own frame, the one the pipe is scanning right now: the first
+	 * swap must go into 1, not into what the panel is reading.
+	 */
+	fFlipNext = 1;
 	fFlips = 0;
 	gFlipMask = 0;
 	gFlipsShown = 0;
-	fDraw = fFlipFrame[0];
+	fDraw = fFlipFrame[1];
 	return true;
 }
 
@@ -750,15 +769,18 @@ flipWaitVblank(void)
 	uint64_t start = mach_absolute_time(), bound;
 
 	if (!gVblankUsable || gIntfOff == 0) {
+		gVblankNone++;
 		return;
 	}
 	nanoseconds_to_absolutetime(12 * NSEC_PER_MSEC, &bound);
 	uint32_t frame = gDPU[(gIntfOff + kDPUIntfFrameCount) / 4];
 	while (mach_absolute_time() - start < bound) {
 		if (gDPU[(gIntfOff + kDPUIntfFrameCount) / 4] != frame) {
+			gVblankMoves++;
 			return;
 		}
 	}
+	gVblankMisses++;
 	gVblankUsable = false;          /* (no counter moved: do not spend the time again) */
 }
 
@@ -782,6 +804,11 @@ IOMobileFramebuffer::flipLatch(void)
 			break;
 		}
 		IODelay(10);
+	}
+	gFlushCount++;
+	gFlushUs += (uint64_t) spin * 10;
+	if (spin >= 500) {
+		gFlushPending++;
 	}
 	if (fFlips < 4) {
 		IOLog("MiniIOMobileFramebuffer: flip %u: flush %#x %s after %u us (ctl +%#x)\n", fFlips,
