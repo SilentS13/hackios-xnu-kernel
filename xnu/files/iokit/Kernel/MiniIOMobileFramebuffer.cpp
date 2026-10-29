@@ -251,6 +251,17 @@ static volatile uint32_t * gDPU;                        /* the controller's regi
 static uint32_t gFlipMask;                              /* the flush written for a flip, 0 while frames are copied */
 static uint32_t gFlipsShown;                            /* frames flipped into the panel */
 
+/*
+ * boot-arg flip=N says which part of the flip to do, so that a phone that stops when a frame is
+ * flipped says which step stopped it:
+ *   0  nothing: frames are copied into the panel's memory (the old path)
+ *   1  frames in memory of their own, and the pipe pointed at them: the whole flip
+ *   2  the pipe's registers written with the address they already hold (no new memory)
+ *   3  the frames made and filled, and the pipe left alone (no register written)
+ */
+static uint32_t gFlipMode = 1;
+static uint32_t gPipeOff;                               /* where the scanning pipe keeps its address, 0 if none */
+
 static void
 dpuNumber(IOService * service, const char * key, uint32_t value)
 {
@@ -318,6 +329,8 @@ dpuMain(void * self, wait_result_t result __unused)
 		}
 		dpuNumber(service, "flip-mask", gFlipMask);
 		dpuNumber(service, "flip-frames", gFlipsShown);
+		dpuNumber(service, "flip-mode", gFlipMode);
+		dpuNumber(service, "dpu-pipe", gPipeOff);
 		lastTime = now;
 		IOSleep(2000);
 	}
@@ -375,6 +388,8 @@ public:
 	uint64_t        fFlipPhys[kFlipFrames];
 	unsigned        fFlipNext;
 	uint32_t        fFlips;
+	bool            fFlipFrames;            /* frames of our own are drawn into (flip=1) */
+	bool            fFlipWrites;            /* the pipe's registers are written (flip=1 or 2) */
 	uint32_t        fPanelWidth, fPanelHeight, fRowBytes;
 	uint32_t        fWidth, fHeight;        /* the display as user space sees it */
 	MiniIOSurface * fDefaultSurface;
@@ -491,6 +506,7 @@ IOMobileFramebuffer::flipFind(void)
 		/* VIG0 is bit 0 of the flush on this controller (topaz writes 0x20001 for it), not bit 1
 		 * as the catalog numbers it: both are set, the one that is not the pipe is ignored */
 		fPipeFlush = kDPUCtlFlushSelf | 1u | (1u << blocks[i].pipe);
+		gPipeOff = fPipeSrcOff;
 		IOLog("MiniIOMobileFramebuffer: pipe %u scans the panel from %#x (its address register at +%#x)\n",
 		    blocks[i].pipe, kDPUFBPhys, fPipeSrcOff);
 		return;
@@ -554,18 +570,20 @@ IOMobileFramebuffer::flipTo(void)
 {
 	unsigned i;
 
-	if (fPipe == NULL) {
+	if (fPipe == NULL || !fFlipWrites) {
 		return;
 	}
 	__asm__ volatile("dsb sy" ::: "memory");
-	fPipe[fPipeSrcOff / 4] = (uint32_t) fFlipPhys[fFlipNext];
+	fPipe[fPipeSrcOff / 4] = fFlipFrames ? (uint32_t) fFlipPhys[fFlipNext] : kDPUFBPhys;
 	fPipe[fPipeStrideOff / 4] = fRowBytes;
 	for (i = 0; i < kDPUCtlCount; i++) {
 		gDPU[(kDPUCtlFirst + kDPUCtlStride * i + kDPUCtlFlush) / 4] = fPipeFlush;
 	}
 	__asm__ volatile("dsb sy" ::: "memory");
-	fFlipNext = (fFlipNext + 1) % kFlipFrames;
-	fDraw = fFlipFrame[fFlipNext];
+	if (fFlipFrames) {
+		fFlipNext = (fFlipNext + 1) % kFlipFrames;
+		fDraw = fFlipFrame[fFlipNext];
+	}
 	fFlips++;
 	gFlipsShown++;
 }
@@ -712,6 +730,15 @@ IOMobileFramebuffer::start(IOService * provider)
 	fPipe = NULL;
 	fFlipNext = 0;
 	fFlips = 0;
+	fFlipFrames = false;
+	fFlipWrites = false;
+	{
+		uint32_t mode = 1;
+
+		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 3) {
+			gFlipMode = mode;
+		}
+	}
 	fPanelWidth = vinfo.v_width;
 	fPanelHeight = vinfo.v_height;
 	fRowBytes = vinfo.v_rowbytes;
@@ -787,9 +814,21 @@ IOMobileFramebuffer::start(IOService * provider)
 	gDPU = (volatile uint32_t *) ml_io_map(kDPUMdpPhys, kDPUMdpBytes);
 	if (gDPU != NULL) {
 		/* frames are flipped into the panel rather than written into it, if a pipe of it will take them */
+		bool frames = false;
+
 		flipFind();
-		if (fPipe == NULL || !flipAllocate()) {
+		if (gFlipMode == 1 || gFlipMode == 3) {
+			frames = flipAllocate();
+		}
+		if (gFlipMode == 1 && frames && fPipe != NULL) {
+			fFlipFrames = true;             /* drawn into frames of their own, and the pipe followed */
+			fFlipWrites = true;
+		} else if (gFlipMode == 2 && fPipe != NULL) {
+			fFlipWrites = true;             /* (only the address it already holds is written back) */
+		} else {
 			fPipe = NULL;
+		}
+		if (!fFlipFrames) {
 			fDraw = fBase;
 		}
 		if (kernel_thread_start(dpuMain, this, &thread) != KERN_SUCCESS) {
@@ -1298,7 +1337,7 @@ IOMobileFramebuffer::show(const uint8_t * swap, MiniIOSurface ** surfaces)
 		}
 	}
 	shown = began;
-	if (fPipe != NULL) {
+	if (fFlipFrames) {
 		fDraw = fFlipFrame[fFlipNext];      /* the frame after the one the panel is scanning */
 	}
 	/* its turn has come: the swap after it may be handed over */
