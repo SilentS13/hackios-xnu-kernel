@@ -238,6 +238,7 @@ static const uint32_t kDPUSplashOff[] = { 0x00000000u, 0x00c00000u, 0x01800000u 
 #define kDPUIntfVsyncPeriod     0x00c
 #define kDPUIntfFrameCount      0x0ac
 #define kDPUIntfLineCount       0x0b0
+#define kDPUIntfScanWords       96                      /* (the first 0x180 of an interface block is scanned) */
 /*
  * The CTL blocks and the pipe's registers. The offsets are of the MDP block, which begins 0x1000
  * into the mapped window (0xae01000: the sm8350 catalog's "DPU" node, qcom,sm8350-dpu), so each is
@@ -299,6 +300,9 @@ static uint32_t gFlipLastAddr, gFlipReadback;           /* what was written to t
  *   7  the frames flipped as 5, with a bar that moves 60 px per flip over the picture, and the
  *      latching alternating every two seconds: white, the address written at once; magenta, the
  *      address written only after a flush of the CTL has cleared (i.e. at a frame boundary)
+ *   8  the same, always boundary-first, with the boundary projected at 1/fb_hz from the last flush
+ *   9  the boundary-first flip handed to a clock thread, so the presenter waits for nothing
+ *  10  the address written the instant the interface's own frame counter moves
  */
 static uint32_t gFlipMode = 1;
 static uint32_t gFlipSync;                              /* flip=7: 1 while the boundary-first latch is in force */
@@ -307,6 +311,7 @@ static uint32_t gPipeBase;                              /* the pipe's block, 0 i
 static uint32_t gCtlOff;                                /* the CTL whose layer holds the pipe, 0 if none */
 static uint32_t gPipeStride;                            /* the stride the panel is scanned with at boot */
 static uint32_t gIntfOff;                               /* the interface block whose frame counter advances, 0 if none */
+static uint32_t gIntfFrameOff = kDPUIntfFrameCount;     /* where that block keeps it */
 
 static void
 dpuNumber(IOService * service, const char * key, uint32_t value)
@@ -341,7 +346,7 @@ dpuMain(void * self, wait_result_t result __unused)
 		 */
 		for (unsigned i = 0; i < kDPUIntfCount && gDPU != NULL; i++) {
 			uint32_t base = kDPUIntfOffsets[i];
-			uint32_t frame = gDPU[(base + kDPUIntfFrameCount) / 4];
+			uint32_t frame = gDPU[(base + gIntfFrameOff) / 4];
 			uint32_t line = gDPU[(base + kDPUIntfLineCount) / 4];
 			uint32_t millihertz = 0;
 
@@ -509,6 +514,7 @@ public:
 	void flipLatch(void);
 	bool flipWaitFrame(void);
 	void flipWaitBoundary(void);
+	void flipScanIntf(void);
 	static void flipClockMain(void * self, wait_result_t result);
 	void flipTo(void);
 	void flipProbe(void);
@@ -625,7 +631,7 @@ dpuDump(const char * tag)
 		uint32_t b = 0x6a000u + 0x1000u * i;
 
 		IOLog("MiniIOMobileFramebuffer: dpu %s: intf%u en %#x frame %u line %u vsync %u\n", tag, i,
-		    gDPU[(b + kDPUIntfTimingEngineEn) / 4] & 1, gDPU[(b + kDPUIntfFrameCount) / 4],
+		    gDPU[(b + kDPUIntfTimingEngineEn) / 4] & 1, gDPU[(b + gIntfFrameOff) / 4],
 		    gDPU[(b + kDPUIntfLineCount) / 4], gDPU[(b + kDPUIntfVsyncPeriod) / 4]);
 	}
 	IOLog("MiniIOMobileFramebuffer: dpu %s: ctl +%#x pipe +%#x intf +%#x flips %u\n", tag, gCtlOff,
@@ -778,19 +784,63 @@ IOMobileFramebuffer::flipAllocateSplash(void)
  */
 static bool gVblankUsable = true;
 
+/*
+ * The interface's frame counter is found rather than assumed: the catalog's offsets for it differ
+ * from SoC to SoC, and the guessed one never moved ("vblank 0 (missed 0, none 940)"). A register in
+ * an interface block that steps by one or two on every 9 ms is it; nothing is written.
+ */
+void
+IOMobileFramebuffer::flipScanIntf(void)
+{
+	for (unsigned b = 0; b < kDPUIntfCount; b++) {
+		uint32_t base = kDPUIntfOffsets[b];
+		uint32_t first[kDPUIntfScanWords], second[kDPUIntfScanWords];
+		unsigned w;
+
+		for (w = 0; w < kDPUIntfScanWords; w++) {
+			first[w] = gDPU[(base + 4 * w) / 4];
+		}
+		IOSleep(9);
+		for (w = 0; w < kDPUIntfScanWords; w++) {
+			second[w] = gDPU[(base + 4 * w) / 4];
+		}
+		IOSleep(9);
+		for (w = 0; w < kDPUIntfScanWords; w++) {
+			uint32_t v = gDPU[(base + 4 * w) / 4];
+			uint32_t d1 = second[w] - first[w], d2 = v - second[w];
+
+			if (d1 >= 1 && d1 <= 2 && d2 >= 1 && d2 <= 2) {
+				if (gIntfOff == 0) {
+					gIntfOff = base;
+					gIntfFrameOff = 4 * w;
+				}
+				IOLog("MiniIOMobileFramebuffer: intf +%#x word +%#x: %u %u %u (one panel frame per step)\n",
+				    base, 4 * w, first[w], second[w], v);
+			}
+		}
+		if (gIntfOff != 0) {
+			IOLog("MiniIOMobileFramebuffer: the panel's frame counter is +%#x in the interface at +%#x\n",
+			    gIntfFrameOff, gIntfOff);
+			return;
+		}
+	}
+	IOLog("MiniIOMobileFramebuffer: no interface frame counter moved: the vblank is timed, not read\n");
+}
+
 static void
 flipWaitVblank(void)
 {
 	uint64_t start = mach_absolute_time(), bound;
+	uint32_t frame;
 
 	if (!gVblankUsable || gIntfOff == 0) {
 		gVblankNone++;
 		return;
 	}
-	nanoseconds_to_absolutetime(12 * NSEC_PER_MSEC, &bound);
-	uint32_t frame = gDPU[(gIntfOff + kDPUIntfFrameCount) / 4];
+	nanoseconds_to_absolutetime(40 * NSEC_PER_MSEC, &bound);
+	frame = gDPU[(gIntfOff + gIntfFrameOff) / 4];
 	while (mach_absolute_time() - start < bound) {
-		if (gDPU[(gIntfOff + kDPUIntfFrameCount) / 4] != frame) {
+		if (gDPU[(gIntfOff + gIntfFrameOff) / 4] != frame) {
 			gVblankMoves++;
 			return;
 		}
@@ -980,6 +1030,30 @@ IOMobileFramebuffer::flipTo(void)
 				line[x0 + x] = gFlipSync ? 0xffff00ffu : 0xffffffffu;
 			}
 		}
+	}
+	if (gFlipMode == 10) {
+		/*
+		 * The address goes in the instant the interface's own frame counter moves, so the panel is at
+		 * the top of a frame when the pipe is pointed: the change is a flip, not a seam. The flush is
+		 * written after it and not waited for: the flush's own wait was up to a whole panel frame.
+		 */
+		flipWaitVblank();
+		__asm__ volatile("dsb sy" ::: "memory");
+		fPipe[fPipeSrcOff / 4] = phys;
+		fPipe[fPipeStrideOff / 4] = stride;
+		__asm__ volatile("dsb sy" ::: "memory");
+		if (gCtlOff != 0) {
+			gDPU[(gCtlOff + kDPUCtlFlush) / 4] = fPipeFlush;
+		}
+		gFlipLastAddr = phys;
+		gFlipReadback = fPipe[fPipeSrcOff / 4];
+		if (fFlipFrames) {
+			fFlipNext = (fFlipNext + 1) % kFlipFrames;
+			fDraw = fFlipFrame[fFlipNext];
+		}
+		fFlips++;
+		gFlipsShown++;
+		return;
 	}
 	if (gFlipMode == 9) {
 		/* hand the frame to the clock and compose again: neither wait is the presenter's */
@@ -1195,7 +1269,7 @@ IOMobileFramebuffer::start(IOService * provider)
 	{
 		uint32_t mode = 1;
 
-		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 9) {
+		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 10) {
 			gFlipMode = mode;
 		}
 		PE_parse_boot_argn("dpu_dump", &gDpuDump, sizeof(gDpuDump));
@@ -1274,12 +1348,14 @@ IOMobileFramebuffer::start(IOService * provider)
 	 */
 	gDPU = (volatile uint32_t *) ml_io_map(kDPUMdpPhys, kDPUMdpBytes);
 	if (gDPU != NULL) {
+		/* where the panel's frame counter is, before anything waits on one */
+		flipScanIntf();
 		/* frames are flipped into the panel rather than written into it, if a pipe of it will take them */
 		bool frames = false;
-		bool full = gFlipMode == 1 || (gFlipMode >= 5 && gFlipMode <= 9);
+		bool full = gFlipMode == 1 || (gFlipMode >= 5 && gFlipMode <= 10);
 
 		flipFind();
-		if (gFlipMode >= 5 && gFlipMode <= 9) {
+		if (gFlipMode >= 5 && gFlipMode <= 10) {
 			frames = flipAllocateSplash();
 		} else if (full || gFlipMode == 3) {
 			frames = flipAllocate();
