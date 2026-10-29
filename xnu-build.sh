@@ -2,6 +2,10 @@
 # Build XNU for redwood on Linux. Extra make args are passed through.
 source "$(dirname "${BASH_SOURCE[0]}")/xnu-env.sh"
 cd "$XNU_SRC" || exit 1
+# xnu-12377 takes the kernel version from System.kext/Info.plist in the SDK or the KDK, and the
+# 16.5 SDK overlay HAS none: name it instead (Darwin 25.5 = iOS 26.5; feeds.toml's release set).
+export RC_DARWIN_KERNEL_VERSION=${RC_DARWIN_KERNEL_VERSION:-25.5.0}
+export RC_ProjectSourceVersion=${RC_ProjectSourceVersion:-12377.121.6}
 # The Wi-Fi driver's object (tools/mk-ath11k.sh) is linked into the kernel when it is there; make
 # does not see it change, so the linked kernel is thrown away when it has.
 LX=$XNUDEPS/build/ath11k/out/ath11k.o
