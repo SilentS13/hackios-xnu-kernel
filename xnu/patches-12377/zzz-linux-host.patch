@@ -125,3 +125,10 @@ index 964d522..6b694b1 100644
  
  # Assume LTO scaling by default, unless it is being explicitly passed on the command-line
  LARGE_BUILD_FOOTPRINT := $(if $(BUILD_LTO),$(BUILD_LTO),1)
+diff --git a/SETUP/config/doconf b/SETUP/config/doconf
+--- a/SETUP/config/doconf
++++ b/SETUP/config/doconf
+@@ -1,2 +1,2 @@
+-#!/bin/csh -f
++#!/usr/bin/env -S csh -f
+ set path = ($path .)
