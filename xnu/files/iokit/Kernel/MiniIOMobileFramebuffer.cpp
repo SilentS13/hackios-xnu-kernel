@@ -1678,13 +1678,9 @@ IOMobileFramebuffer::show(const uint8_t * swap, MiniIOSurface ** surfaces)
 			if (!fGraphics) {
 				/* the first picture: the kernel's text console must stop drawing over it */
 				fGraphics = true;
-				if (gDpuDump == 0) {
-					/* (with dpu_dump the console keeps painting the panel's own memory: the last
-					   picture a stopped panel holds is then what the controller was doing) */
-					PE_initialize_console(NULL, kPEDisableScreen);
-					disableConsoleOutput = 1;
-					vinfo.v_baseaddr = 0;
-				}
+				PE_initialize_console(NULL, kPEDisableScreen);
+				disableConsoleOutput = 1;
+				vinfo.v_baseaddr = 0;
 				for (uint32_t y = 0; y < fPanelHeight; y++) {
 					bzero(fDraw + (size_t) y * fRowBytes, (size_t) fPanelWidth * 4);
 				}
