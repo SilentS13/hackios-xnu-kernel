@@ -213,6 +213,76 @@ refreshHz(void)
 {
 	return gRefreshHz >= 1 && gRefreshHz <= 240 ? gRefreshHz : kFBRefreshHz;
 }
+
+/*
+ * The display controller the panel actually scans from (SM8350's DPU: mdp at 0x0ae01000). The
+ * interface that drives the main panel's DSI is INTF1 at mdp + 0x35000, whose frame counter at
+ * +0xAC and line counter at +0xB0 (INTF_FRAME_COUNT / INTF_LINE_COUNT) count what the hardware
+ * does, not what we ask for: fb_hz is the rate we tell CoreAnimation, and nothing so far has asked
+ * the controller its own. Read only -- the counters are published as service properties for the
+ * window server's log, and the line counter is where a frame's place in the scan can be read.
+ */
+#define kDPUMdpPhys     0x0ae01000u
+#define kDPUMdpBytes    0x8f000u
+#define kDPUIntfFirst   0x35000u                        /* INTF1: DSI 0 */
+#define kDPUIntfStride  0x1000u
+#define kDPUIntfCount   2                               /* INTF1 and INTF2, the two DSI interfaces */
+#define kDPUIntfTimingEngineEn  0x000
+#define kDPUIntfVsyncPeriod     0x00c
+#define kDPUIntfFrameCount      0x0ac
+#define kDPUIntfLineCount       0x0b0
+
+extern vm_offset_t ml_io_map(vm_offset_t phys_addr, vm_size_t size);
+extern void IOSleep(unsigned int milliseconds);
+static volatile uint32_t * gDPU;                        /* the controller's registers, or NULL */
+
+static void
+dpuNumber(IOService * service, const char * key, uint32_t value)
+{
+	OSNumber * number = OSNumber::withNumber((unsigned long long) value, 32);
+
+	if (number != NULL) {
+		service->setProperty(key, number);
+		number->release();
+	}
+}
+
+static void
+dpuMain(void * self, wait_result_t result __unused)
+{
+	IOService * service = (IOService *) self;
+	uint32_t lastFrame[kDPUIntfCount] = { 0, 0 };
+	uint64_t lastTime = 0;
+	char key[32];
+
+	for (;;) {
+		uint64_t now = mach_absolute_time();
+
+		for (unsigned i = 0; i < kDPUIntfCount && gDPU != NULL; i++) {
+			uint32_t base = kDPUIntfFirst + i * kDPUIntfStride;
+			uint32_t frame = gDPU[(base + kDPUIntfFrameCount) / 4];
+			uint32_t line = gDPU[(base + kDPUIntfLineCount) / 4];
+			uint32_t elaps_1000hz = 0;
+
+			if (lastTime != 0 && now > lastTime && frame >= lastFrame[i]) {
+				elaps_1000hz = (uint32_t) ((frame - lastFrame[i]) * 1000ull * 1000000000ull / (now - lastTime));
+			}
+			lastFrame[i] = frame;
+			snprintf(key, sizeof(key), "dpu-intf%u-en", i + 1);
+			dpuNumber(service, key, gDPU[(base + kDPUIntfTimingEngineEn) / 4] & 1);
+			snprintf(key, sizeof(key), "dpu-intf%u-vsync", i + 1);
+			dpuNumber(service, key, gDPU[(base + kDPUIntfVsyncPeriod) / 4]);
+			snprintf(key, sizeof(key), "dpu-intf%u-frame", i + 1);
+			dpuNumber(service, key, frame);
+			snprintf(key, sizeof(key), "dpu-intf%u-line", i + 1);
+			dpuNumber(service, key, line);
+			snprintf(key, sizeof(key), "dpu-intf%u-millihertz", i + 1);
+			dpuNumber(service, key, elaps_1000hz);
+		}
+		lastTime = now;
+		IOSleep(2000);
+	}
+}
 static inline uint32_t
 recStep(void)
 {
@@ -547,6 +617,18 @@ IOMobileFramebuffer::start(IOService * provider)
 	publishRefresh();
 	setName("disp0");
 	registerService();
+	/*
+	 * What the panel's controller is doing, read only and published as properties: the one place
+	 * a "the panel is still 60" can be told apart from "CoreAnimation is still 60" (dpuMain()).
+	 */
+	gDPU = (volatile uint32_t *) ml_io_map(kDPUMdpPhys, kDPUMdpBytes);
+	if (gDPU != NULL) {
+		if (kernel_thread_start(dpuMain, this, &thread) != KERN_SUCCESS) {
+			IOLog("MiniIOMobileFramebuffer: no thread to read the display controller with\n");
+		}
+	} else {
+		IOLog("MiniIOMobileFramebuffer: the display controller could not be mapped\n");
+	}
 	{
 		/* the one line that must still be readable when the panel has stopped scrolling: a minute
 		   after the driver starts, say who opened the display and how many frames were shown */
