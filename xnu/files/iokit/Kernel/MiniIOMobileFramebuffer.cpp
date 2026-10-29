@@ -348,6 +348,7 @@ dpuMain(void * self, wait_result_t result __unused)
 		}
 		dpuNumber(service, "flip-mask", gFlipMask);
 		dpuNumber(service, "flip-frames", gFlipsShown);
+		dpuNumber(service, "fb-swaps", gFBSwapsShown);
 		dpuNumber(service, "flip-mode", gFlipMode);
 		dpuNumber(service, "dpu-pipe", gPipeOff);
 		dpuNumber(service, "dpu-stride", gPipeStride);
