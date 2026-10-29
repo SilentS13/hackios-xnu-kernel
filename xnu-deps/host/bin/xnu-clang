@@ -10,6 +10,7 @@ for a in "$@"; do
   case "$a" in
     -enable-trivial-auto-var-init-zero-knowing-it-will-be-removed-from-clang) ;;
     -fapple-kext-vtable-verify|-Wno-vla-cxx-extension) ;;
+    -mno-implicit-sme) ;;  # clang 18 (Ubuntu 24.04) predates the flag; SME is opt-in there anyway
     -Werror|-Werror=*|-Weverything|-pedantic-errors) ;;
     *) args+=("$a");;
   esac
