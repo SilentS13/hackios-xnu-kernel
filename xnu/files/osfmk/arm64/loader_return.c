@@ -24,6 +24,7 @@
 #include <arm64/proc_reg.h>
 #include <pexpert/pexpert.h>
 #include <pexpert/arm64/board_config.h>
+#include <vm/vm_object_xnu.h>
 #include <vm/vm_page.h>
 
 /*
