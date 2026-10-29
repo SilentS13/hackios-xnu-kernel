@@ -258,10 +258,15 @@ static uint32_t gFlipsShown;                            /* frames flipped into t
  *   1  frames in memory of their own, and the pipe pointed at them: the whole flip
  *   2  the pipe's registers written with the address they already hold (no new memory)
  *   3  the frames made and filled, and the pipe left alone (no register written)
+ *   4  the whole flip, with the pipe's registers written while the panel is not reading them
+ *      and no flush at all
+ *   5  the same, and the pipe's own flush bit alone (not the CTL's: that one broke the picture)
  */
 static uint32_t gFlipMode = 1;
 static uint32_t gPipeOff;                               /* where the scanning pipe keeps its address, 0 if none */
 static uint32_t gPipeStride;                            /* the stride the panel is scanned with at boot */
+static uint32_t gPipeIdx;                               /* the pipe's number in the catalog, for its flush bit */
+static uint32_t gIntfOff;                               /* the interface block whose frame counter advances, 0 if none */
 
 static void
 dpuNumber(IOService * service, const char * key, uint32_t value)
@@ -315,6 +320,9 @@ dpuMain(void * self, wait_result_t result __unused)
 
 			if (lastTime != 0 && now > lastTime && frame >= lastFrame[i]) {
 				millihertz = (uint32_t) ((frame - lastFrame[i]) * 1000ull * 1000000000ull / (now - lastTime));
+			}
+			if (lastTime != 0 && frame != lastFrame[i] && gIntfOff == 0) {
+				gIntfOff = base;        /* (this is the interface the panel is being scanned by) */
 			}
 			lastFrame[i] = frame;
 			snprintf(key, sizeof(key), "dpu-c%u-en", i);
@@ -509,6 +517,7 @@ IOMobileFramebuffer::flipFind(void)
 		 * as the catalog numbers it: both are set, the one that is not the pipe is ignored */
 		fPipeFlush = kDPUCtlFlushSelf | 1u | (1u << blocks[i].pipe);
 		gPipeOff = fPipeSrcOff;
+		gPipeIdx = blocks[i].pipe;
 		gPipeStride = gDPU[fPipeStrideOff / 4];
 		IOLog("MiniIOMobileFramebuffer: pipe %u scans the panel from %#x, stride %u (its address register at +%#x)\n",
 		    blocks[i].pipe, kDPUFBPhys, gPipeStride, fPipeSrcOff);
@@ -567,20 +576,59 @@ IOMobileFramebuffer::flipAllocate(void)
 	return true;
 }
 
+/*
+ * Wait for the panel to start a frame: the address is written while it is not being read, so that a
+ * write the controller latches where it stands is still a flip and not a seam. Bounded (a display
+ * whose counter never moves costs the wait once, then not again).
+ */
+static bool gVblankUsable = true;
+
+static void
+flipWaitVblank(void)
+{
+	uint64_t start = mach_absolute_time(), bound;
+
+	if (!gVblankUsable || gIntfOff == 0) {
+		return;
+	}
+	nanoseconds_to_absolutetime(12 * NSEC_PER_MSEC, &bound);
+	uint32_t frame = gDPU[(gIntfOff + kDPUIntfFrameCount) / 4];
+	while (mach_absolute_time() - start < bound) {
+		if (gDPU[(gIntfOff + kDPUIntfFrameCount) / 4] != frame) {
+			return;
+		}
+	}
+	gVblankUsable = false;          /* (no counter moved: do not spend the time again) */
+}
+
 /* Point the pipe at the frame just drawn; the registers latch at the pipe's next vsync. */
 void
 IOMobileFramebuffer::flipTo(void)
 {
+	uint32_t flush = fPipeFlush;
 	unsigned i;
 
 	if (fPipe == NULL || !fFlipWrites) {
 		return;
 	}
+	flipWaitVblank();
 	__asm__ volatile("dsb sy" ::: "memory");
 	fPipe[fPipeSrcOff / 4] = fFlipFrames ? (uint32_t) fFlipPhys[fFlipNext] : kDPUFBPhys;
 	fPipe[fPipeStrideOff / 4] = fFlipFrames ? fRowBytes : gPipeStride;
-	for (i = 0; i < kDPUCtlCount; i++) {
-		gDPU[(kDPUCtlFirst + kDPUCtlStride * i + kDPUCtlFlush) / 4] = fPipeFlush;
+	__asm__ volatile("dsb sy" ::: "memory");
+	/*
+	 * flip=4 writes the pipe's registers and nothing else: if the controller takes them where they
+	 * stand, that is the whole flip. flip=5 adds the pipe's own flush bit -- not the CTL's, whose
+	 * pending layer is the bootloader's and was never written by us: flushing that again is what
+	 * put flip=2's console on the screen at the wrong stride.
+	 */
+	if (gFlipMode == 4) {
+		flush = 0;
+	} else if (gFlipMode == 5) {
+		flush = 1u << gPipeIdx;
+	}
+	for (i = 0; flush != 0 && i < kDPUCtlCount; i++) {
+		gDPU[(kDPUCtlFirst + kDPUCtlStride * i + kDPUCtlFlush) / 4] = flush;
 	}
 	__asm__ volatile("dsb sy" ::: "memory");
 	if (fFlipFrames) {
@@ -738,7 +786,7 @@ IOMobileFramebuffer::start(IOService * provider)
 	{
 		uint32_t mode = 1;
 
-		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 3) {
+		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 5) {
 			gFlipMode = mode;
 		}
 	}
@@ -818,12 +866,13 @@ IOMobileFramebuffer::start(IOService * provider)
 	if (gDPU != NULL) {
 		/* frames are flipped into the panel rather than written into it, if a pipe of it will take them */
 		bool frames = false;
+		bool full = gFlipMode == 1 || gFlipMode == 4 || gFlipMode == 5;
 
 		flipFind();
-		if (gFlipMode == 1 || gFlipMode == 3) {
+		if (full || gFlipMode == 3) {
 			frames = flipAllocate();
 		}
-		if (gFlipMode == 1 && frames && fPipe != NULL) {
+		if (full && frames && fPipe != NULL) {
 			fFlipFrames = true;             /* drawn into frames of their own, and the pipe followed */
 			fFlipWrites = true;
 		} else if (gFlipMode == 2 && fPipe != NULL) {
