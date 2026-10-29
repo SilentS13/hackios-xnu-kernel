@@ -296,8 +296,12 @@ static uint32_t gFlipLastAddr, gFlipReadback;           /* what was written to t
  *      the memory the bootloader mapped for the display
  *   6  the same frames, painted a whole colour each and flipped: the panel must change colour
  *      every two seconds if the pipe takes the address, and never if it does not
+ *   7  the frames flipped as 5, with a bar that moves 60 px per flip over the picture, and the
+ *      latching alternating every two seconds: white, the address written at once; magenta, the
+ *      address written only after a flush of the CTL has cleared (i.e. at a frame boundary)
  */
 static uint32_t gFlipMode = 1;
+static uint32_t gFlipSync;                              /* flip=7: 1 while the boundary-first latch is in force */
 static uint32_t gPipeOff;                               /* where the scanning pipe keeps its address, 0 if none */
 static uint32_t gPipeBase;                              /* the pipe's block, 0 if none */
 static uint32_t gCtlOff;                                /* the CTL whose layer holds the pipe, 0 if none */
@@ -503,6 +507,7 @@ public:
 	bool flipAllocate(void);
 	bool flipAllocateSplash(void);
 	void flipLatch(void);
+	void flipWaitFrame(void);
 	void flipTo(void);
 	void flipProbe(void);
 	MiniIOSurface * defaultSurface(void);
@@ -826,6 +831,30 @@ IOMobileFramebuffer::flipLatch(void)
 
 /* Point the pipe at the frame just drawn; the CTL takes it at the panel's next vsync. */
 void
+IOMobileFramebuffer::flipWaitFrame(void)
+{
+	uint32_t spin;
+
+	if (gCtlOff == 0) {
+		flipWaitVblank();
+		return;
+	}
+	/*
+	 * A flush is taken at the panel's frame boundary, so waiting for this one to clear is how we
+	 * stand at the start of a frame. It asks for nothing: the pipe's registers already hold what
+	 * they held, and the panel is at the top of a frame when it clears.
+	 */
+	gDPU[(gCtlOff + kDPUCtlFlush) / 4] = fPipeFlush;
+	__asm__ volatile("dsb sy" ::: "memory");
+	for (spin = 0; spin < 500; spin++) {
+		if ((gDPU[(gCtlOff + kDPUCtlFlush) / 4] & fPipeFlush) == 0) {
+			return;
+		}
+		IODelay(10);
+	}
+}
+
+void
 IOMobileFramebuffer::flipTo(void)
 {
 	uint32_t phys = fFlipFrames ? (uint32_t) fFlipPhys[fFlipNext] : kDPUFBPhys;
@@ -851,6 +880,29 @@ IOMobileFramebuffer::flipTo(void)
 				line[x] = colour;
 			}
 		}
+	}
+	if (gFlipMode == 7) {
+		/*
+		 * A bar 240 px wide over the whole height, 60 px further right on every flip: a flip taken
+		 * mid-frame shows it as a step, one taken at a boundary leaves it straight. Its colour says
+		 * which latch is in force this second.
+		 */
+		uint32_t * words = (uint32_t *) (uintptr_t) fFlipFrame[fFlipNext];
+		uint32_t wide = fPanelWidth > 240 ? fPanelWidth - 240 : 1;
+		uint32_t x0 = (fFlips * 60) % wide;
+		uint32_t row, x;
+
+		gFlipSync = (fFlips / 120) & 1;
+		for (row = 0; row < fPanelHeight; row++) {
+			uint32_t * line = words + (size_t) row * (fRowBytes / 4);
+
+			for (x = 0; x < 240 && x0 + x < fPanelWidth; x++) {
+				line[x0 + x] = gFlipSync ? 0xffff00ffu : 0xffffffffu;
+			}
+		}
+	}
+	if (gFlipMode == 7 && gFlipSync) {
+		flipWaitFrame();
 	}
 	flipWaitVblank();
 	__asm__ volatile("dsb sy" ::: "memory");
@@ -1047,7 +1099,7 @@ IOMobileFramebuffer::start(IOService * provider)
 	{
 		uint32_t mode = 1;
 
-		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 6) {
+		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 7) {
 			gFlipMode = mode;
 		}
 		PE_parse_boot_argn("dpu_dump", &gDpuDump, sizeof(gDpuDump));
@@ -1128,10 +1180,10 @@ IOMobileFramebuffer::start(IOService * provider)
 	if (gDPU != NULL) {
 		/* frames are flipped into the panel rather than written into it, if a pipe of it will take them */
 		bool frames = false;
-		bool full = gFlipMode == 1 || gFlipMode == 5 || gFlipMode == 6;
+		bool full = gFlipMode == 1 || (gFlipMode >= 5 && gFlipMode <= 7);
 
 		flipFind();
-		if (gFlipMode == 5 || gFlipMode == 6) {
+		if (gFlipMode >= 5 && gFlipMode <= 7) {
 			frames = flipAllocateSplash();
 		} else if (full || gFlipMode == 3) {
 			frames = flipAllocate();
