@@ -1,9 +1,9 @@
 diff --git a/osfmk/arm64/kernel_runtime_stubs.c b/osfmk/arm64/kernel_runtime_stubs.c
 new file mode 100644
-index 0000000..7ea8447
+index 0000000..4fe7bd5
 --- /dev/null
 +++ b/osfmk/arm64/kernel_runtime_stubs.c
-@@ -0,0 +1,48 @@
+@@ -0,0 +1,47 @@
 +/*
 + * Compiler-runtime hooks the kernel needs when built with stock clang.
 + *
@@ -11,7 +11,6 @@ index 0000000..7ea8447
 + * toolchain; upstream clang leaves them undefined in kernel mode.
 + */
 +#include <mach/mach_types.h>
-+#include <libkern/libkern.h>
 +
 +/*
 + * Mach-O static destructors lower to __cxa_atexit registrations instead of
