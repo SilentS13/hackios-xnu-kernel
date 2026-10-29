@@ -13,7 +13,11 @@ mkdir -p $XNU_SDK_PATH/usr/local/lib/kernel
 # 12377's exported headers refuse to be read as public, and the workq types that eventvar.h
 # then needs live behind BSD_KERNEL_PRIVATE; 8796 has neither.
 PRIV=
-if [ -f "$X/osfmk/kern/upsi.h" ]; then PRIV="-DXNU_KERNEL_PRIVATE=1 -DBSD_KERNEL_PRIVATE=1"; fi
+if [ -f "$X/osfmk/kern/upsi.h" ]; then
+	# sys/proc.h first: 12377's sys/user.h pulls in signalvar.h, which uses proc_t and
+	# expects its includer to have done that; the kernel itself always has
+	PRIV="-DXNU_KERNEL_PRIVATE=1 -DBSD_KERNEL_PRIVATE=1 -include sys/proc.h"
+fi
 for f in kern_init kern_support kern_synch; do
   xnu-clang -arch arm64 -c -Os -mkernel -nostdinc -fno-builtin -fno-common -Wno-int-conversion \
     -DKERNEL=1 -DKERNEL_PRIVATE=1 $PRIV -DPRIVATE=1 -D__PTHREAD_EXPOSE_INTERNALS__=1 -Dpthread_kern=pthread_kext_kern -Dcurrent_uthread=pthread_kext_current_uthread -D__DARWIN_64_BIT_INO_T=1 -DARM64_BOARD_CONFIG_BCM2837 \
