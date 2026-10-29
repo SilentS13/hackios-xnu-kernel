@@ -236,12 +236,22 @@ static const uint32_t kDPUSplashOff[] = { 0x00c00000u, 0x01800000u };    /* 12 M
 #define kDPUIntfVsyncPeriod     0x00c
 #define kDPUIntfFrameCount      0x0ac
 #define kDPUIntfLineCount       0x0b0
-/* the pipes' blocks, and the CTL flush mask (bit 17) taken with each pipe's own bit */
+/*
+ * The CTL blocks and the pipe's registers. A pipe's new configuration is taken by its CTL at the
+ * next frame boundary when the pipe's bit is written to CTL_FLUSH and the CTL is then started
+ * (dpu_hw_ctl_trigger_flush() and dpu_hw_ctl_trigger_start() of the msm driver): CTL_FLUSH alone
+ * is a request the CTL never acts on, and the flush bit of SSPP_VIG0 is bit 0 -- not bit 1, which
+ * the pipe's number in the catalog would suggest (dpu_hw_ctl_update_pending_flush_sspp()).
+ * CTL_FLUSH_MASK_CTL (bit 17) is the CTL's own layering: it is written only when a layer mixer
+ * changes, and writing it here re-latched the bootloader's layers and broke the picture.
+ */
 #define kDPUCtlFirst    0x2000u
 #define kDPUCtlStride   0x200u
 #define kDPUCtlCount    6
+#define kDPUCtlLayer0   0x000u                         /* CTL_LAYER_0: bits 2:0 are VIG0's stage (0: not used) */
+#define kDPUCtlTop      0x014u
 #define kDPUCtlFlush    0x018u
-#define kDPUCtlFlushSelf    (1u << 17)
+#define kDPUCtlStart    0x01cu
 #define kDPUPipeSrc0Addr   0x014u
 #define kDPUPipeStride     0x024u
 #define kFlipFrames     2                           /* one frame shown, one drawn into */
@@ -259,19 +269,21 @@ static uint32_t gFlipsShown;                            /* frames flipped into t
  * boot-arg flip=N says which part of the flip to do, so that a phone that stops when a frame is
  * flipped says which step stopped it:
  *   0  nothing: frames are copied into the panel's memory (the old path)
- *   1  frames in memory of their own, and the pipe pointed at them: the whole flip
- *   2  the pipe's registers written with the address they already hold (no new memory)
+ *   1  the whole flip, the frames in memory of the kernel's: the pipe pointed at them, flushed and
+ *      its CTL started
+ *   2  the pipe's own address and stride written back where they already are (no new memory), so
+ *      that only the latching (flush and start) is tried
  *   3  the frames made and filled, and the pipe left alone (no register written)
- *   4  the whole flip, with the pipe's registers written while the panel is not reading them
- *      and no flush at all
- *   5  the same, and the pipe's own flush bit alone (not the CTL's: that one broke the picture)
- *   6  the whole flip with the frames in the display's own reserved memory (the splash region)
- *   7  the same, and the pipe's own flush bit after the write, to make it latch
+ *   4  the pipe pointed 100 rows into the frame it already scans, and back again a few frames
+ *      later: the latching alone, on memory the display certainly reads
+ *   5  the whole flip with the frames in the display's own reserved memory (the splash region),
+ *      the memory the bootloader mapped for the display
  */
 static uint32_t gFlipMode = 1;
 static uint32_t gPipeOff;                               /* where the scanning pipe keeps its address, 0 if none */
+static uint32_t gPipeBase;                              /* the pipe's block, 0 if none */
+static uint32_t gCtlOff;                                /* the CTL whose layer holds the pipe, 0 if none */
 static uint32_t gPipeStride;                            /* the stride the panel is scanned with at boot */
-static uint32_t gPipeIdx;                               /* the pipe's number in the catalog, for its flush bit */
 static uint32_t gIntfOff;                               /* the interface block whose frame counter advances, 0 if none */
 
 static void
@@ -476,7 +488,9 @@ public:
 	void flipFind(void);
 	bool flipAllocate(void);
 	bool flipAllocateSplash(void);
+	void flipLatch(void);
 	void flipTo(void);
+	void flipProbe(void);
 	MiniIOSurface * defaultSurface(void);
 	void present(const uint8_t * swap);
 	void show(const uint8_t * swap, MiniIOSurface ** surfaces);
@@ -497,6 +511,83 @@ public:
 };
 
 OSDefineMetaClassAndStructors(IOMobileFramebuffer, IOService);
+
+static uint32_t gDpuDump;                               /* seconds between dumps of the controller's state, 0 off */
+
+/*
+ * The CTL that runs the pipe: its layer mixer's blend-stage word holds the pipe's stage in bits
+ * 2:0 (dpu_hw_ctl_setup_blendstage(): SSPP_VIG0 is the first stage of CTL_LAYER_0). The flush
+ * and the start of a flip go to this CTL alone -- they were being written to every CTL.
+ */
+static void
+flipFindCtl(void)
+{
+	static const uint32_t layers[] = { 0x00, 0x04, 0x08, 0x0c, 0x10, 0x24 };    /* CTL_LAYER_0 .. CTL_LAYER_5 */
+	unsigned i, j;
+
+	gCtlOff = 0;
+	for (i = 0; i < kDPUCtlCount && gCtlOff == 0; i++) {
+		uint32_t base = kDPUCtlFirst + kDPUCtlStride * i;
+
+		for (j = 0; j < sizeof(layers) / sizeof(layers[0]); j++) {
+			uint32_t word = gDPU[(base + layers[j]) / 4];
+
+			if ((word & 7) != 0) {
+				gCtlOff = base;
+				IOLog("MiniIOMobileFramebuffer: ctl%u mixes the panel's pipe (layer %u %#x, top %#x, start %#x)\n",
+				    i, j, word, gDPU[(base + kDPUCtlTop) / 4], gDPU[(base + kDPUCtlStart) / 4]);
+				break;
+			}
+		}
+	}
+	if (gCtlOff == 0) {
+		IOLog("MiniIOMobileFramebuffer: no CTL's layer holds the pipe: nothing to flush\n");
+	}
+}
+
+/*
+ * The controller's own state: the CTL's layers and its start, the pipe's registers, and the
+ * interface's frame counter. Read-only; logged every dpu_dump seconds so that a panel that has
+ * stopped moving still shows, frozen on itself, what the controller was doing.
+ */
+static void
+dpuDump(const char * tag)
+{
+	uint32_t base = gPipeBase;
+
+	if (gDPU == NULL || gCtlOff == 0 || base == 0) {
+		return;
+	}
+	IOLog("MiniIOMobileFramebuffer: dpu %s: ctl%u layer %#x %#x %#x %#x %#x %#x ext %#x top %#x flush %#x start %#x\n",
+	    tag, (gCtlOff - kDPUCtlFirst) / kDPUCtlStride,
+	    gDPU[(gCtlOff + 0x00) / 4], gDPU[(gCtlOff + 0x04) / 4], gDPU[(gCtlOff + 0x08) / 4],
+	    gDPU[(gCtlOff + 0x0c) / 4], gDPU[(gCtlOff + 0x10) / 4], gDPU[(gCtlOff + 0x24) / 4],
+	    gDPU[(gCtlOff + 0x40) / 4], gDPU[(gCtlOff + kDPUCtlTop) / 4],
+	    gDPU[(gCtlOff + kDPUCtlFlush) / 4], gDPU[(gCtlOff + kDPUCtlStart) / 4]);
+	IOLog("MiniIOMobileFramebuffer: dpu %s: intf %#x pipe %#x lms %#x fetch %#x frame %u line %u; +0x00 %08x %08x %08x %08x %08x %08x\n",
+	    tag, gDPU[(gCtlOff + 0x0f4) / 4], gDPU[(gCtlOff + 0x12c) / 4], gDPU[(gCtlOff + 0x130) / 4],
+	    gDPU[(gCtlOff + 0x0fc) / 4], gIntfOff != 0 ? gDPU[(gIntfOff + kDPUIntfFrameCount) / 4] : 0,
+	    gIntfOff != 0 ? gDPU[(gIntfOff + kDPUIntfLineCount) / 4] : 0,
+	    gDPU[(base + 0x00) / 4], gDPU[(base + 0x04) / 4], gDPU[(base + 0x08) / 4], gDPU[(base + 0x0c) / 4],
+	    gDPU[(base + 0x10) / 4], gDPU[(base + 0x14) / 4]);
+	IOLog("MiniIOMobileFramebuffer: dpu %s: +0x18 %08x %08x %08x %08x %08x %08x\n", tag,
+	    gDPU[(base + 0x18) / 4], gDPU[(base + 0x1c) / 4], gDPU[(base + 0x20) / 4], gDPU[(base + 0x24) / 4],
+	    gDPU[(base + 0x28) / 4], gDPU[(base + 0x2c) / 4]);
+}
+
+static void
+dpuDumpMain(void * self __unused, wait_result_t result __unused)
+{
+	char tag[16];
+	unsigned n;
+
+	for (n = 1; n <= 90; n++) {
+		IOSleep(gDpuDump * 1000);
+		snprintf(tag, sizeof(tag), "%us", n * gDpuDump);
+		dpuDump(tag);
+	}
+	thread_terminate(current_thread());
+}
 
 /*
  * Which pipe scans the panel: the bootloader points one at the boot framebuffer, and its address
@@ -520,14 +611,14 @@ IOMobileFramebuffer::flipFind(void)
 		fPipe = gDPU;
 		fPipeSrcOff = blocks[i].base + kDPUPipeSrc0Addr;
 		fPipeStrideOff = blocks[i].base + kDPUPipeStride;
-		/* VIG0 is bit 0 of the flush on this controller (topaz writes 0x20001 for it), not bit 1
-		 * as the catalog numbers it: both are set, the one that is not the pipe is ignored */
-		fPipeFlush = kDPUCtlFlushSelf | 1u | (1u << blocks[i].pipe);
+		/* SSPP_VIG0's bit in its CTL's flush mask is bit 0 (dpu_hw_ctl_update_pending_flush_sspp()) */
+		fPipeFlush = 1u << (blocks[i].pipe - 1);
+		gPipeBase = blocks[i].base;
 		gPipeOff = fPipeSrcOff;
-		gPipeIdx = blocks[i].pipe;
 		gPipeStride = gDPU[fPipeStrideOff / 4];
 		IOLog("MiniIOMobileFramebuffer: pipe %u scans the panel from %#x, stride %u (its address register at +%#x)\n",
 		    blocks[i].pipe, kDPUFBPhys, gPipeStride, fPipeSrcOff);
+		flipFindCtl();
 		return;
 	}
 	/* not where the catalog puts them: say where the address is, to be read */
@@ -588,8 +679,7 @@ IOMobileFramebuffer::flipAllocate(void)
 /*
  * The same frames, but inside the display's own carved-out memory (reserved-memory/splash_region,
  * 35 MB) rather than memory of the kernel's: the controller fetches what the bootloader mapped for
- * it there, and a flip=4 boot -- a new address, written in the vblank, no flush -- stopped the phone,
- * which is what a fetch from memory the display cannot see would do.
+ * it there, so the frames are memory the display certainly sees. (flip=5)
  */
 bool
 IOMobileFramebuffer::flipAllocateSplash(void)
@@ -652,41 +742,47 @@ flipWaitVblank(void)
 	gVblankUsable = false;          /* (no counter moved: do not spend the time again) */
 }
 
-/* Point the pipe at the frame just drawn; the registers latch at the pipe's next vsync. */
+/*
+ * The pipe's new registers are taken at the CTL's next frame boundary: the pipe's bit goes to
+ * CTL_FLUSH, then CTL_START is written. (Both are what the msm driver writes for every commit;
+ * a flush alone stays pending and nothing changes on the panel.)
+ */
+void
+IOMobileFramebuffer::flipLatch(void)
+{
+	if (gCtlOff == 0) {
+		return;
+	}
+	gDPU[(gCtlOff + kDPUCtlFlush) / 4] = fPipeFlush;
+	__asm__ volatile("dsb sy" ::: "memory");
+	gDPU[(gCtlOff + kDPUCtlStart) / 4] = 1;
+	__asm__ volatile("dsb sy" ::: "memory");
+}
+
+/* Point the pipe at the frame just drawn; the CTL takes it at the panel's next vsync. */
 void
 IOMobileFramebuffer::flipTo(void)
 {
-	uint32_t flush = fPipeFlush;
-	unsigned i;
+	uint32_t phys = fFlipFrames ? (uint32_t) fFlipPhys[fFlipNext] : kDPUFBPhys;
+	uint32_t stride = fFlipFrames ? fRowBytes : gPipeStride;
 
 	if (fPipe == NULL || !fFlipWrites) {
 		return;
 	}
+	if (gFlipMode == 4) {
+		flipProbe();
+		return;
+	}
 	flipWaitVblank();
 	__asm__ volatile("dsb sy" ::: "memory");
-	fPipe[fPipeSrcOff / 4] = fFlipFrames ? (uint32_t) fFlipPhys[fFlipNext] : kDPUFBPhys;
-	fPipe[fPipeStrideOff / 4] = fFlipFrames ? fRowBytes : gPipeStride;
+	fPipe[fPipeSrcOff / 4] = phys;
+	fPipe[fPipeStrideOff / 4] = stride;
 	__asm__ volatile("dsb sy" ::: "memory");
-	/*
-	 * flip=4 writes the pipe's registers and nothing else: if the controller takes them where they
-	 * stand, that is the whole flip. flip=5 adds the pipe's own flush bit -- not the CTL's, whose
-	 * pending layer is the bootloader's and was never written by us: flushing that again is what
-	 * put flip=2's console on the screen at the wrong stride.
-	 */
-	if (gFlipMode == 5 || gFlipMode == 7) {
-		flush = 1u << gPipeIdx;         /* the pipe's own bit alone */
-	} else if (gFlipMode == 1 || gFlipMode == 2) {
-		flush = fPipeFlush;             /* (the mask that broke the picture: kept for comparison) */
-	} else {
-		flush = 0;                      /* 4, 6: written so the controller latches it where it stands */
-	}
-	for (i = 0; flush != 0 && i < kDPUCtlCount; i++) {
-		gDPU[(kDPUCtlFirst + kDPUCtlStride * i + kDPUCtlFlush) / 4] = flush;
-	}
-	__asm__ volatile("dsb sy" ::: "memory");
+	flipLatch();
 	if (fFlips < 4) {
-		IOLog("MiniIOMobileFramebuffer: flip %u: +%#x = %#x, stride %u, flush %#x\n", fFlips, fPipeSrcOff,
-		    fPipe[fPipeSrcOff / 4], fPipe[fPipeStrideOff / 4], flush);
+		IOLog("MiniIOMobileFramebuffer: flip %u: +%#x = %#x, stride %u; ctl +%#x flush %#x start %#x\n", fFlips,
+		    fPipeSrcOff, phys, stride, gCtlOff, gDPU[(gCtlOff + kDPUCtlFlush) / 4],
+		    gDPU[(gCtlOff + kDPUCtlStart) / 4]);
 	}
 	if (fFlipFrames) {
 		fFlipNext = (fFlipNext + 1) % kFlipFrames;
@@ -694,6 +790,33 @@ IOMobileFramebuffer::flipTo(void)
 	}
 	fFlips++;
 	gFlipsShown++;
+}
+
+/*
+ * flip=4: the latching alone, on memory the display certainly reads. At the 30th frame the pipe
+ * is pointed 100 rows into the frame it is already scanning (the picture jumps up by that much and
+ * the last rows of the memory after it show); five seconds later it is pointed back. Nothing is
+ * allocated and nothing else is written: if the picture jumps and comes back, a flushed and
+ * started CTL does take a new address, and the only question left is whether frames of our own
+ * are memory the display can see.
+ */
+void
+IOMobileFramebuffer::flipProbe(void)
+{
+	uint32_t rows = 100;
+
+	fFlips++;
+	if (fFlips != 30 && fFlips != 600) {
+		return;
+	}
+	flipWaitVblank();
+	__asm__ volatile("dsb sy" ::: "memory");
+	fPipe[fPipeSrcOff / 4] = fFlips == 30 ? kDPUFBPhys + (uint32_t) fRowBytes * rows : kDPUFBPhys;
+	__asm__ volatile("dsb sy" ::: "memory");
+	flipLatch();
+	IOLog("MiniIOMobileFramebuffer: probe: +%#x = %#x (%u rows %s), ctl +%#x flush %#x start %#x\n", fPipeSrcOff,
+	    fPipe[fPipeSrcOff / 4], rows, fFlips == 30 ? "on" : "back", gCtlOff, gDPU[(gCtlOff + kDPUCtlFlush) / 4],
+	    gDPU[(gCtlOff + kDPUCtlStart) / 4]);
 }
 
 static void
@@ -843,9 +966,10 @@ IOMobileFramebuffer::start(IOService * provider)
 	{
 		uint32_t mode = 1;
 
-		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 7) {
+		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 5) {
 			gFlipMode = mode;
 		}
+		PE_parse_boot_argn("dpu_dump", &gDpuDump, sizeof(gDpuDump));
 	}
 	fPanelWidth = vinfo.v_width;
 	fPanelHeight = vinfo.v_height;
@@ -923,24 +1047,33 @@ IOMobileFramebuffer::start(IOService * provider)
 	if (gDPU != NULL) {
 		/* frames are flipped into the panel rather than written into it, if a pipe of it will take them */
 		bool frames = false;
-		bool full = gFlipMode == 1 || gFlipMode == 4 || gFlipMode == 5 || gFlipMode == 6 || gFlipMode == 7;
+		bool full = gFlipMode == 1 || gFlipMode == 5;
 
 		flipFind();
-		if (gFlipMode == 6 || gFlipMode == 7) {
+		if (gFlipMode == 5) {
 			frames = flipAllocateSplash();
 		} else if (full || gFlipMode == 3) {
 			frames = flipAllocate();
 		}
-		if (full && frames && fPipe != NULL) {
+		if (full && frames && fPipe != NULL && gCtlOff != 0) {
 			fFlipFrames = true;             /* drawn into frames of their own, and the pipe followed */
 			fFlipWrites = true;
-		} else if (gFlipMode == 2 && fPipe != NULL) {
-			fFlipWrites = true;             /* (only the address it already holds is written back) */
+		} else if ((gFlipMode == 2 || gFlipMode == 4) && fPipe != NULL) {
+			fFlipWrites = true;             /* (only the pipe's registers: the latching alone) */
 		} else {
 			fPipe = NULL;
 		}
 		if (!fFlipFrames) {
 			fDraw = fBase;
+		}
+		dpuDump("at start");
+		if (gDpuDump != 0) {
+			thread_t dump;
+
+			if (kernel_thread_start(dpuDumpMain, NULL, &dump) == KERN_SUCCESS) {
+				thread_set_thread_name(dump, "the display controller's state");
+				thread_deallocate(dump);
+			}
 		}
 		if (kernel_thread_start(dpuMain, this, &thread) != KERN_SUCCESS) {
 			IOLog("MiniIOMobileFramebuffer: no thread to read the display controller with\n");
@@ -1515,9 +1648,13 @@ IOMobileFramebuffer::show(const uint8_t * swap, MiniIOSurface ** surfaces)
 			if (!fGraphics) {
 				/* the first picture: the kernel's text console must stop drawing over it */
 				fGraphics = true;
-				PE_initialize_console(NULL, kPEDisableScreen);
-				disableConsoleOutput = 1;
-				vinfo.v_baseaddr = 0;
+				if (gDpuDump == 0) {
+					/* (with dpu_dump the console keeps painting the panel's own memory: the last
+					   picture a stopped panel holds is then what the controller was doing) */
+					PE_initialize_console(NULL, kPEDisableScreen);
+					disableConsoleOutput = 1;
+					vinfo.v_baseaddr = 0;
+				}
 				for (uint32_t y = 0; y < fPanelHeight; y++) {
 					bzero(fDraw + (size_t) y * fRowBytes, (size_t) fPanelWidth * 4);
 				}
