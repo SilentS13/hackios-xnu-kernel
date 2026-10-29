@@ -33,7 +33,7 @@ IOS_SDK=$THEOS/sdks/iPhoneOS16.5.sdk
 # macOS SDK of the same family (only Kernel.framework is unpacked). 8796's .iig files are the 13.3
 # set; 12377 adds IOExtensiblePaniclog.iig, which only 26.x has.
 MACOS_SDK_VERSION=13.3
-[ -f "$XNU_SRC/iokit/DriverKit/IOExtensiblePaniclog.iig" ] && MACOS_SDK_VERSION=26.1
+if [ -f "$XNU_SRC/iokit/DriverKit/IOExtensiblePaniclog.iig" ]; then MACOS_SDK_VERSION=26.1; fi
 MACOS_SDK=$XNUDEPS/MacOSX$MACOS_SDK_VERSION.sdk
 MACOS_SDK_URL=https://github.com/joseluisq/macosx-sdks/releases/download/$MACOS_SDK_VERSION/MacOSX$MACOS_SDK_VERSION.sdk.tar.xz
 
@@ -173,8 +173,11 @@ stage2() {
 	if [ ! -f $lib/libfirehose_kernel.a ]; then
 		log "building libfirehose_kernel.a"
 		mkdir -p build/firehose
+		# 12377's exported headers refuse to be read as public (upsi.h is one of them)
+		local kernpriv=0
+		if [ -f "$XNU_SRC/osfmk/kern/upsi.h" ]; then kernpriv=1; fi
 		xnu-clang -arch arm64 -c -Os -mkernel -nostdinc -fno-builtin \
-			-DKERNEL=1 -DKERNEL_PRIVATE=1 -DXNU_KERNEL_PRIVATE=0 -DPRIVATE=1 -D__DARWIN_64_BIT_INO_T=1 \
+			-DKERNEL=1 -DKERNEL_PRIVATE=1 -DXNU_KERNEL_PRIVATE=$kernpriv -DPRIVATE=1 -D__DARWIN_64_BIT_INO_T=1 \
 			-DDISPATCH_USE_DTRACE=0 -DOS_ATOMIC_CONFIG_MEMORY_ORDER_DEPENDENCY=1 \
 			-DOS_ATOMIC_CONFIG_STARVATION_FREE_ONLY=0 -DOS_FIREHOSE_SPI=1 -DARM64_BOARD_CONFIG_BCM2837 \
 			-Ilibdispatch -Ilibdispatch/src -Ilibdispatch/src/firehose \
