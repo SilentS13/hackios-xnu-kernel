@@ -215,22 +215,25 @@ refreshHz(void)
 }
 
 /*
- * The display controller the panel actually scans from (SM8350's DPU: mdp at 0x0ae01000). The
- * interface that drives the main panel's DSI is INTF1 at mdp + 0x35000, whose frame counter at
- * +0xAC and line counter at +0xB0 (INTF_FRAME_COUNT / INTF_LINE_COUNT) count what the hardware
- * does, not what we ask for: fb_hz is the rate we tell CoreAnimation, and nothing so far has asked
+ * The display controller the panel actually scans from: SM8350's DPU, `qcom,mdss_mdp@ae00000` in
+ * the device tree. Its frame counter (+0xAC) and line counter (+0xB0) count what the hardware does,
+ * not what we ask for: fb_hz is the rate we tell CoreAnimation, and nothing before this has asked
  * the controller its own. Read only -- the counters are published as service properties for the
  * window server's log, and the line counter is where a frame's place in the scan can be read.
+ *
+ * The interface blocks sit at +0x6A000 on this controller (DPU 6/7 layout) rather than the +0x35000
+ * of SM8150, so five candidates are watched and the answer says which one is alive.
  */
-#define kDPUMdpPhys     0x0ae01000u
-#define kDPUMdpBytes    0x8f000u
-#define kDPUIntfFirst   0x35000u                        /* INTF1: DSI 0 */
-#define kDPUIntfStride  0x1000u
-#define kDPUIntfCount   2                               /* INTF1 and INTF2, the two DSI interfaces */
+#define kDPUMdpPhys     0x0ae00000u
+#define kDPUMdpBytes    0x100000u
+#define kDPUFBPhys      0xea600000u                     /* cont_splash_region, what the panel scans */
 #define kDPUIntfTimingEngineEn  0x000
 #define kDPUIntfVsyncPeriod     0x00c
 #define kDPUIntfFrameCount      0x0ac
 #define kDPUIntfLineCount       0x0b0
+
+static const uint32_t kDPUIntfOffsets[] = { 0x35000u, 0x6a000u, 0x6b000u, 0x6c000u, 0x6d000u };
+#define kDPUIntfCount   (sizeof(kDPUIntfOffsets) / sizeof(kDPUIntfOffsets[0]))
 
 extern "C" vm_offset_t ml_io_map(vm_offset_t phys_addr, vm_size_t size);
 static volatile uint32_t * gDPU;                        /* the controller's registers, or NULL */
@@ -250,33 +253,55 @@ static void
 dpuMain(void * self, wait_result_t result __unused)
 {
 	IOService * service = (IOService *) self;
-	uint32_t lastFrame[kDPUIntfCount] = { 0, 0 };
+	uint32_t lastFrame[kDPUIntfCount];
 	uint64_t lastTime = 0;
 	char key[32];
 
+	for (unsigned i = 0; i < kDPUIntfCount; i++) {
+		lastFrame[i] = 0;
+	}
 	for (;;) {
 		uint64_t now = mach_absolute_time();
 
+		if (lastTime == 0) {
+			/* once: where the controller is, and which register holds the panel's own buffer */
+			uint32_t nonzero = 0, hits = 0, found[4] = { ~0u, ~0u, ~0u, ~0u };
+
+			for (uint32_t w = 0; gDPU != NULL && w < kDPUMdpBytes / 4; w++) {
+				uint32_t value = gDPU[w];
+
+				nonzero += value != 0;
+				if (value == kDPUFBPhys && hits < 4) {
+					found[hits++] = w * 4;
+				}
+			}
+			dpuNumber(service, "dpu-nonzero", nonzero);
+			dpuNumber(service, "dpu-src-hits", hits);
+			for (unsigned i = 0; i < 4; i++) {
+				snprintf(key, sizeof(key), "dpu-src%u", i);
+				dpuNumber(service, key, found[i]);
+			}
+		}
 		for (unsigned i = 0; i < kDPUIntfCount && gDPU != NULL; i++) {
-			uint32_t base = kDPUIntfFirst + i * kDPUIntfStride;
+			uint32_t base = kDPUIntfOffsets[i];
 			uint32_t frame = gDPU[(base + kDPUIntfFrameCount) / 4];
 			uint32_t line = gDPU[(base + kDPUIntfLineCount) / 4];
-			uint32_t elaps_1000hz = 0;
+			uint32_t millihertz = 0;
 
 			if (lastTime != 0 && now > lastTime && frame >= lastFrame[i]) {
-				elaps_1000hz = (uint32_t) ((frame - lastFrame[i]) * 1000ull * 1000000000ull / (now - lastTime));
+				millihertz = (uint32_t) ((frame - lastFrame[i]) * 1000ull * 1000000000ull / (now - lastTime));
 			}
 			lastFrame[i] = frame;
-			snprintf(key, sizeof(key), "dpu-intf%u-en", i + 1);
+			snprintf(key, sizeof(key), "dpu-c%u-en", i);
 			dpuNumber(service, key, gDPU[(base + kDPUIntfTimingEngineEn) / 4] & 1);
-			snprintf(key, sizeof(key), "dpu-intf%u-vsync", i + 1);
+			snprintf(key, sizeof(key), "dpu-c%u-vsync", i);
 			dpuNumber(service, key, gDPU[(base + kDPUIntfVsyncPeriod) / 4]);
-			snprintf(key, sizeof(key), "dpu-intf%u-frame", i + 1);
+			snprintf(key, sizeof(key), "dpu-c%u-frame", i);
 			dpuNumber(service, key, frame);
-			snprintf(key, sizeof(key), "dpu-intf%u-line", i + 1);
+			snprintf(key, sizeof(key), "dpu-c%u-line", i);
 			dpuNumber(service, key, line);
-			snprintf(key, sizeof(key), "dpu-intf%u-millihertz", i + 1);
-			dpuNumber(service, key, elaps_1000hz);
+			snprintf(key, sizeof(key), "dpu-c%u-millihertz", i);
+			dpuNumber(service, key, millihertz);
 		}
 		lastTime = now;
 		IOSleep(2000);
