@@ -262,6 +262,9 @@ static const uint32_t kDPUSplashOff[] = { 0x00000000u, 0x00c00000u, 0x01800000u 
 #define kDPUPipeSrc0Addr   0x014u
 #define kDPUPipeStride     0x024u
 #define kFlipFrames     3                           /* one shown, one just flipped to, one drawn into */
+/* flip=6: whole frames of one colour, a different one every 60 flips (the test that does not
+ * depend on the picture at all: if the panel changes colour, the pipe took the address) */
+static const uint32_t kFlipColours[] = { 0xffff0000u, 0xff00ff00u, 0xff0000ffu };
 
 static const uint32_t kDPUIntfOffsets[] = { 0x35000u, 0x6a000u, 0x6b000u, 0x6c000u, 0x6d000u };
 #define kDPUIntfCount   (sizeof(kDPUIntfOffsets) / sizeof(kDPUIntfOffsets[0]))
@@ -276,6 +279,7 @@ static uint32_t gFlipsShown;                            /* frames flipped into t
 static uint32_t gFlushCount, gFlushPending;
 static uint64_t gFlushUs;
 static uint32_t gVblankMoves, gVblankMisses, gVblankNone;
+static uint32_t gFlipLastAddr, gFlipReadback;           /* what was written to the pipe, and what it reads back */
 
 /*
  * boot-arg flip=N says which part of the flip to do, so that a phone that stops when a frame is
@@ -290,6 +294,8 @@ static uint32_t gVblankMoves, gVblankMisses, gVblankNone;
  *      later: the latching alone, on memory the display certainly reads
  *   5  the whole flip with the frames in the display's own reserved memory (the splash region),
  *      the memory the bootloader mapped for the display
+ *   6  the same frames, painted a whole colour each and flipped: the panel must change colour
+ *      every two seconds if the pipe takes the address, and never if it does not
  */
 static uint32_t gFlipMode = 1;
 static uint32_t gPipeOff;                               /* where the scanning pipe keeps its address, 0 if none */
@@ -362,6 +368,8 @@ dpuMain(void * self, wait_result_t result __unused)
 		dpuNumber(service, "flip-vblank", gVblankMoves);
 		dpuNumber(service, "flip-vblank-misses", gVblankMisses);
 		dpuNumber(service, "flip-vblank-none", gVblankNone);
+		dpuNumber(service, "flip-addr", gFlipLastAddr);
+		dpuNumber(service, "flip-readback", gFlipReadback);
 		dpuNumber(service, "flip-mode", gFlipMode);
 		dpuNumber(service, "dpu-pipe", gPipeOff);
 		dpuNumber(service, "dpu-stride", gPipeStride);
@@ -830,12 +838,28 @@ IOMobileFramebuffer::flipTo(void)
 		flipProbe();
 		return;
 	}
+	if (gFlipMode == 6) {
+		/* a colour the screen cannot fail to show: if the pipe takes the address, the panel
+		 * changes colour every 60 flips; if it does not, the picture never changes at all */
+		uint32_t * words = (uint32_t *) (uintptr_t) fFlipFrame[fFlipNext];
+		uint32_t colour = kFlipColours[(fFlips / 60) % 3];
+		uint32_t row;
+
+		for (row = 0; row < fPanelHeight; row++) {
+			uint32_t * line = words + (size_t) row * (fRowBytes / 4);
+			for (uint32_t x = 0; x < fPanelWidth; x++) {
+				line[x] = colour;
+			}
+		}
+	}
 	flipWaitVblank();
 	__asm__ volatile("dsb sy" ::: "memory");
 	fPipe[fPipeSrcOff / 4] = phys;
 	fPipe[fPipeStrideOff / 4] = stride;
 	__asm__ volatile("dsb sy" ::: "memory");
 	flipLatch();
+	gFlipLastAddr = phys;
+	gFlipReadback = fPipe[fPipeSrcOff / 4];
 	if (fFlips < 4) {
 		IOLog("MiniIOMobileFramebuffer: flip %u: +%#x = %#x, stride %u; ctl +%#x flush %#x start %#x\n", fFlips,
 		    fPipeSrcOff, phys, stride, gCtlOff, gDPU[(gCtlOff + kDPUCtlFlush) / 4],
@@ -1104,10 +1128,10 @@ IOMobileFramebuffer::start(IOService * provider)
 	if (gDPU != NULL) {
 		/* frames are flipped into the panel rather than written into it, if a pipe of it will take them */
 		bool frames = false;
-		bool full = gFlipMode == 1 || gFlipMode == 5;
+		bool full = gFlipMode == 1 || gFlipMode == 5 || gFlipMode == 6;
 
 		flipFind();
-		if (gFlipMode == 5) {
+		if (gFlipMode == 5 || gFlipMode == 6) {
 			frames = flipAllocateSplash();
 		} else if (full || gFlipMode == 3) {
 			frames = flipAllocate();
