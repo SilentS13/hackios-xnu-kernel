@@ -507,7 +507,8 @@ public:
 	bool flipAllocate(void);
 	bool flipAllocateSplash(void);
 	void flipLatch(void);
-	void flipWaitFrame(void);
+	bool flipWaitFrame(void);
+	void flipWaitBoundary(void);
 	void flipTo(void);
 	void flipProbe(void);
 	MiniIOSurface * defaultSurface(void);
@@ -829,29 +830,71 @@ IOMobileFramebuffer::flipLatch(void)
 	}
 }
 
-/* Point the pipe at the frame just drawn; the CTL takes it at the panel's next vsync. */
-void
+static uint64_t gBoundaryNs;                            /* when the next frame boundary is due */
+static bool gBoundaryKnown;
+static uint32_t gBoundaryAge;                           /* flips since the boundary was last seen, not predicted */
+static uint32_t gBoundaryMisses;                        /* predicted boundaries the panel was already past */
+
+/*
+ * A flush is taken at the panel's frame boundary, so waiting for this one to clear is how we stand
+ * at the start of a frame. It asks for nothing: the pipe's registers already hold what they held,
+ * and the panel is at the top of a frame when it clears.
+ */
+bool
 IOMobileFramebuffer::flipWaitFrame(void)
 {
 	uint32_t spin;
 
 	if (gCtlOff == 0) {
 		flipWaitVblank();
-		return;
+		return false;
 	}
-	/*
-	 * A flush is taken at the panel's frame boundary, so waiting for this one to clear is how we
-	 * stand at the start of a frame. It asks for nothing: the pipe's registers already hold what
-	 * they held, and the panel is at the top of a frame when it clears.
-	 */
 	gDPU[(gCtlOff + kDPUCtlFlush) / 4] = fPipeFlush;
 	__asm__ volatile("dsb sy" ::: "memory");
 	for (spin = 0; spin < 500; spin++) {
 		if ((gDPU[(gCtlOff + kDPUCtlFlush) / 4] & fPipeFlush) == 0) {
-			return;
+			return true;
 		}
 		IODelay(10);
 	}
+	return false;
+}
+
+/*
+ * The panel's boundaries come every 1/fb_hz, so one that has been seen can be projected: the flush
+ * is the anchor, and every flip after it waits for the projected boundary instead of a second
+ * flush (a flush costs up to a whole frame, and two of them per flip was the stutter). The anchor
+ * is taken again every 16 flips, since a flip is slower than a panel frame and the projection then
+ * has to be stepped forward rather than waited on.
+ */
+void
+IOMobileFramebuffer::flipWaitBoundary(void)
+{
+	uint64_t period;
+
+	nanoseconds_to_absolutetime(1000000000ull / (gRefreshHz != 0 ? gRefreshHz : 120), &period);
+	if (!gBoundaryKnown || gBoundaryAge >= 16) {
+		if (flipWaitFrame()) {
+			uint64_t seen = mach_absolute_time();
+
+			if (gBoundaryKnown && seen > gBoundaryNs) {
+				gBoundaryMisses++;
+			}
+			gBoundaryNs = seen + period;
+			gBoundaryKnown = true;
+			gBoundaryAge = 0;
+		}
+		return;
+	}
+	/* (flips are slower than the panel: step the projection up to the boundary after now) */
+	for (unsigned i = 0; gBoundaryNs <= mach_absolute_time() && i < 4096; i++) {
+		gBoundaryNs += period;
+	}
+	while (mach_absolute_time() < gBoundaryNs) {
+		IODelay(10);                    /* (10 us: a line of the panel is 20) */
+	}
+	gBoundaryNs += period;
+	gBoundaryAge++;
 }
 
 void
@@ -881,18 +924,18 @@ IOMobileFramebuffer::flipTo(void)
 			}
 		}
 	}
-	if (gFlipMode == 7) {
+	if (gFlipMode == 7 || gFlipMode == 8) {
 		/*
 		 * A bar 240 px wide over the whole height, 60 px further right on every flip: a flip taken
-		 * mid-frame shows it as a step, one taken at a boundary leaves it straight. Its colour says
-		 * which latch is in force this second.
+		 * mid-frame shows it as a step, one taken at a boundary leaves it straight. In 7 its colour
+		 * says which latch is in force this second; 8 is the projected boundary, in white.
 		 */
 		uint32_t * words = (uint32_t *) (uintptr_t) fFlipFrame[fFlipNext];
 		uint32_t wide = fPanelWidth > 240 ? fPanelWidth - 240 : 1;
 		uint32_t x0 = (fFlips * 60) % wide;
 		uint32_t row, x;
 
-		gFlipSync = (fFlips / 120) & 1;
+		gFlipSync = gFlipMode == 8 ? 1 : ((fFlips / 120) & 1);
 		for (row = 0; row < fPanelHeight; row++) {
 			uint32_t * line = words + (size_t) row * (fRowBytes / 4);
 
@@ -901,7 +944,9 @@ IOMobileFramebuffer::flipTo(void)
 			}
 		}
 	}
-	if (gFlipMode == 7 && gFlipSync) {
+	if (gFlipMode == 8) {
+		flipWaitBoundary();
+	} else if (gFlipMode == 7 && gFlipSync) {
 		flipWaitFrame();
 	}
 	flipWaitVblank();
@@ -1099,7 +1144,7 @@ IOMobileFramebuffer::start(IOService * provider)
 	{
 		uint32_t mode = 1;
 
-		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 7) {
+		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 8) {
 			gFlipMode = mode;
 		}
 		PE_parse_boot_argn("dpu_dump", &gDpuDump, sizeof(gDpuDump));
@@ -1180,10 +1225,10 @@ IOMobileFramebuffer::start(IOService * provider)
 	if (gDPU != NULL) {
 		/* frames are flipped into the panel rather than written into it, if a pipe of it will take them */
 		bool frames = false;
-		bool full = gFlipMode == 1 || (gFlipMode >= 5 && gFlipMode <= 7);
+		bool full = gFlipMode == 1 || (gFlipMode >= 5 && gFlipMode <= 8);
 
 		flipFind();
-		if (gFlipMode >= 5 && gFlipMode <= 7) {
+		if (gFlipMode >= 5 && gFlipMode <= 8) {
 			frames = flipAllocateSplash();
 		} else if (full || gFlipMode == 3) {
 			frames = flipAllocate();
