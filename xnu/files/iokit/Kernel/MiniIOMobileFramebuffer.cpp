@@ -316,25 +316,12 @@ dpuMain(void * self, wait_result_t result __unused)
 	for (;;) {
 		uint64_t now = mach_absolute_time();
 
-		if (lastTime == 0) {
-			/* once: where the controller is, and which register holds the panel's own buffer */
-			uint32_t nonzero = 0, hits = 0, found[4] = { ~0u, ~0u, ~0u, ~0u };
-
-			for (uint32_t w = 0; gDPU != NULL && w < kDPUMdpBytes / 4; w++) {
-				uint32_t value = gDPU[w];
-
-				nonzero += value != 0;
-				if (value == kDPUFBPhys && hits < 4) {
-					found[hits++] = w * 4;
-				}
-			}
-			dpuNumber(service, "dpu-nonzero", nonzero);
-			dpuNumber(service, "dpu-src-hits", hits);
-			for (unsigned i = 0; i < 4; i++) {
-				snprintf(key, sizeof(key), "dpu-src%u", i);
-				dpuNumber(service, key, found[i]);
-			}
-		}
+		/*
+		 * Only the interface blocks are read: a census of the whole window (every register of
+		 * 0xae00000..0xae100000, once, when this thread started) stopped the phone dead a moment
+		 * after the display came up, in every boot since it was written. The blocks in between
+		 * include pipes the bootloader never powered, and an access to one of those does not return.
+		 */
 		for (unsigned i = 0; i < kDPUIntfCount && gDPU != NULL; i++) {
 			uint32_t base = kDPUIntfOffsets[i];
 			uint32_t frame = gDPU[(base + kDPUIntfFrameCount) / 4];
@@ -643,7 +630,7 @@ IOMobileFramebuffer::flipFind(void)
 		{ 0x05000, 1 }, { 0x07000, 2 }, { 0x09000, 3 }, { 0x0b000, 4 },          /* VIG0-3 */
 		{ 0x25000, 9 }, { 0x27000, 10 }, { 0x29000, 11 }, { 0x2b000, 12 },       /* DMA0-3 */
 	};
-	unsigned i, told = 0;
+	unsigned i;
 
 	for (i = 0; i < sizeof(blocks) / sizeof(blocks[0]); i++) {
 		if (gDPU[(blocks[i].base + kDPUPipeSrc0Addr) / 4] != kDPUFBPhys) {
@@ -662,16 +649,7 @@ IOMobileFramebuffer::flipFind(void)
 		flipFindCtl();
 		return;
 	}
-	/* not where the catalog puts them: say where the address is, to be read */
-	for (i = 0; i + 4 <= kDPUMdpBytes && told < 4; i += 4) {
-		if (gDPU[i / 4] == kDPUFBPhys) {
-			IOLog("MiniIOMobileFramebuffer: %#x is held at +%#x, not in a pipe\n", kDPUFBPhys, i);
-			told++;
-		}
-	}
-	if (told == 0) {
-		IOLog("MiniIOMobileFramebuffer: no pipe scans %#x: frames are written into the panel's memory\n", kDPUFBPhys);
-	}
+	IOLog("MiniIOMobileFramebuffer: no pipe scans %#x: frames are written into the panel's memory\n", kDPUFBPhys);
 }
 
 bool
