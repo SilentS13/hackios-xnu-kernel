@@ -21,6 +21,7 @@
 #include <sys/redwood_input.h>
 #include <sys/systm.h>
 #include <vm/vm_kern.h>
+#include <vm/vm_kern_xnu.h>
 
 extern vm_offset_t ml_io_map(vm_offset_t phys_addr, vm_size_t size);
 extern vm_offset_t ml_io_map_wcomb(vm_offset_t phys_addr, vm_size_t size);

@@ -93,6 +93,7 @@
 #include <sys/vnode.h>
 #include <sys/vnode_internal.h>
 #include <vm/vm_kern.h>
+#include <vm/vm_kern_xnu.h>
 #include <sys/redwood_audio.h>
 #include <sys/redwood_input.h>
 

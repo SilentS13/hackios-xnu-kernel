@@ -40,6 +40,7 @@
 #include <sys/systm.h>
 #include <sys/uio.h>
 #include <vm/vm_kern.h>
+#include <vm/vm_kern_xnu.h>
 
 extern uint64_t kvtophys(vm_offset_t va);       /* pmap_paddr_t */
 

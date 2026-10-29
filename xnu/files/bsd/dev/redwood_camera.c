@@ -72,6 +72,7 @@
 #include <kern/locks.h>
 #include <kern/thread.h>
 #include <vm/vm_kern.h>
+#include <vm/vm_kern_xnu.h>
 #include <libkern/libkern.h>
 #include <mach/mach_types.h>
 #include <machine/machine_routines.h>

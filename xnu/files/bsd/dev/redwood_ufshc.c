@@ -62,6 +62,7 @@
 #include <sys/systm.h>
 #include <sys/sysctl.h>
 #include <vm/vm_kern.h>
+#include <vm/vm_kern_xnu.h>
 #include <vm/memory_types.h>
 #include "redwood_ufshc.h"
 
