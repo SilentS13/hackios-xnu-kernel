@@ -237,16 +237,19 @@ static const uint32_t kDPUSplashOff[] = { 0x00c00000u, 0x01800000u };    /* 12 M
 #define kDPUIntfFrameCount      0x0ac
 #define kDPUIntfLineCount       0x0b0
 /*
- * The CTL blocks and the pipe's registers. A pipe's new configuration is taken by its CTL at the
- * next frame boundary when the pipe's bit is written to CTL_FLUSH and the CTL is then started
- * (dpu_hw_ctl_trigger_flush() and dpu_hw_ctl_trigger_start() of the msm driver): CTL_FLUSH alone
- * is a request the CTL never acts on, and the flush bit of SSPP_VIG0 is bit 0 -- not bit 1, which
- * the pipe's number in the catalog would suggest (dpu_hw_ctl_update_pending_flush_sspp()).
- * CTL_FLUSH_MASK_CTL (bit 17) is the CTL's own layering: it is written only when a layer mixer
- * changes, and writing it here re-latched the bootloader's layers and broke the picture.
+ * The CTL blocks and the pipe's registers. The offsets are of the MDP block, which begins 0x1000
+ * into the mapped window (0xae01000: the sm8350 catalog's "DPU" node, qcom,sm8350-dpu), so each is
+ * the catalog's own plus that 0x1000: CTL 0..5 at 0x15000 + 0x1000 * n, VIG 0..3 at 0x4000 +
+ * 0x2000 * n, DMA 0..3 at 0x24000 + 0x2000 * n, interfaces 0..3 at 0x34000 + 0x1000 * n.
+ *
+ * A pipe's new configuration is taken by its CTL at the next frame boundary when the pipe's bit is
+ * written to CTL_FLUSH; the bit clears once the CTL has taken it (the probe of a working sm8550 port
+ * waits for exactly that). The flush bit of SSPP_VIG0 is bit 0, not bit 1 (dpu_hw_ctl_update_pending_
+ * flush_sspp()). CTL_FLUSH_MASK_CTL (bit 17) is the CTL's own layering: it is written only when a
+ * layer mixer changes, and writing it here re-latched the bootloader's layers and broke the picture.
  */
-#define kDPUCtlFirst    0x2000u
-#define kDPUCtlStride   0x200u
+#define kDPUCtlFirst    0x16000u
+#define kDPUCtlStride   0x1000u
 #define kDPUCtlCount    6
 #define kDPUCtlLayer0   0x000u                         /* CTL_LAYER_0: bits 2:0 are VIG0's stage (0: not used) */
 #define kDPUCtlTop      0x014u
@@ -577,58 +580,37 @@ flipFindCtl(void)
 }
 
 /*
- * The controller's own state: every pipe that holds a buffer, the layer and flush registers of
- * every CTL, and the interface's frame counter. Read-only; logged every dpu_dump seconds so that
- * a panel that has stopped moving still shows, frozen on itself, what the controller was doing.
- *
- * The CTL's layer words read back zero on this controller (they are write-only here), so this
- * says which CTLs have anything at all set rather than which one mixes the pipe.
+ * The controller's own state, every dpu_dump seconds: the panel's pipe, the layer words of every CTL,
+ * and the interface's frame and line counters. Only the blocks the running scanout keeps powered are
+ * read -- VIG0, the CTLs, the interfaces. Reading a pipe the bootloader left unpowered (VIG1's block
+ * was the first tried) never returns: the dump of every pipe block stopped the phone dead.
  */
 static void
 dpuDump(const char * tag)
 {
-	static const uint32_t blocks[] = {
-		0x05000, 0x07000, 0x09000, 0x0b000, 0x0d000, 0x0f000, 0x11000, 0x13000,      /* VIG0-3, RGB0-3 */
-		0x25000, 0x27000, 0x29000, 0x2b000,                                          /* DMA0-3 */
-	};
-	char line[220];
-	unsigned i, n;
+	unsigned i;
 
 	if (gDPU == NULL) {
 		return;
 	}
-	n = snprintf(line, sizeof(line), "MiniIOMobileFramebuffer: dpu %s: frame %u line %u", tag,
-	    gIntfOff != 0 ? gDPU[(gIntfOff + kDPUIntfFrameCount) / 4] : 0,
-	    gIntfOff != 0 ? gDPU[(gIntfOff + kDPUIntfLineCount) / 4] : 0);
-	for (i = 0; i < sizeof(blocks) / sizeof(blocks[0]) && n < sizeof(line) - 26; i++) {
-		uint32_t addr = gDPU[(blocks[i] + kDPUPipeSrc0Addr) / 4];
-
-		if (addr != 0) {
-			n += snprintf(line + n, sizeof(line) - n, " +%#x=%#x/%u", blocks[i], addr,
-			    gDPU[(blocks[i] + kDPUPipeStride) / 4]);
-		}
-	}
-	IOLog("%s\n", line);
+	IOLog("MiniIOMobileFramebuffer: dpu %s: vig0 src %#x stride %u fmt %#x size %#x\n", tag,
+	    gDPU[(0x5000 + kDPUPipeSrc0Addr) / 4], gDPU[(0x5000 + kDPUPipeStride) / 4],
+	    gDPU[(0x5000 + 0x30) / 4], gDPU[0x5000 / 4]);
 	for (i = 0; i < kDPUCtlCount; i++) {
 		uint32_t b = kDPUCtlFirst + kDPUCtlStride * i;
-		uint32_t w[11];
 
-		w[0] = gDPU[(b + 0x00) / 4];
-		w[1] = gDPU[(b + 0x04) / 4];
-		w[2] = gDPU[(b + 0x08) / 4];
-		w[3] = gDPU[(b + 0x0c) / 4];
-		w[4] = gDPU[(b + 0x10) / 4];
-		w[5] = gDPU[(b + 0x24) / 4];
-		w[6] = gDPU[(b + 0x40) / 4];            /* CTL_LAYER_EXT: the stages past the first eight */
-		w[7] = gDPU[(b + 0x14) / 4];            /* CTL_TOP */
-		w[8] = gDPU[(b + 0x18) / 4];            /* CTL_FLUSH */
-		w[9] = gDPU[(b + 0x1c) / 4];            /* CTL_START */
-		w[10] = gDPU[(b + 0xf4) / 4];           /* CTL_INTF_ACTIVE */
-		if ((w[0] | w[1] | w[2] | w[3] | w[4] | w[5] | w[6] | w[7] | w[8] | w[9] | w[10]) == 0) {
-			continue;
-		}
 		IOLog("MiniIOMobileFramebuffer: dpu %s: ctl%u layer %#x %#x %#x %#x %#x %#x ext %#x top %#x flush %#x start %#x intf %#x\n",
-		    tag, i, w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], w[8], w[9], w[10]);
+		    tag, i, gDPU[(b + 0x00) / 4], gDPU[(b + 0x04) / 4], gDPU[(b + 0x08) / 4],
+		    gDPU[(b + 0x0c) / 4], gDPU[(b + 0x10) / 4], gDPU[(b + 0x24) / 4],
+		    gDPU[(b + kDPUCtlLayerExt) / 4], gDPU[(b + kDPUCtlTop) / 4], gDPU[(b + kDPUCtlFlush) / 4],
+		    gDPU[(b + kDPUCtlStart) / 4], gDPU[(b + kDPUCtlIntfActive) / 4]);
+	}
+	for (i = 0; i < 4; i++) {
+		uint32_t b = 0x35000u + 0x1000u * i;
+
+		IOLog("MiniIOMobileFramebuffer: dpu %s: intf%u en %#x frame %u line %u vsync %u\n", tag, i,
+		    gDPU[(b + kDPUIntfTimingEngineEn) / 4] & 1, gDPU[(b + kDPUIntfFrameCount) / 4],
+		    gDPU[(b + kDPUIntfLineCount) / 4], gDPU[(b + kDPUIntfVsyncPeriod) / 4]);
 	}
 }
 
@@ -648,15 +630,16 @@ dpuDumpMain(void * self __unused, wait_result_t result __unused)
 
 /*
  * Which pipe scans the panel: the bootloader points one at the boot framebuffer, and its address
- * register still holds it. The blocks are 0x2000 apart (VIG0-3, RGB0-3, DMA0-3) and the flush bit of
- * a pipe in its CTL's mask is its number in the catalog.
+ * register still holds it. VIG0 is at 0x5000 in the mapped window (0x4000 + 0x1000) and the rest of
+ * the catalog's blocks follow it; the flush bit of a pipe in its CTL's mask is its number in the
+ * catalog. Only blocks up to the first that holds the address are read: a pipe the bootloader left
+ * unpowered need not answer (reading one was what a dump of every block died on).
  */
 void
 IOMobileFramebuffer::flipFind(void)
 {
 	static const struct { uint32_t base; uint32_t pipe; } blocks[] = {
 		{ 0x05000, 1 }, { 0x07000, 2 }, { 0x09000, 3 }, { 0x0b000, 4 },          /* VIG0-3 */
-		{ 0x0d000, 5 }, { 0x0f000, 6 }, { 0x11000, 7 }, { 0x13000, 8 },          /* RGB0-3 */
 		{ 0x25000, 9 }, { 0x27000, 10 }, { 0x29000, 11 }, { 0x2b000, 12 },       /* DMA0-3 */
 	};
 	unsigned i, told = 0;
@@ -800,20 +783,30 @@ flipWaitVblank(void)
 }
 
 /*
- * The pipe's new registers are taken at the CTL's next frame boundary: the pipe's bit goes to
- * CTL_FLUSH, then CTL_START is written. (Both are what the msm driver writes for every commit;
- * a flush alone stays pending and nothing changes on the panel.)
+ * The pipe's new registers are taken at the CTL's next frame boundary once the pipe's bit is in
+ * CTL_FLUSH; the bit clears when the CTL has taken them (the sm8550 port's probe waits on exactly
+ * that). CTL_START is not written: it starts a CTL that is stopped, and this one is running.
  */
 void
 IOMobileFramebuffer::flipLatch(void)
 {
+	uint32_t spin;
+
 	if (gCtlOff == 0) {
 		return;
 	}
 	gDPU[(gCtlOff + kDPUCtlFlush) / 4] = fPipeFlush;
 	__asm__ volatile("dsb sy" ::: "memory");
-	gDPU[(gCtlOff + kDPUCtlStart) / 4] = 1;
-	__asm__ volatile("dsb sy" ::: "memory");
+	for (spin = 0; spin < 500; spin++) {                    /* at most 5 ms: a frame is 8.3 */
+		if ((gDPU[(gCtlOff + kDPUCtlFlush) / 4] & fPipeFlush) == 0) {
+			break;
+		}
+		IODelay(10);
+	}
+	if (fFlips < 4) {
+		IOLog("MiniIOMobileFramebuffer: flip %u: flush %#x %s after %u us (ctl +%#x)\n", fFlips,
+		    fPipeFlush, spin < 500 ? "taken" : "still pending", spin * 10, gCtlOff);
+	}
 }
 
 /* Point the pipe at the frame just drawn; the CTL takes it at the panel's next vsync. */
