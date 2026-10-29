@@ -1,0 +1,31 @@
+diff --git a/bsd/sys/pthread_internal.h b/bsd/sys/pthread_internal.h
+--- a/bsd/sys/pthread_internal.h
++++ b/bsd/sys/pthread_internal.h
+@@ -32,12 +32,22 @@
+ #include <sys/user.h>
++#include <sys/queue.h>
+ #include <kern/thread_call.h>
+ 
++/* libpthread's kernel sources define this struct themselves: it is the one struct uthread
++ * reserves room for in uu_save.uus_kwe. Upstream the two headers share the
++ * _SYS_PTHREAD_INTERNAL_H_ guard, so only one of them is ever compiled; we build
++ * libpthread against the kernel's headers with that guard renamed, so this has to carry
++ * the real layout rather than an opaque blob. */
+ struct ksyn_waitq_element {
+-#if __LP64__
+-	char opaque[48];
+-#else
+-	char opaque[32];
+-#endif
++	TAILQ_ENTRY(ksyn_waitq_element) kwe_list;	/* link to other list members */
++	void *          kwe_kwqqueue;			/* queue blocked on */
++	thread_t        kwe_thread;
++	uint16_t        kwe_state;			/* state */
++	uint16_t        kwe_flags;
++	uint32_t        kwe_lockseq;			/* the sequence of the entry */
++	uint32_t	kwe_count;			/* upper bound on number of matches still pending */
++	uint32_t	kwe_psynchretval;		/* thread retval */
++	void		*kwe_uth;			/* uthread */
+ };
+ 
+ void workq_mark_exiting(struct proc *);

@@ -1,5 +1,5 @@
 diff --git a/kern/kern_internal.h b/kern/kern_internal.h
-index 156ad74..bc93319 100644
+index 156ad74..257a2df 100644
 --- a/kern/kern_internal.h
 +++ b/kern/kern_internal.h
 @@ -26,8 +26,8 @@
@@ -13,7 +13,27 @@ index 156ad74..bc93319 100644
  
  #include <TargetConditionals.h>
  
-@@ -154,8 +154,8 @@ typedef struct ksyn_waitq_element * ksyn_waitq_element_t;
+@@ -138,24 +138,17 @@ struct _pthread_registration_data {
+ 
+ extern pthread_callbacks_t pthread_kern;
+ 
+-struct ksyn_waitq_element {
+-	TAILQ_ENTRY(ksyn_waitq_element) kwe_list;	/* link to other list members */
+-	void *          kwe_kwqqueue;			/* queue blocked on */
+-	thread_t        kwe_thread;
+-	uint16_t        kwe_state;			/* state */
+-	uint16_t        kwe_flags;
+-	uint32_t        kwe_lockseq;			/* the sequence of the entry */
+-	uint32_t	kwe_count;			/* upper bound on number of matches still pending */
+-	uint32_t	kwe_psynchretval;		/* thread retval */
+-	void		*kwe_uth;			/* uthread */
+-};
++/* 12377's <sys/pthread_internal.h>, which <sys/user.h> pulls in, is the definition the
++ * kernel's struct uthread is built on; with the include guard no longer shared it has to
++ * be the only one. */
++#include <sys/user.h>
+ typedef struct ksyn_waitq_element * ksyn_waitq_element_t;
+ 
  #define PTH_DEFAULT_STACKSIZE 512*1024
  #define MAX_PTHREAD_SIZE 64*1024
  
