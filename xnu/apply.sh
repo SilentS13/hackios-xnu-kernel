@@ -1,20 +1,19 @@
 #!/bin/bash
-# Get Apple's XNU sources (the release that iOS 16.5 was built from) and put the redwood
-# work on top of them: redwood.patch changes Apple's files, files/ holds the new ones.
-# usage: xnu/apply.sh [DIR]              (default: $XNU_SRC, else xnu-src/xnu-8796.121.2 next to this directory)
-# env:   XNU_URL   where to fetch from (default: Apple's repository on GitHub; an existing clone
-#                  that has the tag will do: XNU_URL=file:///path/to/xnu)
-# The result is a git tree on the branch "redwood" with the work uncommitted, which is how
-# xnu/export.sh expects to find it. A directory that already exists is left alone.
+# Get Apple's XNU xnu-12377.121.6 (the iOS 26.5 kernel) and put UniXNU's patches/xnu-12377 series
+# on top of it: the BCM2837 machine config and source for the machine layer Apple only ships
+# closed. This is the iOS 26 track; the redwood device layer (redwood.patch + files/) is not
+# applied here yet -- it is what goes on after a bare 12377 kernel builds.
+# usage: xnu/apply.sh [DIR]              (default: xnu-src/xnu-12377.121.6 next to this directory)
+# env:   XNU_URL   where to fetch from (default: Apple's repository on GitHub)
 set -e
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-DIR=${1:-${XNU_SRC:-$HERE/../xnu-src/xnu-8796.121.2}}
+DIR=${1:-${XNU_SRC:-$HERE/../xnu-src/xnu-12377.121.6}}
 URL=${XNU_URL:-https://github.com/apple-oss-distributions/xnu.git}
-TAG=xnu-8796.121.2
-BASE=c54f35ca767986246321eb901baf8f5ff7923f6a
+TAG=xnu-12377.121.6
+BASE=ac9718fb1af618d5ce8678d0dc6e8a58f252216f
 
 [ -e "$DIR" ] && { echo "apply.sh: $DIR already exists; not touching it" >&2; exit 1; }
-[ -s "$HERE/redwood.patch" ] && [ -d "$HERE/files" ] || { echo "apply.sh: no redwood.patch and files/ in $HERE" >&2; exit 1; }
+[ -d "$HERE/patches-12377" ] || { echo "apply.sh: no patches-12377 in $HERE" >&2; exit 1; }
 mkdir -p "$(dirname "$DIR")"
 DIR=$(cd "$(dirname "$DIR")" && pwd)/$(basename "$DIR")
 git init -q "$DIR"
@@ -22,9 +21,15 @@ trap 'echo "apply.sh: failed; removing the incomplete $DIR" >&2; rm -rf "$DIR"' 
 cd "$DIR"
 git remote add origin "$URL"
 git fetch -q --depth 1 origin "refs/tags/$TAG:refs/tags/$TAG"      # that one release, without the history
-git checkout -q -b redwood "$TAG"
+git checkout -q -b ios26 "$TAG"
 [ "$(git rev-parse HEAD)" = "$BASE" ] || { echo "apply.sh: $TAG is $(git rev-parse HEAD), expected $BASE" >&2; false; }
 echo 'BUILD/' >> .git/info/exclude
-git apply --whitespace=nowarn "$HERE/redwood.patch"
-cp -a "$HERE/files/." .
-echo "apply.sh: $DIR: $TAG + $(grep -c '^diff --git' "$HERE/redwood.patch") changed and $(find "$HERE/files" -type f | wc -l) new files"
+n=0
+for patch in "$HERE/patches-12377"/*.patch; do
+	git apply --whitespace=nowarn "$patch" || { echo "apply.sh: $(basename "$patch") does not apply" >&2; false; }
+	n=$((n + 1))
+done
+# .github/workflows/kernel.yml names the 8796 tree in its build and artifact paths, and the token
+# has no `workflow` scope to change it: give that name to this tree instead.
+ln -sfn "$(basename "$DIR")" "$HERE/../xnu-src/xnu-8796.121.2"
+echo "apply.sh: $DIR: $TAG + $n patches (UniXNU patches/xnu-12377)"
