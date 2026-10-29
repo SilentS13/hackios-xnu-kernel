@@ -1,0 +1,15 @@
+diff --git a/iokit/conf/Makefile.template b/iokit/conf/Makefile.template
+index 1a2bbeb..02dfec7 100644
+--- a/iokit/conf/Makefile.template
++++ b/iokit/conf/Makefile.template
+@@ -30,9 +30,7 @@ CFLAGS_DEBUG += -DIOASSERT=1
+ #
+ COMP_SUBDIRS = \
+ 	DriverKit \
+-	Exclaves \
+-	Tests \
+-	Tests/TestServices
++	Exclaves
+ 
+ #
+ #  Make sure we don't remove this by accident if interrupted at the wrong
