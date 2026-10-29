@@ -1144,7 +1144,7 @@ IOMobileFramebuffer::flipLineMain(void * self, wait_result_t result __unused)
 	IOMobileFramebuffer * me = (IOMobileFramebuffer *) self;
 
 	for (;;) {
-		uint32_t seq, phys, stride, spin, lines, prev;
+		uint32_t seq, phys, stride, spin, lines = 0, prev;
 		uint64_t seen = 0;
 		uint64_t ns = 0;
 
@@ -1162,21 +1162,29 @@ IOMobileFramebuffer::flipLineMain(void * self, wait_result_t result __unused)
 			continue;
 		}
 		prev = gDPU[(gIntfLineBase + kDPUIntfLineCount) / 4];
-		for (spin = 0; spin < 4000; spin++) {                   /* at most ~20 ms: a frame is 8.3 */
-			lines = gDPU[(gIntfLineBase + kDPUIntfLineCount) / 4];
-			if (lines > gIntfLinesMax) {
-				gIntfLinesMax = lines;
+		if (gIntfWraps == 0 && gBoundaryMisses > 3) {
+			/* (no wrap was ever seen, so there is no boundary to wait for: keep the picture
+			 * moving, tear and all, rather than hold every frame for one that never comes) */
+			spin = 4000;
+			lines = prev;
+			seen = mach_absolute_time();
+		} else {
+			for (spin = 0; spin < 4000; spin++) {           /* at most ~20 ms: a frame is 8.3 */
+				lines = gDPU[(gIntfLineBase + kDPUIntfLineCount) / 4];
+				if (lines > gIntfLinesMax) {
+					gIntfLinesMax = lines;
+				}
+				if (lines < prev) {
+					seen = mach_absolute_time();
+					gIntfWraps++;
+					break;
+				}
+				prev = lines;
+				IODelay(2);
 			}
-			if (lines < prev) {
-				seen = mach_absolute_time();
-				gIntfWraps++;
-				break;
-			}
-			prev = lines;
-			IODelay(2);
 		}
 		gIntfLine = lines;
-		if (spin >= 4000) {
+		if (spin >= 4000 && gIntfWraps != 0) {
 			gBoundaryMisses++;
 			continue;
 		}
