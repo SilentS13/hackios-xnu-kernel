@@ -232,8 +232,7 @@ refreshHz(void)
 #define kDPUIntfFrameCount      0x0ac
 #define kDPUIntfLineCount       0x0b0
 
-extern vm_offset_t ml_io_map(vm_offset_t phys_addr, vm_size_t size);
-extern void IOSleep(unsigned int milliseconds);
+extern "C" vm_offset_t ml_io_map(vm_offset_t phys_addr, vm_size_t size);
 static volatile uint32_t * gDPU;                        /* the controller's registers, or NULL */
 
 static void
