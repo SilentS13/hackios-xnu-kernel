@@ -271,7 +271,7 @@ psci_smp_stop_rest(void)
 	for (int cpu = 0; cpu <= max_cpu; cpu++) {
 		cpu_data_t *cdp = cpu_datap(cpu);
 
-		if (cpu != me && cdp != NULL && (cpu == master_cpu || (psci_smp_started & (1u << cpu)))) {
+		if (cpu != me && cdp != NULL && (cpu == boot_cpu_id || (psci_smp_started & (1u << cpu)))) {
 			gic_v3_irq_signal_stop(cdp->cpu_phys_id);
 		}
 	}
@@ -297,11 +297,11 @@ psci_smp_stop_others(void)
 	__builtin_arm_wsr("DAIFSet", DAIFSC_ALL);
 	me = cpu_number();
 	max_cpu = ml_get_max_cpu_number();
-	if (!os_atomic_cmpxchg(&psci_smp_stop_owner, -1, me, acq_rel) && psci_smp_stop_owner != me && me != master_cpu) {
+	if (!os_atomic_cmpxchg(&psci_smp_stop_owner, -1, me, acq_rel) && psci_smp_stop_owner != me && me != boot_cpu_id) {
 		psci_smp_cpu_off();     /* another processor is at it already */
 	}
 
-	if (me != master_cpu) {
+	if (me != boot_cpu_id) {
 		/*
 		 * Nobody is stopped before the boot processor has answered: a core that is switched
 		 * off while it holds a lock the boot processor is waiting for would take the return
@@ -310,7 +310,7 @@ psci_smp_stop_others(void)
 		psci_smp_note(" ends the system: the return to the boot loader is the boot processor's to make\n", me);
 		os_atomic_store(&psci_smp_boot_wanted, true, release);
 		__builtin_arm_dsb(DSB_SY);
-		gic_v3_irq_signal_stop(cpu_datap(master_cpu)->cpu_phys_id);
+		gic_v3_irq_signal_stop(cpu_datap(boot_cpu_id)->cpu_phys_id);
 		__builtin_arm_sev();
 		now = mach_absolute_time();
 		nanoseconds_to_absolutetime(PSCI_SMP_STOP_SECONDS * NSEC_PER_SEC, &deadline);
@@ -369,7 +369,7 @@ psci_smp_stop_here(void)
 	if (psci_smp_started == 0) {
 		return;
 	}
-	if (cpu_number() != master_cpu) {
+	if (cpu_number() != boot_cpu_id) {
 		if (os_atomic_load(&psci_smp_stopping, acquire)) {
 			psci_smp_cpu_off();
 		}

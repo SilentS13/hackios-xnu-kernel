@@ -348,7 +348,7 @@ index ffe7ce0..6cb65f6 100644
  #endif /* DEVFS */
  
 diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
-index 6cbeaad..2a04307 100644
+index 6cbeaad..dd5aab1 100644
 --- a/bsd/kern/kern_exec.c
 +++ b/bsd/kern/kern_exec.c
 @@ -1919,6 +1919,9 @@ SYSCTL_PROC(_vm, OID_AUTO, shared_region_control,
@@ -671,20 +671,7 @@ index 6cbeaad..2a04307 100644
  	task_set_uniqueid(proc_task(p));
  
  	/*
-@@ -7809,10 +8018,8 @@ handle_mac_transition:
- 		        return false;
- 		}
- 
--		pcred->cr_svuid = pcred->cr_uid;
--		pcred->cr_svgid = pcred->cr_gid;
--		return true;
--	});
-+	return updated;
-+}
- 
- 	return error;
- }
-@@ -8767,6 +8974,11 @@ process_signature(proc_t p, struct image_params *imgp)
+@@ -8767,6 +8976,11 @@ process_signature(proc_t p, struct image_params *imgp)
  	}
  
  done:
@@ -1566,7 +1553,7 @@ index 53f9ce5..6a1e164 100644
  #endif
  
 diff --git a/osfmk/arm64/machine_routines.c b/osfmk/arm64/machine_routines.c
-index ac03c45..0b9b50e 100644
+index ac03c45..1aa0110 100644
 --- a/osfmk/arm64/machine_routines.c
 +++ b/osfmk/arm64/machine_routines.c
 @@ -907,6 +907,9 @@ ml_get_machine_mem(void)
@@ -1589,87 +1576,16 @@ index ac03c45..0b9b50e 100644
  	while (1) {
  		;
  	}
-@@ -1140,6 +1146,99 @@ ml_read_chip_revision(unsigned int *rev __unused)
+@@ -1140,6 +1146,28 @@ ml_read_chip_revision(unsigned int *rev __unused)
  #endif
  }
  
 +/*
-+ * The slower cores (an L2 access penalty, or the loader's "small-core"): each is made the SMT
-+ * sibling ("secondary") of a faster core of its own, and the scheduler then treats it as XNU
-+ * treats the second thread of a hyperthreaded core: a thread is put on it only when no faster
-+ * core is idle or running something of lower priority; it looks for work only when none of
-+ * them is idle; and what runs on it goes back to the run queue at every rescheduling, to be
-+ * put on a faster core that has come free meanwhile. (XNU itself pairs such a core with the
-+ * boot processor, which allows one of them; the phone has three: with cpus=8, cores 3, 2 and
-+ * 1 go with 4, 5 and 6, so that 7, the boot core and the fastest, where real-time threads go
-+ * first, stays alone: the scheduler idles a secondary while its primary runs a real-time
-+ * thread.)
++ * A core the boot loader calls small (on the phone the Cortex-A55s) is marked with an L2 access
++ * penalty; the CPU driver starts those last (GenericARMPE.cpp, boot-arg small_cores_after).
++ * Boot-arg small_cores=0: all cores alike, as before.
 + */
-+static uint32_t small_cores_apart = 2;          /* boot-arg small_cores, read in ml_parse_cpu_topology() (before tunables are) */
-+static int ml_slow_core_partner[MAX_CPUS];      /* by cpu_id: the faster core it is paired with, -1 if none */
-+
-+static void
-+ml_choose_slow_core_partners(void)
-+{
-+	bool taken[MAX_CPUS] = { false };
-+
-+	for (int i = 0; i < MAX_CPUS; i++) {
-+		ml_slow_core_partner[i] = -1;
-+	}
-+	for (int i = 0; i < (int)topology_info.num_cpus; i++) {
-+		int partner = -1;
-+
-+		if (topology_info.cpus[i].l2_access_penalty == 0) {
-+			continue;
-+		}
-+		/* the last fast core not yet taken; the boot core only if there is no other */
-+		for (int j = (int)topology_info.num_cpus - 1; j >= 0; j--) {
-+			if (topology_info.cpus[j].l2_access_penalty != 0 || taken[j]) {
-+				continue;
-+			}
-+			if (&topology_info.cpus[j] == topology_info.boot_cpu) {
-+				if (partner < 0) {
-+					partner = j;
-+				}
-+				continue;
-+			}
-+			partner = j;
-+			break;
-+		}
-+		if (partner >= 0) {
-+			taken[partner] = true;
-+			ml_slow_core_partner[i] = partner;
-+		}
-+	}
-+}
-+
-+extern void loader_log_line(const char *line);
-+
-+/* At the registration of each processor: pairs it with its partner, if that one is registered too. */
-+static void
-+ml_pair_slow_processors(int cpu_id)
-+{
-+	for (int i = 0; i < (int)topology_info.num_cpus; i++) {
-+		int partner = ml_slow_core_partner[i];
-+		processor_t slow, fast;
-+		char line[128];
-+
-+		if (partner < 0 || (i != cpu_id && partner != cpu_id)) {
-+			continue;
-+		}
-+		slow = processor_array[i];
-+		fast = processor_array[partner];
-+		if (slow == PROCESSOR_NULL || fast == PROCESSOR_NULL || slow->processor_primary == fast) {
-+			continue;
-+		}
-+		sched_slow_secondaries = small_cores_apart >= 2;
-+		processor_set_primary(slow, fast);
-+		snprintf(line, sizeof(line), "cpu %d (phys id 0x%x) is a slower core: the scheduler uses it after cpu %d (phys id 0x%x)\n",
-+		    i, topology_info.cpus[i].phys_id, partner, topology_info.cpus[partner].phys_id);
-+		printf("%s", line);
-+		loader_log_line(line);          /* (the kernel's own log of a run keeps only its end) */
-+	}
-+}
++static uint32_t small_cores_apart = 1;          /* boot-arg small_cores, read in ml_parse_cpu_topology() (before tunables are) */
 +
 +/* How long processor cpu_id has been idle since it started, in mach_absolute_time() units (redwood_cpufreq.c's cpuload). */
 +bool ml_cpu_idle_time(int cpu_id, uint64_t *idle);
@@ -1679,7 +1595,7 @@ index ac03c45..0b9b50e 100644
 +{
 +	struct recount_usage usage = { 0 };
 +
-+	if (cpu_id < 0 || cpu_id >= MAX_SCHED_CPUS || processor_array[cpu_id] == PROCESSOR_NULL) {
++	if (cpu_id < 0 || cpu_id >= MAX_CPUS || processor_array[cpu_id] == PROCESSOR_NULL) {
 +		return false;
 +	}
 +	recount_processor_usage(&processor_array[cpu_id]->pr_recount, &usage, idle);
@@ -1689,7 +1605,7 @@ index ac03c45..0b9b50e 100644
  void
  ml_parse_cpu_topology(void)
  {
-@@ -1153,6 +1252,7 @@ ml_parse_cpu_topology(void)
+@@ -1153,6 +1181,7 @@ ml_parse_cpu_topology(void)
  	int64_t cluster_max_cpu_phys_id[MAX_CPU_CLUSTER_PHY_ID + 1];
  	const boolean_t cpus_boot_arg_present = PE_parse_boot_argn("cpus", &cpu_boot_arg, sizeof(cpu_boot_arg));
  	const boolean_t cpumask_boot_arg_present = PE_parse_boot_argn("cpumask", &cpumask_boot_arg, sizeof(cpumask_boot_arg));
@@ -1697,44 +1613,18 @@ index ac03c45..0b9b50e 100644
  
  	// The cpus=N and cpumask=N boot args cannot be used simultaneously. Flag this
  	// so that we trigger a panic later in the boot process, once serial is enabled.
-@@ -1218,6 +1318,21 @@ ml_parse_cpu_topology(void)
+@@ -1218,6 +1247,11 @@ ml_parse_cpu_topology(void)
  
  		cpu->phys_id = (uint32_t)ml_readprop(child, "reg", ML_READPROP_MANDATORY);
  
 +		cpu->l2_access_penalty = (uint32_t)ml_readprop(child, "l2-access-penalty", 0);
-+		/*
-+		 * A core the boot loader calls small (on the phone the Cortex-A55s; the Cortex-A78 the
-+		 * kernel boots on is about 2.5 times as fast) is to be used only when the faster ones are all
-+		 * busy: what XNU does with a core that has an L2 access penalty (ml_pair_slow_processors()).
-+		 * The loader gives it a name of its own because a kernel without that function would make
-+		 * every such core the sibling of the boot processor, and stop at the assertion that a
-+		 * processor has only one. Boot-arg small_cores=0: all cores alike, as before; 1: paired as
-+		 * XNU pairs the two threads of a hyperthreaded core (a secondary kept idle while its primary
-+		 * runs a real-time thread, and so on); 2 (the default): as cores of their own (see
-+		 * sched_slow_secondaries in osfmk/kern/sched.h).
-+		 */
++		/* (a core the loader calls small: described at small_cores_apart) */
 +		if (cpu->l2_access_penalty == 0 && ml_readprop(child, "small-core", 0) != 0 && small_cores_apart) {
 +			cpu->l2_access_penalty = 1;
 +		}
  		cpu->l2_cache_size = (uint32_t)ml_readprop(child, "l2-cache-size", 0);
  		cpu->l2_cache_id = (uint32_t)ml_readprop(child, "l2-cache-id", 0);
  		cpu->l3_cache_size = (uint32_t)ml_readprop(child, "l3-cache-size", 0);
-@@ -1334,6 +1449,7 @@ ml_parse_cpu_topology(void)
- 	cluster_offsets[0] = 0;
- #endif
- 	assert(topology_info.boot_cpu != NULL);
-+	ml_choose_slow_core_partners();
- 	ml_read_chip_revision(&topology_info.chip_revision);
- 	ml_cluster_power_override(&topology_info.cluster_power_down);
- 
-@@ -1708,6 +1824,7 @@ ml_processor_register(ml_processor_info_t *in_processor_info,
- 	if (!is_boot_cpu) {
- 		smr_cpu_init(*processor_out);
- 	}
-+	ml_pair_slow_processors(this_cpu_datap->cpu_number);
- 	*ipi_handler_out = cpu_signal_handler;
- #if CONFIG_CPU_COUNTERS
- 	cpc_cpu_transition(CPC_CPU_INIT, this_cpu_datap);
 diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
 index 3ed10c7..75ef8d8 100644
 --- a/osfmk/arm64/start.s
@@ -2162,124 +2052,6 @@ index dee4503..ff62baf 100644
  #define percpu_foreach_secondary(it, name) \
  	for (__PERCPU_TYPE(name) it, \
  	    __unsafe_indexable __base_ ## it = __PERCPU_CAST(name, percpu_base.start), \
-diff --git a/osfmk/kern/sched.h b/osfmk/kern/sched.h
-index ac4b4d3..033dc31 100644
---- a/osfmk/kern/sched.h
-+++ b/osfmk/kern/sched.h
-@@ -461,4 +461,13 @@ extern int sched_rt_n_backup_processors;
- extern bool system_is_SMT;
- #endif /* CONFIG_SCHED_SMT */
- 
-+/*
-+ * The "secondaries" are not the second threads of hyperthreaded cores but slower cores of their
-+ * own, each paired with a faster one (ml_pair_slow_processors() in osfmk/arm64/machine_routines.c):
-+ * the scheduler still prefers the primaries, but what runs on one core does not slow the other,
-+ * so a secondary is not kept idle for its primary's sake, and when a primary goes idle a thread
-+ * running on a secondary is moved to it.
-+ */
-+extern bool sched_slow_secondaries;
-+
- #endif  /* _KERN_SCHED_H_ */
-diff --git a/osfmk/kern/sched_prim.c b/osfmk/kern/sched_prim.c
-index b2aae03..a2ec92e 100644
---- a/osfmk/kern/sched_prim.c
-+++ b/osfmk/kern/sched_prim.c
-@@ -2109,6 +2109,8 @@ sched_vm_group_maintenance(void)
- #define SCHED_AVOID_CPU0 0
- #endif
- 
-+int sched_allow_rt_smt = 1;
-+bool sched_slow_secondaries = false;
- int sched_avoid_cpu0 = SCHED_AVOID_CPU0;
- int sched_backup_cpu_timeout_count = 5; /* The maximum number of 10us delays to wait before using a backup cpu */
- int sched_rt_n_backup_processors = SCHED_DEFAULT_BACKUP_PROCESSORS;
-@@ -2150,6 +2152,7 @@ bool
- sched_SMT_balance(processor_t cprocessor, processor_set_t cpset)
- {
- 	processor_t ast_processor = NULL;
-+	sched_ipi_type_t ipi_type = SCHED_IPI_NONE;
- 
- #if (DEVELOPMENT || DEBUG)
- 	if (__improbable(sched_smt_balance == 0)) {
-@@ -2158,7 +2161,39 @@ sched_SMT_balance(processor_t cprocessor, processor_set_t cpset)
- #endif
- 
- 	assert(cprocessor == current_processor());
--	if (cprocessor->is_SMT == FALSE) {
-+	if (cprocessor->is_SMT == FALSE && !sched_slow_secondaries) {
-+		goto smt_balance_exit;
-+	}
-+
-+	if (sched_slow_secondaries) {
-+		/*
-+		 * A faster core is going idle: the thread of highest priority that runs on a slower one
-+		 * (not a real-time one: those stay where they are) is sent here. Its core is made to
-+		 * reschedule; a thread on a secondary goes back to the run queue then, and an idle
-+		 * primary is where it is put.
-+		 */
-+		integer_t highest = -1;
-+
-+		if (cprocessor->processor_primary != cprocessor) {
-+			goto smt_balance_exit;
-+		}
-+		uint64_t running_secondaries = (cpset->cpu_state_map[PROCESSOR_RUNNING] & ~cpset->primary_map &
-+		    ~cpset->pending_AST_URGENT_cpu_mask);
-+		for (int cpuid = lsb_first(running_secondaries); cpuid >= 0; cpuid = lsb_next(running_secondaries, cpuid)) {
-+			processor_t sprocessor = processor_array[cpuid];
-+
-+			if (sprocessor->current_pri < BASEPRI_RTQUEUES && sprocessor->current_pri > highest &&
-+			    sprocessor->current_pri > MINPRI) {
-+				highest = sprocessor->current_pri;
-+				ast_processor = sprocessor;
-+			}
-+		}
-+		if (ast_processor != PROCESSOR_NULL) {
-+			ipi_type = sched_ipi_action(ast_processor, NULL, SCHED_IPI_EVENT_SMT_REBAL);
-+			if (ipi_type == SCHED_IPI_NONE) {
-+				ast_processor = PROCESSOR_NULL;
-+			}
-+		}
- 		goto smt_balance_exit;
- 	}
- 
-@@ -2173,7 +2208,6 @@ sched_SMT_balance(processor_t cprocessor, processor_set_t cpset)
- 
- 	processor_t sprocessor;
- 
--	sched_ipi_type_t ipi_type = SCHED_IPI_NONE;
- 	uint64_t running_secondary_map = (cpset->cpu_state_map[PROCESSOR_RUNNING] &
- 	    ~cpset->primary_map);
- 	for (int cpuid = lsb_first(running_secondary_map); cpuid >= 0; cpuid = lsb_next(running_secondary_map, cpuid)) {
-@@ -2578,6 +2612,10 @@ thread_select(thread_t          thread,
- 
- #if CONFIG_SCHED_SMT
- 		bool needs_smt_rebalance = !is_yielding && thread->sched_pri < BASEPRI_RTQUEUES && processor->processor_primary != processor;
-+		if (needs_smt_rebalance && sched_slow_secondaries) {
-+			/* (a slower core of its own: worth leaving only for a faster one that is idle) */
-+			needs_smt_rebalance = (pset->recommended_bitmask & pset->primary_map & pset->cpu_state_map[PROCESSOR_IDLE]) != 0;
-+		}
- #endif /* CONFIG_SCHED_SMT */
- 
- 		bool affinity_mismatch   = thread->affinity_set != AFFINITY_SET_NULL && thread->affinity_set->aset_pset != pset;
-@@ -2727,7 +2765,7 @@ pick_new_rt_thread:
- 				clear_pending_AST_bits(pset, processor, select_outcome);
- 
- #if CONFIG_SCHED_SMT
--				if (processor->processor_secondary != NULL) {
-+				if (processor->processor_secondary != NULL && !sched_slow_secondaries) {
- 					processor_t sprocessor = processor->processor_secondary;
- 					if ((sprocessor->state == PROCESSOR_RUNNING) || (sprocessor->state == PROCESSOR_DISPATCHING)) {
- 						ipi_type = sched_ipi_action(sprocessor, NULL, SCHED_IPI_EVENT_SMT_REBAL);
-@@ -2800,7 +2838,8 @@ send_followup_ipi_before_idle:
- 			}
- 
- #if CONFIG_SCHED_SMT
--			if ((processor->processor_primary != processor) && (processor->processor_primary->current_pri >= BASEPRI_RTQUEUES)) {
-+			if ((processor->processor_primary != processor) && (processor->processor_primary->current_pri >= BASEPRI_RTQUEUES) &&
-+			    !sched_slow_secondaries) {
- 				/* secondary can only run realtime thread */
- 				if (select_outcome == IDLE_NONE) {
- 					select_outcome = IDLE_SMT_PAIR_REALTIME;
 diff --git a/osfmk/kern/startup.c b/osfmk/kern/startup.c
 index dccdff8..d3fd9b3 100644
 --- a/osfmk/kern/startup.c

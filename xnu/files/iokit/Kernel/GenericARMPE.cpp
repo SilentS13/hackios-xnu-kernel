@@ -144,7 +144,7 @@ GenericARMCPU::initCPU(bool boot)
 void
 GenericARMCPU::quiesceCPU(void)
 {
-	if (getCPUNumber() != (UInt32)master_cpu) {
+	if (getCPUNumber() != (UInt32)boot_cpu_id) {
 		setCPUState(kIOCPUStateStopped);
 		psci_smp_cpu_off();
 	}
@@ -159,7 +159,7 @@ GenericARMCPU::startCPU(vm_offset_t start_paddr, vm_offset_t arg_paddr)
 void
 GenericARMCPU::haltCPU(void)
 {
-	if (getCPUNumber() != (UInt32)master_cpu) {
+	if (getCPUNumber() != (UInt32)boot_cpu_id) {
 		processor_exit(machProcessor);
 	}
 }
@@ -220,7 +220,7 @@ GenericARMPE::start(IOService * provider)
 	/*
 	 * super::start() published the /cpus children as nubs. Attach a CPU driver to each
 	 * one the kernel has a number for, register them all -- that settles the CPU count --
-	 * and then start them, the boot processor (number master_cpu) first.
+	 * and then start them, the boot processor (number boot_cpu_id) first.
 	 */
 	static GenericARMCPU * cpus[MAX_CPUS];        /* (static: the slower cores may be started later, see below) */
 	unsigned int count = 0;
@@ -249,7 +249,7 @@ GenericARMPE::start(IOService * provider)
 		}
 		iter->release();
 	}
-	if (cpus[master_cpu] != NULL) {
+	if (cpus[boot_cpu_id] != NULL) {
 		/* Unblocks everything that waits for the CPU count to be known. */
 		ml_set_max_cpus(count);
 		if (count > 1) {
@@ -267,9 +267,9 @@ GenericARMPE::start(IOService * provider)
 		static thread_call_t later_call;
 
 		PE_parse_boot_argn("small_cores_after", &later, sizeof(later));
-		cpus[master_cpu]->run();
+		cpus[boot_cpu_id]->run();
 		for (unsigned int number = 0; number < MAX_CPUS; number++) {
-			if (cpus[number] != NULL && number != (unsigned int)master_cpu) {
+			if (cpus[number] != NULL && number != (unsigned int)boot_cpu_id) {
 				if (later != 0 && ml_get_topology_info()->cpus[number].l2_access_penalty != 0) {
 					continue;
 				}
