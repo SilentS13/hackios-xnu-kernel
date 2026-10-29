@@ -42,8 +42,8 @@ die() { echo "setup: $*" >&2; exit 1; }
 
 # fetch DIR URL COMMIT: one commit of a repository, without its history
 fetch() {
-	# there already? (its own repository, not the one this directory is part of)
-	[ -d "$1" ] && git -C "$1" rev-parse -q --verify HEAD >/dev/null 2>&1 &&
+	# there already, at the wanted commit, and its own repository (not the one this directory is part of)
+	[ -d "$1" ] && [ "$(git -C "$1" rev-parse -q --verify HEAD 2>/dev/null)" = "$3" ] &&
 		[ "$(git -C "$1" rev-parse --show-toplevel)" = "$(cd "$1" && pwd -P)" ] && return 0
 	log "fetching $1"
 	rm -rf "$1"
@@ -78,8 +78,15 @@ stage1() {
 		5d9baee345b3bc72b26c71adc65f94f2d5e9ced2        # AvailabilityVersions-115.4
 	fetch libdispatch https://github.com/apple-oss-distributions/libdispatch.git \
 		a641558f447659d90ad002ef0ee6f0212273fbfc        # libdispatch-1415.100.11
-	fetch libpthread https://github.com/apple-oss-distributions/libpthread.git \
-		a6c70ca0e544347a0377babf748f831577ec24f9        # libpthread-514.100.2
+	# the pthread kext compiles against the tree's own private headers, so it moves with the tree:
+	# 12377's are the 539 line and reject the 514 sources
+	if [ -f "$XNU_SRC/osfmk/kern/upsi.h" ]; then
+		fetch libpthread https://github.com/apple-oss-distributions/libpthread.git \
+			1f4f5265b319111142f1bf3a27d4484ef5a98314    # libpthread-539.100.4
+	else
+		fetch libpthread https://github.com/apple-oss-distributions/libpthread.git \
+			a6c70ca0e544347a0377babf748f831577ec24f9    # libpthread-514.100.2
+	fi
 	fetch mm_bootstrap_cmds https://github.com/markmentovai/bootstrap_cmds \
 		f337e600741638896fb6056ce87c6479f74b89a3        # cross_platform/bootstrap_cmds-138
 	fetch tcsh https://github.com/tcsh-org/tcsh.git b7db07931546178c4cb2542b5fc850c483628ed5
