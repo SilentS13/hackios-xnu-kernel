@@ -272,7 +272,9 @@ static const uint32_t kDPUSplashOff[] = { 0x00000000u, 0x00c00000u, 0x01800000u 
  * depend on the picture at all: if the panel changes colour, the pipe took the address) */
 static const uint32_t kFlipColours[] = { 0xffff0000u, 0xff00ff00u, 0xff0000ffu };
 
-static const uint32_t kDPUIntfOffsets[] = { 0x34000u, 0x35000u, 0x36000u, 0x37000u };
+/* the catalog's intf_0..3 (0x34000 + 0x1000 * n) plus the 0x1000 the DPU node begins at, the way
+ * the CTL and the pipes are: intf_1, the DSI0 interface, is at +0x36000 */
+static const uint32_t kDPUIntfOffsets[] = { 0x35000u, 0x36000u, 0x37000u, 0x38000u };
 #define kDPUIntfCount   (sizeof(kDPUIntfOffsets) / sizeof(kDPUIntfOffsets[0]))
 /*
  * Where the scan for the frame counter looks: the four interfaces the sm8350 catalog names
