@@ -13,3 +13,16 @@ index 1a2bbeb..02dfec7 100644
  
  #
  #  Make sure we don't remove this by accident if interrupted at the wrong
+diff --git a/iokit/conf/files b/iokit/conf/files
+index c72c690..ac2aa95 100644
+--- a/iokit/conf/files
++++ b/iokit/conf/files
+@@ -111,8 +111,6 @@ iokit/Tests/TestServices/TestIODeviceMemoryRosetta.cpp optional iokitcpp
+ iokit/Tests/TestServices/TestIOUserClient2022Entitlements.cpp optional iokitcpp
+ iokit/Tests/TestServices/TestIOServiceUserNotification.cpp optional iokitcpp
+ iokit/Tests/TestServices/TestIODataQueues.cpp optional iokitcpp
+-./Tests/TestServices/TestDextRematch.iig.cpp optional iokitcpp
+-iokit/Tests/TestServices/TestDextRematchKernel.cpp optional iokitcpp
+ 
+ iokit/Kernel/IOStatistics.cpp				optional iokitcpp
+ iokit/Kernel/IOInterruptAccounting.cpp			optional iokitcpp

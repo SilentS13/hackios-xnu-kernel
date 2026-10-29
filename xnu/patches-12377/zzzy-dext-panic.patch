@@ -1,0 +1,26 @@
+diff --git a/iokit/Kernel/IOUserServer.cpp b/iokit/Kernel/IOUserServer.cpp
+index 14d77fb..f88bd15 100644
+--- a/iokit/Kernel/IOUserServer.cpp
++++ b/iokit/Kernel/IOUserServer.cpp
+@@ -2310,21 +2310,6 @@ IOUserServer::Create_Impl(
+ 	return ret;
+ }
+ 
+-kern_return_t
+-IOUserServer::Panic_Impl(const char * reason)
+-{
+-	if (isPlatformDriver()) {
+-		if (strnlen(reason, kIOUserServrMaxPanicReasonLength) == kIOUserServrMaxPanicReasonLength) {
+-			// Invalid panic message, panic anyways
+-			panic("%s: dext requested panic", getName());
+-		} else {
+-			panic("%s: dext requested panic: \"%s\"", getName(), reason);
+-		}
+-		return kIOReturnSuccess;
+-	}
+-	return kIOReturnNotPermitted;
+-}
+-
+ kern_return_t
+ IOUserServer::RegisterService_Impl()
+ {

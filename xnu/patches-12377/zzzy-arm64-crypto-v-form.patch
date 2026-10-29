@@ -1,0 +1,16 @@
+diff --git a/osfmk/arm64/corecrypto/arm64_isa_compatibility.h b/osfmk/arm64/corecrypto/arm64_isa_compatibility.h
+index 8800687..f60a4d6 100644
+--- a/osfmk/arm64/corecrypto/arm64_isa_compatibility.h
++++ b/osfmk/arm64/corecrypto/arm64_isa_compatibility.h
+@@ -37,7 +37,10 @@
+ // #include <Availability.h>
+ #include <sys/cdefs.h>
+ 
+-#if defined(__clang__) && ((defined(__apple_build_version__) && __apple_build_version__ > 5010000))
++/* Only Apple's clang takes q-register operands for the crypto instructions; upstream clang's
++ * integrated assembler reports "invalid operand" for them, so every clang gets the v forms,
++ * which both assemblers accept. */
++#if defined(__clang__)
+ #define __USES_V_CRYPTO_INTRINSICS 1
+ #else
+ #define __USES_V_CRYPTO_INTRINSICS 0

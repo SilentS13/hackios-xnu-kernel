@@ -1173,10 +1173,10 @@ index 0000000..6d24c2a
 +#endif /* libTrustCache_TypesConfig_h */
 diff --git a/EXTERNAL_HEADERS/CoreEntitlements/V2/API.h b/EXTERNAL_HEADERS/CoreEntitlements/V2/API.h
 new file mode 100644
-index 0000000..d8def8a
+index 0000000..d4680fd
 --- /dev/null
 +++ b/EXTERNAL_HEADERS/CoreEntitlements/V2/API.h
-@@ -0,0 +1,65 @@
+@@ -0,0 +1,66 @@
 +/*
 + * Reconstructed subset of Apple's private CoreEntitlements V2 kernel API.
 + *
@@ -1227,7 +1227,8 @@ index 0000000..d8def8a
 +	uint64_t ce_opaque[16];
 +} CEContext_t;
 +
-+typedef struct CEBuffer {
++/* Untagged: the V1 <CoreEntitlements/Runtime.h> already owns the name "CEBuffer". */
++typedef struct {
 +	uint8_t *data;
 +	size_t length;
 +} CEBuffer_t;
