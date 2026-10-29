@@ -46,6 +46,7 @@
 #include <uuid/uuid.h>
 #include <vfs/vfs_support.h>
 #include <vm/vm_kern.h>
+#include <vm/vm_kern_xnu.h>
 
 #define RAMFS_MAX_NAME          255
 #define RAMFS_MAX_XATTR         (16u * 1024 * 1024)
