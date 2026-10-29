@@ -1035,6 +1035,11 @@ IOMobileFramebuffer::flipDeferredMain(void * self, wait_result_t result __unused
 			IODelay(1000);
 			continue;
 		}
+		if (gFlipPendingSeq == gFlipPendingDone) {
+			/* nothing to show: two polls a millisecond, not a frame's worth of spinning */
+			IODelay(500);
+			continue;
+		}
 		gDPU[(gCtlOff + kDPUCtlFlush) / 4] = me->fPipeFlush;
 		__asm__ volatile("dsb sy" ::: "memory");
 		for (spin = 0; spin < 1200; spin++) {                   /* at most 12 ms: a frame is 8.3 */
