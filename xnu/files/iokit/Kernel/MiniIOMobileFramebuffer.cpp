@@ -509,6 +509,7 @@ public:
 	void flipLatch(void);
 	bool flipWaitFrame(void);
 	void flipWaitBoundary(void);
+	static void flipClockMain(void * self, wait_result_t result);
 	void flipTo(void);
 	void flipProbe(void);
 	MiniIOSurface * defaultSurface(void);
@@ -897,6 +898,42 @@ IOMobileFramebuffer::flipWaitBoundary(void)
 	gBoundaryAge++;
 }
 
+/*
+ * flip=9: the flip is handed to a clock of its own. The presenter only says which frame is ready
+ * (gFlipPendingSeq has moved) and goes back to compositing; this thread waits for the panel's
+ * boundary, points the pipe at the frame, and waits for the flush where nobody is held up by it.
+ * The presenter used to do both waits itself: up to two panel frames of it per flip, which is what
+ * the stutter was.
+ */
+static uint32_t gFlipPendingPhys, gFlipPendingStride;
+static volatile uint32_t gFlipPendingSeq, gFlipPendingDone;
+
+void
+IOMobileFramebuffer::flipClockMain(void * self, wait_result_t result __unused)
+{
+	IOMobileFramebuffer * me = (IOMobileFramebuffer *) self;
+
+	for (;;) {
+		uint32_t seq, phys, stride;
+
+		flipWaitBoundary();
+		seq = gFlipPendingSeq;
+		if (seq == gFlipPendingDone) {
+			continue;
+		}
+		phys = gFlipPendingPhys;
+		stride = gFlipPendingStride;
+		__asm__ volatile("dsb sy" ::: "memory");
+		me->fPipe[me->fPipeSrcOff / 4] = phys;
+		me->fPipe[me->fPipeStrideOff / 4] = stride;
+		__asm__ volatile("dsb sy" ::: "memory");
+		me->flipLatch();
+		gFlipPendingDone = seq;
+		gFlipLastAddr = phys;
+		gFlipReadback = me->fPipe[me->fPipeSrcOff / 4];
+	}
+}
+
 void
 IOMobileFramebuffer::flipTo(void)
 {
@@ -924,18 +961,18 @@ IOMobileFramebuffer::flipTo(void)
 			}
 		}
 	}
-	if (gFlipMode == 7 || gFlipMode == 8) {
+	if (gFlipMode >= 7) {
 		/*
 		 * A bar 240 px wide over the whole height, 60 px further right on every flip: a flip taken
 		 * mid-frame shows it as a step, one taken at a boundary leaves it straight. In 7 its colour
-		 * says which latch is in force this second; 8 is the projected boundary, in white.
+		 * says which latch is in force this second; 8 and 9 are boundary-latched, in white.
 		 */
 		uint32_t * words = (uint32_t *) (uintptr_t) fFlipFrame[fFlipNext];
 		uint32_t wide = fPanelWidth > 240 ? fPanelWidth - 240 : 1;
 		uint32_t x0 = (fFlips * 60) % wide;
 		uint32_t row, x;
 
-		gFlipSync = gFlipMode == 8 ? 1 : ((fFlips / 120) & 1);
+		gFlipSync = gFlipMode == 7 ? ((fFlips / 120) & 1) : 1;
 		for (row = 0; row < fPanelHeight; row++) {
 			uint32_t * line = words + (size_t) row * (fRowBytes / 4);
 
@@ -943,6 +980,20 @@ IOMobileFramebuffer::flipTo(void)
 				line[x0 + x] = gFlipSync ? 0xffff00ffu : 0xffffffffu;
 			}
 		}
+	}
+	if (gFlipMode == 9) {
+		/* hand the frame to the clock and compose again: neither wait is the presenter's */
+		gFlipPendingPhys = phys;
+		gFlipPendingStride = stride;
+		__asm__ volatile("dsb sy" ::: "memory");
+		gFlipPendingSeq++;
+		if (fFlipFrames) {
+			fFlipNext = (fFlipNext + 1) % kFlipFrames;
+			fDraw = fFlipFrame[fFlipNext];
+		}
+		fFlips++;
+		gFlipsShown++;
+		return;
 	}
 	if (gFlipMode == 8) {
 		flipWaitBoundary();
@@ -1144,7 +1195,7 @@ IOMobileFramebuffer::start(IOService * provider)
 	{
 		uint32_t mode = 1;
 
-		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 8) {
+		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 9) {
 			gFlipMode = mode;
 		}
 		PE_parse_boot_argn("dpu_dump", &gDpuDump, sizeof(gDpuDump));
@@ -1225,10 +1276,10 @@ IOMobileFramebuffer::start(IOService * provider)
 	if (gDPU != NULL) {
 		/* frames are flipped into the panel rather than written into it, if a pipe of it will take them */
 		bool frames = false;
-		bool full = gFlipMode == 1 || (gFlipMode >= 5 && gFlipMode <= 8);
+		bool full = gFlipMode == 1 || (gFlipMode >= 5 && gFlipMode <= 9);
 
 		flipFind();
-		if (gFlipMode >= 5 && gFlipMode <= 8) {
+		if (gFlipMode >= 5 && gFlipMode <= 9) {
 			frames = flipAllocateSplash();
 		} else if (full || gFlipMode == 3) {
 			frames = flipAllocate();
@@ -1243,6 +1294,16 @@ IOMobileFramebuffer::start(IOService * provider)
 		}
 		if (!fFlipFrames) {
 			fDraw = fBase;
+		}
+		if (gFlipMode == 9 && fFlipFrames) {
+			thread_t clock;
+
+			if (kernel_thread_start(&IOMobileFramebuffer::flipClockMain, this, &clock) == KERN_SUCCESS) {
+				thread_set_thread_name(clock, "the flip's frame clock");
+				thread_deallocate(clock);
+				IOLog("MiniIOMobileFramebuffer: flips go to a clock at %u Hz: the presenter waits for none\n",
+				    gRefreshHz);
+			}
 		}
 		dpuDump("at start");
 		if (gDpuDump != 0) {
