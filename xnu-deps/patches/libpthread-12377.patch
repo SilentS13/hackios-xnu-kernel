@@ -45,7 +45,7 @@ index 156ad74..257a2df 100644
  /* function declarations for pthread_kext.c */
  void pthread_init(void);
 diff --git a/kern/kern_support.c b/kern/kern_support.c
-index bdb04ab..9d986bc 100644
+index bdb04ab..d66a8c9 100644
 --- a/kern/kern_support.c
 +++ b/kern/kern_support.c
 @@ -50,7 +50,9 @@
@@ -84,6 +84,42 @@ index bdb04ab..9d986bc 100644
  	}
  
  	if (kret != KERN_SUCCESS) {
+@@ -816,7 +819,7 @@ workq_set_register_state(proc_t p, thread_t th,
+ 
+ 		int error = pthread_kern->thread_set_wq_state32(th, (thread_state_t)&state);
+ 		if (error != KERN_SUCCESS) {
+-			panic(__func__ ": thread_set_wq_state failed: %d", error);
++			panic("thread_set_wq_state failed: %d", error);
+ 		}
+ 	} else {
+ 		x86_thread_state64_t state64 = {
+@@ -834,7 +837,7 @@ workq_set_register_state(proc_t p, thread_t th,
+ 
+ 		int error = pthread_kern->thread_set_wq_state64(th, (thread_state_t)&state64);
+ 		if (error != KERN_SUCCESS) {
+-			panic(__func__ ": thread_set_wq_state failed: %d", error);
++			panic("thread_set_wq_state failed: %d", error);
+ 		}
+ 	}
+ #elif defined(__arm__) || defined(__arm64__)
+@@ -854,7 +857,7 @@ workq_set_register_state(proc_t p, thread_t th,
+ 
+ 		int error = pthread_kern->thread_set_wq_state32(th, (thread_state_t)&state);
+ 		if (error != KERN_SUCCESS) {
+-			panic(__func__ ": thread_set_wq_state failed: %d", error);
++			panic("thread_set_wq_state failed: %d", error);
+ 		}
+ 	} else {
+ #if defined(__arm64__)
+@@ -872,7 +875,7 @@ workq_set_register_state(proc_t p, thread_t th,
+ 
+ 		int error = pthread_kern->thread_set_wq_state64(th, (thread_state_t)&state);
+ 		if (error != KERN_SUCCESS) {
+-			panic(__func__ ": thread_set_wq_state failed: %d", error);
++			panic("thread_set_wq_state failed: %d", error);
+ 		}
+ #else /* defined(__arm64__) */
+ 		panic("Shouldn't have a 64-bit thread on a 32-bit kernel...");
 @@ -967,9 +970,11 @@ workq_setup_thread(proc_t p, thread_t th, vm_map_t map, user_addr_t stackaddr,
  		vm_map_offset_t th_page = vm_map_trunc_page_mask(th_addrs.self, mask);
  		vm_map_offset_t stk_page = vm_map_trunc_page_mask(th_addrs.stack_top - 1, mask);
