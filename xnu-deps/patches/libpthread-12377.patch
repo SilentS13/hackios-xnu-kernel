@@ -44,6 +44,60 @@ index 156ad74..257a2df 100644
  
  /* function declarations for pthread_kext.c */
  void pthread_init(void);
+diff --git a/kern/kern_support.c b/kern/kern_support.c
+index bdb04ab..9d986bc 100644
+--- a/kern/kern_support.c
++++ b/kern/kern_support.c
+@@ -50,7 +50,9 @@
+ #include <os/log.h>
+ 
+ // <rdar://problem/26158937> panic() should be marked noreturn
++#ifndef panic
+ extern void panic(const char *string, ...) __printflike(1,2) __dead2;
++#endif
+ 
+ #include <sys/param.h>
+ #include <sys/queue.h>
+@@ -98,6 +100,7 @@ extern void panic(const char *string, ...) __printflike(1,2) __dead2;
+ //#include <vm/vm_protos.h>
+ #include <vm/vm_fault.h>
+ #include <vm/vm_map.h>
++#include <vm/vm_kern_xnu.h>	/* mach_vm_map_kernel, for a kernel that has no mach_vm_map */
+ #include <mach/thread_act.h> /* for thread_resume */
+ #include <machine/machine_routines.h>
+ #include <mach/shared_region.h>
+@@ -706,13 +709,13 @@ workq_create_threadstack(proc_t p, vm_map_t vmap, mach_vm_offset_t *out_addr)
+ 	kern_return_t kret;
+ 
+ 	th_allocsize = workq_thread_allocsize(p, vmap, &guardsize);
+-	kret = mach_vm_map(vmap, &stackaddr, th_allocsize, page_size - 1,
+-			VM_MAKE_TAG(VM_MEMORY_STACK) | VM_FLAGS_ANYWHERE, NULL, 0, FALSE,
++	vm_map_kernel_flags_t vmk_flags = VM_MAP_KERNEL_FLAGS_ANYWHERE(.vm_tag = VM_MEMORY_STACK);
++	kret = mach_vm_map_kernel(vmap, (mach_vm_offset_ut *)&stackaddr, th_allocsize, page_size - 1,
++			vmk_flags, NULL, 0, FALSE,
+ 			VM_PROT_DEFAULT, VM_PROT_ALL, VM_INHERIT_DEFAULT);
+ 
+ 	if (kret != KERN_SUCCESS) {
+-		kret = mach_vm_allocate(vmap, &stackaddr, th_allocsize,
+-				VM_MAKE_TAG(VM_MEMORY_STACK) | VM_FLAGS_ANYWHERE);
++		kret = mach_vm_allocate_kernel(vmap, (mach_vm_offset_ut *)&stackaddr, th_allocsize, vmk_flags);
+ 	}
+ 
+ 	if (kret != KERN_SUCCESS) {
+@@ -967,9 +970,11 @@ workq_setup_thread(proc_t p, thread_t th, vm_map_t map, user_addr_t stackaddr,
+ 		vm_map_offset_t th_page = vm_map_trunc_page_mask(th_addrs.self, mask);
+ 		vm_map_offset_t stk_page = vm_map_trunc_page_mask(th_addrs.stack_top - 1, mask);
+ 		if (th_page != stk_page) {
+-			vm_fault(map, stk_page, VM_PROT_READ | VM_PROT_WRITE, FALSE, THREAD_UNINT, NULL, 0);
++			vm_fault(map, stk_page, VM_PROT_READ | VM_PROT_WRITE, FALSE,
++					VM_KERN_MEMORY_NONE, THREAD_UNINT, NULL, 0);
+ 		}
+-		vm_fault(map, th_page, VM_PROT_READ | VM_PROT_WRITE, FALSE, THREAD_UNINT, NULL, 0);
++		vm_fault(map, th_page, VM_PROT_READ | VM_PROT_WRITE, FALSE,
++				VM_KERN_MEMORY_NONE, THREAD_UNINT, NULL, 0);
+ 	}
+ 
+ 	if (setup_flags & WQ_SETUP_EXIT_THREAD) {
 diff --git a/kern/kern_synch.c b/kern/kern_synch.c
 index 97343a3..8325ced 100644
 --- a/kern/kern_synch.c
