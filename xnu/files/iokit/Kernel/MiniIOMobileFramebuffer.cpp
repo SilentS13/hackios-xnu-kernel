@@ -228,6 +228,10 @@ refreshHz(void)
 #define kDPUMdpPhys     0x0ae00000u
 #define kDPUMdpBytes    0x100000u
 #define kDPUFBPhys      0xea600000u                     /* cont_splash_region, what the panel scans */
+/* reserved-memory/splash_region is 0x2300000 bytes (the device tree says so): room for frames of
+ * our own after the one the bootloader scans, inside the memory the display already reads */
+#define kDPUSplashBytes 0x02300000u
+static const uint32_t kDPUSplashOff[] = { 0x00c00000u, 0x01800000u };    /* 12 MB, 24 MB */
 #define kDPUIntfTimingEngineEn  0x06c
 #define kDPUIntfVsyncPeriod     0x00c
 #define kDPUIntfFrameCount      0x0ac
@@ -240,7 +244,7 @@ refreshHz(void)
 #define kDPUCtlFlushSelf    (1u << 17)
 #define kDPUPipeSrc0Addr   0x014u
 #define kDPUPipeStride     0x024u
-#define kFlipFrames     3                           /* one frame shown, one drawn, one spare */
+#define kFlipFrames     2                           /* one frame shown, one drawn into */
 
 static const uint32_t kDPUIntfOffsets[] = { 0x35000u, 0x6a000u, 0x6b000u, 0x6c000u, 0x6d000u };
 #define kDPUIntfCount   (sizeof(kDPUIntfOffsets) / sizeof(kDPUIntfOffsets[0]))
@@ -261,6 +265,7 @@ static uint32_t gFlipsShown;                            /* frames flipped into t
  *   4  the whole flip, with the pipe's registers written while the panel is not reading them
  *      and no flush at all
  *   5  the same, and the pipe's own flush bit alone (not the CTL's: that one broke the picture)
+ *   6  the whole flip with the frames in the display's own reserved memory (the splash region)
  */
 static uint32_t gFlipMode = 1;
 static uint32_t gPipeOff;                               /* where the scanning pipe keeps its address, 0 if none */
@@ -469,6 +474,7 @@ public:
 	void publishRefresh(void);
 	void flipFind(void);
 	bool flipAllocate(void);
+	bool flipAllocateSplash(void);
 	void flipTo(void);
 	MiniIOSurface * defaultSurface(void);
 	void present(const uint8_t * swap);
@@ -571,8 +577,52 @@ IOMobileFramebuffer::flipAllocate(void)
 	gFlipMask = fPipeFlush;
 	gFlipsShown = 0;
 	fDraw = fFlipFrame[0];
-	IOLog("MiniIOMobileFramebuffer: %u frames to flip between at %#llx %#llx %#llx\n", kFlipFrames,
-	    (unsigned long long) fFlipPhys[0], (unsigned long long) fFlipPhys[1], (unsigned long long) fFlipPhys[2]);
+	for (i = 0; i < kFlipFrames; i++) {
+		IOLog("MiniIOMobileFramebuffer: frame %u of the flip at %#llx (allocated)\n", i,
+		    (unsigned long long) fFlipPhys[i]);
+	}
+	return true;
+}
+
+/*
+ * The same frames, but inside the display's own carved-out memory (reserved-memory/splash_region,
+ * 35 MB) rather than memory of the kernel's: the controller fetches what the bootloader mapped for
+ * it there, and a flip=4 boot -- a new address, written in the vblank, no flush -- stopped the phone,
+ * which is what a fetch from memory the display cannot see would do.
+ */
+bool
+IOMobileFramebuffer::flipAllocateSplash(void)
+{
+	vm_size_t bytes = (vm_size_t) fRowBytes * fPanelHeight;
+	unsigned i;
+
+	bytes = (bytes + 4095) & ~(vm_size_t) 4095;
+	for (i = 0; i < kFlipFrames; i++) {
+		uint64_t phys = (uint64_t) kDPUFBPhys + kDPUSplashOff[i];
+		vm_offset_t va;
+
+		if (kDPUSplashOff[i] + bytes > kDPUSplashBytes) {
+			IOLog("MiniIOMobileFramebuffer: the splash region has no room for flip frame %u\n", i);
+			return false;
+		}
+		va = ml_io_map_unmappable((vm_offset_t) phys, bytes, VM_WIMG_WCOMB);
+		if (va == 0) {
+			IOLog("MiniIOMobileFramebuffer: splash flip frame %u at %#llx could not be mapped\n", i,
+			    (unsigned long long) phys);
+			return false;
+		}
+		fFlipBuffer[i] = NULL;
+		fFlipPhys[i] = phys;
+		fFlipFrame[i] = (uint8_t *) (uintptr_t) va;
+		bzero(fFlipFrame[i], bytes);
+		IOLog("MiniIOMobileFramebuffer: frame %u of the flip at %#llx (in the splash region)\n", i,
+		    (unsigned long long) phys);
+	}
+	fFlipNext = 0;
+	fFlips = 0;
+	gFlipMask = 0;
+	gFlipsShown = 0;
+	fDraw = fFlipFrame[0];
 	return true;
 }
 
@@ -622,10 +672,12 @@ IOMobileFramebuffer::flipTo(void)
 	 * pending layer is the bootloader's and was never written by us: flushing that again is what
 	 * put flip=2's console on the screen at the wrong stride.
 	 */
-	if (gFlipMode == 4) {
-		flush = 0;
-	} else if (gFlipMode == 5) {
-		flush = 1u << gPipeIdx;
+	if (gFlipMode == 5) {
+		flush = 1u << gPipeIdx;         /* the pipe's own bit alone */
+	} else if (gFlipMode == 1 || gFlipMode == 2) {
+		flush = fPipeFlush;             /* (the mask that broke the picture: kept for comparison) */
+	} else {
+		flush = 0;                      /* 4, 6: written so the controller latches it where it stands */
 	}
 	for (i = 0; flush != 0 && i < kDPUCtlCount; i++) {
 		gDPU[(kDPUCtlFirst + kDPUCtlStride * i + kDPUCtlFlush) / 4] = flush;
@@ -786,7 +838,7 @@ IOMobileFramebuffer::start(IOService * provider)
 	{
 		uint32_t mode = 1;
 
-		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 5) {
+		if (PE_parse_boot_argn("flip", &mode, sizeof(mode)) && mode <= 6) {
 			gFlipMode = mode;
 		}
 	}
@@ -866,10 +918,12 @@ IOMobileFramebuffer::start(IOService * provider)
 	if (gDPU != NULL) {
 		/* frames are flipped into the panel rather than written into it, if a pipe of it will take them */
 		bool frames = false;
-		bool full = gFlipMode == 1 || gFlipMode == 4 || gFlipMode == 5;
+		bool full = gFlipMode == 1 || gFlipMode == 4 || gFlipMode == 5 || gFlipMode == 6;
 
 		flipFind();
-		if (full || gFlipMode == 3) {
+		if (gFlipMode == 6) {
+			frames = flipAllocateSplash();
+		} else if (full || gFlipMode == 3) {
 			frames = flipAllocate();
 		}
 		if (full && frames && fPipe != NULL) {
