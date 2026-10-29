@@ -261,6 +261,7 @@ static uint32_t gFlipsShown;                            /* frames flipped into t
  */
 static uint32_t gFlipMode = 1;
 static uint32_t gPipeOff;                               /* where the scanning pipe keeps its address, 0 if none */
+static uint32_t gPipeStride;                            /* the stride the panel is scanned with at boot */
 
 static void
 dpuNumber(IOService * service, const char * key, uint32_t value)
@@ -331,6 +332,7 @@ dpuMain(void * self, wait_result_t result __unused)
 		dpuNumber(service, "flip-frames", gFlipsShown);
 		dpuNumber(service, "flip-mode", gFlipMode);
 		dpuNumber(service, "dpu-pipe", gPipeOff);
+		dpuNumber(service, "dpu-stride", gPipeStride);
 		lastTime = now;
 		IOSleep(2000);
 	}
@@ -507,8 +509,9 @@ IOMobileFramebuffer::flipFind(void)
 		 * as the catalog numbers it: both are set, the one that is not the pipe is ignored */
 		fPipeFlush = kDPUCtlFlushSelf | 1u | (1u << blocks[i].pipe);
 		gPipeOff = fPipeSrcOff;
-		IOLog("MiniIOMobileFramebuffer: pipe %u scans the panel from %#x (its address register at +%#x)\n",
-		    blocks[i].pipe, kDPUFBPhys, fPipeSrcOff);
+		gPipeStride = gDPU[fPipeStrideOff / 4];
+		IOLog("MiniIOMobileFramebuffer: pipe %u scans the panel from %#x, stride %u (its address register at +%#x)\n",
+		    blocks[i].pipe, kDPUFBPhys, gPipeStride, fPipeSrcOff);
 		return;
 	}
 	/* not where the catalog puts them: say where the address is, to be read */
@@ -575,7 +578,7 @@ IOMobileFramebuffer::flipTo(void)
 	}
 	__asm__ volatile("dsb sy" ::: "memory");
 	fPipe[fPipeSrcOff / 4] = fFlipFrames ? (uint32_t) fFlipPhys[fFlipNext] : kDPUFBPhys;
-	fPipe[fPipeStrideOff / 4] = fRowBytes;
+	fPipe[fPipeStrideOff / 4] = fFlipFrames ? fRowBytes : gPipeStride;
 	for (i = 0; i < kDPUCtlCount; i++) {
 		gDPU[(kDPUCtlFirst + kDPUCtlStride * i + kDPUCtlFlush) / 4] = fPipeFlush;
 	}
