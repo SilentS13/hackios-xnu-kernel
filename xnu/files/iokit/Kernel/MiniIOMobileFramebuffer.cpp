@@ -319,6 +319,9 @@ static uint32_t gFlipLastAddr, gFlipReadback;           /* what was written to t
  */
 static uint32_t gFlipMode = 1;
 static uint32_t gFlipSync;                              /* flip=7: 1 while the boundary-first latch is in force */
+static volatile uint32_t gFlipDrops;                    /* 12: frames handed over while one was still waiting */
+static uint32_t gFlipBoundaries;                        /* 12: boundaries the thread saw in the flush bit */
+static uint32_t gFlipLateUs;                            /* 12: from the bit clearing to the address being written */
 static uint32_t gPipeOff;                               /* where the scanning pipe keeps its address, 0 if none */
 static uint32_t gPipeBase;                              /* the pipe's block, 0 if none */
 static uint32_t gCtlOff;                                /* the CTL whose layer holds the pipe, 0 if none */
@@ -1017,10 +1020,6 @@ IOMobileFramebuffer::flipClockMain(void * self, wait_result_t result __unused)
  * microseconds early or late is a seam. The price is one panel frame of latency between the
  * presenter handing a frame over and it being shown; the presenter pays none of it.
  */
-static volatile uint32_t gFlipDrops;            /* frames handed over while one was still waiting */
-static uint32_t gFlipBoundaries;                /* boundaries this thread saw in the flush bit */
-static uint32_t gFlipLateUs;                    /* from the bit clearing to the address being written */
-
 void
 IOMobileFramebuffer::flipDeferredMain(void * self, wait_result_t result __unused)
 {
