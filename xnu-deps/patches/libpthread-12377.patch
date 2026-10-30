@@ -45,7 +45,7 @@ index 156ad74..257a2df 100644
  /* function declarations for pthread_kext.c */
  void pthread_init(void);
 diff --git a/kern/kern_support.c b/kern/kern_support.c
-index bdb04ab..d66a8c9 100644
+index bdb04ab..f48b118 100644
 --- a/kern/kern_support.c
 +++ b/kern/kern_support.c
 @@ -50,7 +50,9 @@
@@ -134,6 +134,14 @@ index bdb04ab..d66a8c9 100644
  	}
  
  	if (setup_flags & WQ_SETUP_EXIT_THREAD) {
+@@ -1049,5 +1054,6 @@ _pthread_init(void)
+ 		pthread_mutex_default_policy = policy_bootarg;
+ 	}
+ 
+-	sysctl_register_oid(&sysctl__kern_pthread_mutex_default_policy);
++	/* 12377's SYSCTL_INT() marks the node permanent and registers it from a
++	 * SYSCTL startup entry; registering it again here panics. */
+ }
 diff --git a/kern/kern_synch.c b/kern/kern_synch.c
 index 97343a3..8325ced 100644
 --- a/kern/kern_synch.c
