@@ -30,7 +30,7 @@ index 58769e0..8641b95 100644
  			break;
  
 diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
-index dd5aab1..b7d8bb2 100644
+index dd5aab1..1d2abb7 100644
 --- a/bsd/kern/kern_exec.c
 +++ b/bsd/kern/kern_exec.c
 @@ -7243,6 +7243,34 @@ is_arm64e_running_as_arm64(const struct image_params *imgp)
@@ -68,11 +68,12 @@ index dd5aab1..b7d8bb2 100644
  _Atomic uint64_t libmalloc_experiment_factors = 0;
  
  static int
-@@ -7446,6 +7474,26 @@ exec_add_apple_strings(struct image_params *imgp,
+@@ -7446,6 +7474,27 @@ exec_add_apple_strings(struct image_params *imgp,
  	}
  #endif /* __has_feature(ptrauth_calls) */
  
 +#if !__has_feature(ptrauth_calls)
++#define SWEET_PTRAUTH_DISABLED "ptrauth_disabled=1"
 +	/*
 +	 * sweetarm64e=1: an arm64e image on a CPU without PAuth, accepted by
 +	 * ml_grade_binary() and rewritten offline to contain no PAC instruction
@@ -83,7 +84,7 @@ index dd5aab1..b7d8bb2 100644
 +	 */
 +	if (sweet_arm64e_enabled() &&
 +	    (imgp->ip_origcpusubtype & ~CPU_SUBTYPE_MASK) == CPU_SUBTYPE_ARM64E) {
-+		error = exec_add_user_string(imgp, CAST_USER_ADDR_T(PTRAUTH_DISABLED_FLAG), UIO_SYSSPACE, FALSE);
++		error = exec_add_user_string(imgp, CAST_USER_ADDR_T(SWEET_PTRAUTH_DISABLED), UIO_SYSSPACE, FALSE);
 +		if (error) {
 +			goto bad;
 +		}
