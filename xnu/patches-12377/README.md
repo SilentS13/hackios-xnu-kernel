@@ -9,9 +9,16 @@ BSD-2-Clause-Patent, Copyright (c) 2026 UniXNU contributors. They are applied in
 `xnu/apply.sh` on this branch. Their result is a kernel that boots as far as `arm_init` on an
 SM8350 (the Surface Duo 2 port); it carries no device drivers.
 
-Exception: `zzz-linux-host.patch` is ours. It is the same host-portability fix `redwood.patch`
-already carries for 8796 (Linux CI has no `sysctl` and no `/usr/bin/xcrun`), and it sorts last so
-it lands on top of the series.
+Exceptions, all ours and sorted last so they land on top of the series:
+
+- `zzz-linux-host.patch` — the same host-portability fix `redwood.patch` already carries for 8796
+  (Linux CI has no `sysctl` and no `/usr/bin/xcrun`).
+- `zzzz-redwood-device-layer.patch` — the vili (SM8350) device layer edits; the sources it adds
+  arrive as whole files in `xnu/files/`.
+- `zzzz-sweet-fjcvtzs-emulation.patch` — trap emulation of `FJCVTZS` (`handle_uncategorized`) for
+  EL0 threads, gated on boot-arg `sweetarm64e=1`; this CPU has no ARMv8.3-JSCVT and the iOS 26
+  JavaScriptCore/WebCore use the instruction unconditionally.
+- `zzzzz-loader-log-console.patch` — keep the kernel's `printf` output in the loader log.
 
 `config/MASTER.arm64.bcm2837` comes from this series; `config/MASTER` gets `CONFIG_APPLE_AMCC` and
 the machine layer gets source replacements. Nothing here is redwood-specific — our own tree
