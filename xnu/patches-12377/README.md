@@ -15,6 +15,11 @@ Exceptions, all ours and sorted last so they land on top of the series:
   (Linux CI has no `sysctl` and no `/usr/bin/xcrun`).
 - `zzzz-redwood-device-layer.patch` — the vili (SM8350) device layer edits; the sources it adds
   arrive as whole files in `xnu/files/`.
+- `zzzz-sweet-arm64e-exec.patch` — accept an **arm64e** slice on this PAuth-less host when
+  boot-arg `sweetarm64e=1` is set: `ml_grade_binary()` grades it below a real arm64 slice, and exec
+  puts `ptrauth_disabled=1` in the `apple[]` vector so dyld takes its no-PAC paths. The code itself
+  is rewritten offline by `tools/renegade/pacstrip.py` / `pacstrip_cache.py`. The AMFI stand-in
+  (`xnu/files/bsd/kern/kern_minimac.c`) answers dyld's policy query with every `ALLOW_*` bit.
 - `zzzz-sweet-fjcvtzs-emulation.patch` — trap emulation of `FJCVTZS` (`handle_uncategorized`) for
   EL0 threads, gated on boot-arg `sweetarm64e=1`; this CPU has no ARMv8.3-JSCVT and the iOS 26
   JavaScriptCore/WebCore use the instruction unconditionally.

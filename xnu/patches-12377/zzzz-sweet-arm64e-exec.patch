@@ -1,0 +1,97 @@
+diff --git a/bsd/dev/arm/kern_machdep.c b/bsd/dev/arm/kern_machdep.c
+index 58769e0..8641b95 100644
+--- a/bsd/dev/arm/kern_machdep.c
++++ b/bsd/dev/arm/kern_machdep.c
+@@ -21,6 +21,8 @@ int ml_grade_binary(cpu_type_t, cpu_subtype_t, cpu_subtype_t, bool);
+ 
+ #if __arm64__
+ static cpu_subtype_t cpu_subtype32(void);
++/* kern_exec.c: boot-arg sweetarm64e=1 (arm64e userland on a CPU without PAuth) */
++extern bool sweet_arm64e_enabled(void);
+ #endif /* __arm64__ */
+ 
+ #if __arm64__
+@@ -91,6 +93,17 @@ ml_grade_binary(cpu_type_t exectype, cpu_subtype_t execsubtype, cpu_subtype_t ex
+ 				return 10;
+ 			case CPU_SUBTYPE_ARM64_ALL:
+ 				return 9;
++			case CPU_SUBTYPE_ARM64E:
++				/*
++				 * sweetarm64e=1: arm64e on this PAuth-less host. The code
++				 * was rewritten offline so no PAC instruction it would trap
++				 * on is left (tools/renegade/pacstrip*.py). Graded below a
++				 * real arm64 slice, so a fat iOS 16 binary stays arm64.
++				 */
++				if (sweet_arm64e_enabled()) {
++					return 8;
++				}
++				break;
+ 			}
+ 			break;
+ 
+diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
+index dd5aab1..b7d8bb2 100644
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -7243,6 +7243,34 @@ is_arm64e_running_as_arm64(const struct image_params *imgp)
+ }
+ #endif /* __has_feature(ptrauth_calls) */
+ 
++/*
++ * Boot-arg sweetarm64e=1: run an arm64e userland on this CPU, which has no
++ * pointer authentication. Everything it enables is keyed on the Mach-O CPU
++ * subtype being arm64e, so arm64 processes are unaffected: ml_grade_binary()
++ * accepts the slice (bsd/dev/arm/kern_machdep.c), exec passes
++ * ptrauth_disabled=1 (below), and the AMFI stand-in answers dyld's policy
++ * query (bsd/kern/kern_minimac.c). The binaries are rewritten offline so
++ * that every PAC instruction the CPU would trap on is gone
++ * (tools/renegade/pacstrip.py, pacstrip_cache.py).
++ */
++bool
++sweet_arm64e_enabled(void)
++{
++	static int state = -1;
++	if (state < 0) {
++		uint32_t v = 0;
++		state = PE_parse_boot_argn("sweetarm64e", &v, sizeof(v)) && v != 0;
++	}
++	return state > 0;
++}
++
++bool
++sweet_proc_is_arm64e(struct proc *p)
++{
++	return p != PROC_NULL && p->p_cputype == CPU_TYPE_ARM64 &&
++	       (p->p_cpusubtype & ~CPU_SUBTYPE_MASK) == CPU_SUBTYPE_ARM64E;
++}
++
+ _Atomic uint64_t libmalloc_experiment_factors = 0;
+ 
+ static int
+@@ -7446,6 +7474,26 @@ exec_add_apple_strings(struct image_params *imgp,
+ 	}
+ #endif /* __has_feature(ptrauth_calls) */
+ 
++#if !__has_feature(ptrauth_calls)
++	/*
++	 * sweetarm64e=1: an arm64e image on a CPU without PAuth, accepted by
++	 * ml_grade_binary() and rewritten offline to contain no PAC instruction
++	 * that traps (tools/renegade/pacstrip.py). dyld then takes its no-PAC
++	 * paths -- the same string a ptrauth kernel passes for a process it
++	 * runs without the JOP keys -- instead of signing pointers nothing can
++	 * authenticate.
++	 */
++	if (sweet_arm64e_enabled() &&
++	    (imgp->ip_origcpusubtype & ~CPU_SUBTYPE_MASK) == CPU_SUBTYPE_ARM64E) {
++		error = exec_add_user_string(imgp, CAST_USER_ADDR_T(PTRAUTH_DISABLED_FLAG), UIO_SYSSPACE, FALSE);
++		if (error) {
++			goto bad;
++		}
++
++		imgp->ip_applec++;
++	}
++#endif /* !__has_feature(ptrauth_calls) */
++
+ 	/*
+ 	 * Add main thread mach port name
+ 	 * +1 uref on main thread port, this ref will be extracted by libpthread in __pthread_init

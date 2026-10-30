@@ -70,7 +70,11 @@ miniamfi_vnode_check_signature(__unused struct vnode *vp, __unused struct label 
  * our own library be loaded into stock daemons (DYLD_INSERT_LIBRARIES).
  */
 #define AMFI_SYSCALL_CHECK_DYLD_POLICY  0x5a
-#define AMFI_DYLD_OUTPUT_ALLOW_ALL      0xffULL
+/*
+ * Every AMFI_DYLD_OUTPUT_ALLOW_* bit; iOS 18 dyld uses the ones above 0xff too
+ * (library validation, trusted paths) and withholds @-paths when they are clear.
+ */
+#define AMFI_DYLD_OUTPUT_ALLOW_ALL      0x3ffULL
 
 /*
  * Request 0x60, "query boot-arg state" (amfi_interface_query_bootarg_state() in libamfi): the
